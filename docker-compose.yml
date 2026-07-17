@@ -58,8 +58,8 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        rpk topic create "$$RETRO_KAFKA_TOPIC" --brokers redpanda:9092 || rpk topic describe "$$RETRO_KAFKA_TOPIC" --brokers redpanda:9092
-        rpk topic create "$$RETRO_KAFKA_DLQ_TOPIC" --brokers redpanda:9092 || rpk topic describe "$$RETRO_KAFKA_DLQ_TOPIC" --brokers redpanda:9092
+        rpk topic create "$$RETRO_KAFKA_TOPIC" -X brokers=redpanda:9092 || rpk topic describe "$$RETRO_KAFKA_TOPIC" -X brokers=redpanda:9092
+        rpk topic create "$$RETRO_KAFKA_DLQ_TOPIC" -X brokers=redpanda:9092 || rpk topic describe "$$RETRO_KAFKA_DLQ_TOPIC" -X brokers=redpanda:9092
     depends_on:
       redpanda:
         condition: service_healthy
