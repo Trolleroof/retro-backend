@@ -11,10 +11,11 @@
     "chunk_id",
     "chunk_sequence",
     "accepted_event_range",
+    "queued",
     "server_received_at_ms"
   ],
   "properties": {
-    "accepted": { "type": "boolean" },
+    "accepted": { "type": "boolean", "const": true },
     "duplicate": { "type": "boolean" },
     "game_id": { "type": "string", "pattern": "^game_" },
     "chunk_id": { "type": "string", "pattern": "^chk_" },
@@ -28,6 +29,7 @@
         "last": { "type": "integer", "minimum": 1 }
       }
     },
-    "server_received_at_ms": { "type": "number", "minimum": 0 }
+    "queued": { "type": "boolean", "const": true },
+    "server_received_at_ms": { "type": "integer", "minimum": 0 }
   }
 }

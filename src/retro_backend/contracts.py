@@ -1,9 +1,20 @@
 """Pure-Python request contracts shared by Worker HTTP and Queue handlers."""
 
+import json
 import re
+from collections.abc import Mapping
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    model_validator,
+)
+
+from .bindings import is_binding_null, value_field
 
 GameType = Literal[
     "2048",
@@ -19,6 +30,86 @@ GameType = Literal[
 
 class ContractError(ValueError):
     """Raised when a valid envelope violates an authenticated contract."""
+
+
+class EventRange(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    first: int = Field(ge=1)
+    last: int = Field(ge=1)
+
+
+class GameplayPointer(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: Literal[1] = 1
+    r2_key: str
+    payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    user_id: str
+    game_id: str
+    chunk_id: str
+    received_at_ms: int = Field(ge=0)
+
+
+class IngestAcknowledgment(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    accepted: Literal[True] = True
+    duplicate: bool
+    game_id: str
+    chunk_id: str
+    chunk_sequence: int = Field(ge=1)
+    accepted_event_range: EventRange
+    queued: Literal[True] = True
+    server_received_at_ms: int = Field(ge=0)
+
+
+class ChunkReservation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: Literal["reserved", "duplicate", "conflict", "publishing"]
+    ack: IngestAcknowledgment | None = None
+
+    @model_validator(mode="after")
+    def validate_ack_status(self) -> "ChunkReservation":
+        if self.status == "duplicate" and self.ack is None:
+            raise ValueError("duplicate reservation requires acknowledgment")
+        if self.status != "duplicate" and self.ack is not None:
+            raise ValueError("only duplicate reservation may include acknowledgment")
+        return self
+
+    @classmethod
+    def from_binding(cls, value: object) -> "ChunkReservation":
+        """Normalize a structured-clone mapping or Pyodide proxy response."""
+        status = value_field(value, "status")
+        ack_value = value_field(value, "ack")
+        data: dict[str, object] = {"status": status}
+        if not is_binding_null(ack_value):
+            data["ack"] = _acknowledgment_from_binding(ack_value)
+        try:
+            return cls.model_validate(data)
+        except ValidationError as error:
+            raise ContractError("invalid chunk reservation") from error
+
+
+def _acknowledgment_from_binding(value: object) -> IngestAcknowledgment:
+    if isinstance(value, IngestAcknowledgment):
+        return value
+    event_range = value_field(value, "accepted_event_range")
+    data = {
+        "accepted": value_field(value, "accepted"),
+        "duplicate": value_field(value, "duplicate"),
+        "game_id": value_field(value, "game_id"),
+        "chunk_id": value_field(value, "chunk_id"),
+        "chunk_sequence": value_field(value, "chunk_sequence"),
+        "accepted_event_range": {
+            "first": value_field(event_range, "first"),
+            "last": value_field(event_range, "last"),
+        },
+        "queued": value_field(value, "queued"),
+        "server_received_at_ms": value_field(value, "server_received_at_ms"),
+    }
+    return IngestAcknowledgment.model_validate(data)
 
 
 class GameResultRequest(BaseModel):
@@ -90,3 +181,24 @@ class ChunkEnvelope(BaseModel):
                 raise ContractError(
                     f"events[{index}].user_id must match the authenticated user"
                 )
+
+
+def _reject_non_json_constant(value: str) -> None:
+    raise ValueError(f"unsupported JSON constant: {value}")
+
+
+def parse_chunk_envelope(raw_body: bytes, user_id: str) -> ChunkEnvelope:
+    """Parse one UTF-8 JSON envelope, validate v2, then enforce auth identity."""
+    try:
+        payload = json.loads(
+            raw_body.decode("utf-8"),
+            parse_constant=_reject_non_json_constant,
+        )
+        if not isinstance(payload, Mapping):
+            raise ValueError("chunk envelope must be an object")
+        envelope = ChunkEnvelope.model_validate(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, ValueError) as error:
+        raise ContractError("invalid chunk envelope") from error
+
+    envelope.validate_authenticated_identity(user_id)
+    return envelope

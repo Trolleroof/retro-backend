@@ -19,6 +19,8 @@ class D1Database(Protocol):
 
 
 class R2Bucket(Protocol):
+    async def head(self, key: str) -> object | None: ...
+
     async def get(self, key: str) -> object | None: ...
 
     async def put(
@@ -26,17 +28,40 @@ class R2Bucket(Protocol):
         key: str,
         value: object,
         options: object | None = None,
-    ) -> object: ...
+    ) -> object | None: ...
 
 
 class QueueBinding(Protocol):
     async def send(self, message: object) -> object: ...
 
 
+class RateLimiterBinding(Protocol):
+    async def limit(self, options: dict[str, str]) -> object: ...
+
+
+class ChunkGateStub(Protocol):
+    async def reserve(
+        self,
+        payload_sha256: str,
+        now_ms: int,
+        lease_ms: int,
+    ) -> object: ...
+
+    async def accept(
+        self,
+        payload_sha256: str,
+        acknowledgment: object,
+        now_ms: int,
+        dedupe_ttl_ms: int,
+    ) -> object: ...
+
+    async def release(self, payload_sha256: str) -> object: ...
+
+
 class DurableObjectNamespace(Protocol):
     def idFromName(self, name: str) -> object: ...
 
-    def get(self, object_id: object) -> object: ...
+    def get(self, object_id: object) -> ChunkGateStub: ...
 
 
 def is_binding_null(value: object) -> bool:
@@ -69,3 +94,19 @@ def iter_binding_values(value: object) -> Iterator[object]:
         return iter(cast(Iterable[object], value))
     except TypeError:
         return iter(())
+
+
+def positive_int_field(environment: object, name: str, default: int) -> int:
+    """Read one positive integer config value without coercing booleans or floats."""
+    value = value_field(environment, name)
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value if value > 0 else default
+    if isinstance(value, str) and value.isascii() and value.isdecimal():
+        try:
+            parsed = int(value)
+        except ValueError:
+            return default
+        return parsed if parsed > 0 else default
+    return default

@@ -1,5 +1,6 @@
 import json
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -46,6 +47,182 @@ class FakeD1:
         return FakeD1PreparedStatement(self, sql)
 
 
+@dataclass(frozen=True, slots=True)
+class FakeR2PutCall:
+    key: str
+    body: object
+    options: dict[str, object]
+
+
+class FakeR2Bucket:
+    def __init__(self, operation_order: list[str]) -> None:
+        self.operation_order = operation_order
+        self.objects: dict[str, object] = {}
+        self.head_calls: list[str] = []
+        self.head_results: list[object | None] = []
+        self.put_calls: list[FakeR2PutCall] = []
+        self.put_results: list[object | None] = []
+        self.head_failure: Exception | None = None
+        self.put_failure: Exception | None = None
+
+    async def head(self, key: str) -> object | None:
+        self.head_calls.append(key)
+        if self.head_failure is not None:
+            raise self.head_failure
+        if self.head_results:
+            return self.head_results.pop(0)
+        return self.objects.get(key)
+
+    async def put(
+        self,
+        key: str,
+        value: object,
+        options: object | None = None,
+    ) -> object | None:
+        assert isinstance(options, dict)
+        self.operation_order.append("r2.put")
+        self.put_calls.append(FakeR2PutCall(key=key, body=value, options=options))
+        if self.put_failure is not None:
+            raise self.put_failure
+        if self.put_results:
+            result = self.put_results.pop(0)
+            if result is not None:
+                self.objects[key] = result
+            return result
+
+        stored = SimpleNamespace(customMetadata=options["customMetadata"])
+        self.objects[key] = stored
+        return stored
+
+    def seed_metadata(
+        self,
+        key: str,
+        payload_sha256: str | None,
+        *,
+        proxy: bool = False,
+    ) -> object:
+        metadata: object
+        if proxy:
+            metadata = SimpleNamespace(payload_sha256=payload_sha256)
+        else:
+            metadata = (
+                {} if payload_sha256 is None else {"payload_sha256": payload_sha256}
+            )
+        stored = SimpleNamespace(customMetadata=metadata)
+        self.objects[key] = stored
+        return stored
+
+
+class FakeQueueBinding:
+    def __init__(self, operation_order: list[str]) -> None:
+        self.operation_order = operation_order
+        self.send_calls: list[object] = []
+        self.failure: Exception | None = None
+
+    async def send(self, message: object) -> object:
+        self.operation_order.append("queue.send")
+        self.send_calls.append(message)
+        if self.failure is not None:
+            raise self.failure
+        return {"accepted": True}
+
+
+class FakeRateLimiter:
+    def __init__(self) -> None:
+        self.success = True
+        self.return_proxy = False
+        self.calls: list[dict[str, str]] = []
+        self.failure: Exception | None = None
+
+    async def limit(self, options: dict[str, str]) -> object:
+        self.calls.append(options)
+        if self.failure is not None:
+            raise self.failure
+        if self.return_proxy:
+            return SimpleNamespace(success=self.success)
+        return {"success": self.success}
+
+
+class FakeChunkGateStub:
+    def __init__(self, operation_order: list[str], rpc_order: list[str]) -> None:
+        self.operation_order = operation_order
+        self.rpc_order = rpc_order
+        self.reserve_result: object = {"status": "reserved"}
+        self.reserve_calls: list[tuple[str, int, int]] = []
+        self.accept_calls: list[tuple[str, object, int, int]] = []
+        self.release_calls: list[str] = []
+        self.reserve_failure: Exception | None = None
+        self.accept_failure: Exception | None = None
+        self.release_failure: Exception | None = None
+
+    async def reserve(
+        self,
+        payload_sha256: str,
+        now_ms: int,
+        lease_ms: int,
+    ) -> object:
+        self.operation_order.append("gate.reserve")
+        self.rpc_order.append("reserve")
+        self.reserve_calls.append((payload_sha256, now_ms, lease_ms))
+        if self.reserve_failure is not None:
+            raise self.reserve_failure
+        return self.reserve_result
+
+    async def accept(
+        self,
+        payload_sha256: str,
+        acknowledgment: object,
+        now_ms: int,
+        dedupe_ttl_ms: int,
+    ) -> object:
+        self.operation_order.append("gate.accept")
+        self.rpc_order.append("accept")
+        self.accept_calls.append(
+            (payload_sha256, acknowledgment, now_ms, dedupe_ttl_ms)
+        )
+        if self.accept_failure is not None:
+            raise self.accept_failure
+        return {"accepted": True}
+
+    async def release(self, payload_sha256: str) -> object:
+        self.operation_order.append("gate.release")
+        self.rpc_order.append("release")
+        self.release_calls.append(payload_sha256)
+        if self.release_failure is not None:
+            raise self.release_failure
+        return {"released": True}
+
+
+class FakeChunkGateNamespace:
+    def __init__(self, operation_order: list[str]) -> None:
+        self.rpc_order: list[str] = []
+        self.id_from_name_calls: list[str] = []
+        self.get_calls: list[object] = []
+        self.stub = FakeChunkGateStub(operation_order, self.rpc_order)
+
+    def idFromName(self, name: str) -> object:
+        self.rpc_order.append("idFromName")
+        self.id_from_name_calls.append(name)
+        return SimpleNamespace(name=name)
+
+    def get(self, object_id: object) -> FakeChunkGateStub:
+        self.rpc_order.append("get")
+        self.get_calls.append(object_id)
+        return self.stub
+
+    @property
+    def reserve_result(self) -> object:
+        return self.stub.reserve_result
+
+    @reserve_result.setter
+    def reserve_result(self, value: object) -> None:
+        self.stub.reserve_result = value
+
+    @property
+    def release_calls(self) -> list[str]:
+        return self.stub.release_calls
+
+
 @pytest.fixture
 def fixture_bytes() -> bytes:
     return V2_FIXTURE.read_bytes()
@@ -63,7 +240,18 @@ def fake_d1() -> FakeD1:
 
 @pytest.fixture
 def fake_env(fake_d1: FakeD1) -> SimpleNamespace:
-    return SimpleNamespace(DB=fake_d1)
+    operation_order: list[str] = []
+    return SimpleNamespace(
+        DB=fake_d1,
+        RAW_BUCKET=FakeR2Bucket(operation_order),
+        GAMEPLAY_QUEUE=FakeQueueBinding(operation_order),
+        CHUNK_GATE=FakeChunkGateNamespace(operation_order),
+        INGEST_RATE_LIMITER=FakeRateLimiter(),
+        MAX_CHUNK_BYTES="262144",
+        CHUNK_DEDUP_TTL_MS="86400000",
+        CHUNK_PUBLISHING_LEASE_MS="30000",
+        operation_order=operation_order,
+    )
 
 
 @pytest.fixture

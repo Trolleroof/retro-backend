@@ -1,133 +1,141 @@
-"""Transactional ingestion and idempotency service."""
-
-from __future__ import annotations
+"""R2-first gameplay ingestion coordinated by one per-chunk Durable Object."""
 
 import hashlib
-import json
-import time
-from dataclasses import dataclass
-from typing import Any
+from contextlib import suppress
+from typing import cast
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from ..bindings import (
+    DurableObjectNamespace,
+    R2Bucket,
+    is_binding_null,
+    positive_int_field,
+    value_field,
+)
+from ..chunk_gate import ChunkGateClient
+from ..contracts import (
+    EventRange,
+    GameplayPointer,
+    IngestAcknowledgment,
+    parse_chunk_envelope,
+)
+from ..storage.queues import GameplayQueuePublisher
+from ..storage.r2 import ObjectConflict, R2Store
 
-from ..contracts import validate_chunk
-from ..models import GameplayEvent, GameSession, IngestedChunk, ProcessingJob, User
-
-
-class ChunkConflictError(RuntimeError):
-    pass
-
-
-@dataclass(frozen=True)
-class IngestionResult:
-    chunk: dict[str, Any]
-    duplicate: bool
-    server_received_at_ms: int
-
-    def acknowledgment(self) -> dict[str, Any]:
-        return {
-            "accepted": True,
-            "duplicate": self.duplicate,
-            "game_id": self.chunk["game_id"],
-            "chunk_id": self.chunk["chunk_id"],
-            "chunk_sequence": self.chunk["chunk_sequence"],
-            "accepted_event_range": {
-                "first": self.chunk["first_event_sequence"],
-                "last": self.chunk["last_event_sequence"],
-            },
-            "server_received_at_ms": self.server_received_at_ms,
-        }
+DEFAULT_CHUNK_DEDUP_TTL_MS = 86_400_000
+DEFAULT_CHUNK_PUBLISHING_LEASE_MS = 30_000
 
 
-async def ingest_chunk(session: AsyncSession, raw_payload: bytes) -> IngestionResult:
-    chunk = validate_chunk(json.loads(raw_payload))
-    digest = hashlib.sha256(raw_payload).hexdigest()
-    existing = await session.get(IngestedChunk, chunk["chunk_id"])
-    if existing is not None:
-        if existing.payload_sha256 != digest or existing.raw_payload != raw_payload:
-            raise ChunkConflictError("chunk ID already contains different bytes")
-        return IngestionResult(
-            chunk=chunk, duplicate=True, server_received_at_ms=int(time.time() * 1000)
-        )
+class ChunkConflict(RuntimeError):
+    """Raised when a chunk identity is already bound to different bytes."""
 
-    sequence_owner = await session.scalar(
-        select(IngestedChunk).where(
-            IngestedChunk.game_id == chunk["game_id"],
-            IngestedChunk.chunk_sequence == chunk["chunk_sequence"],
-        )
+
+class IngestionUnavailable(RuntimeError):
+    """Raised for retryable ingest infrastructure failures."""
+
+
+def _build_adapters(
+    environment: object,
+) -> tuple[R2Store, GameplayQueuePublisher, ChunkGateClient]:
+    bucket = value_field(environment, "RAW_BUCKET")
+    namespace = value_field(environment, "CHUNK_GATE")
+    queue = value_field(environment, "GAMEPLAY_QUEUE")
+    if any(is_binding_null(binding) for binding in (bucket, namespace, queue)):
+        raise RuntimeError("required ingest binding unavailable")
+
+    lease_ms = positive_int_field(
+        environment,
+        "CHUNK_PUBLISHING_LEASE_MS",
+        DEFAULT_CHUNK_PUBLISHING_LEASE_MS,
     )
-    if sequence_owner is not None:
-        raise ChunkConflictError("chunk sequence already belongs to a different chunk")
+    dedupe_ttl_ms = positive_int_field(
+        environment,
+        "CHUNK_DEDUP_TTL_MS",
+        DEFAULT_CHUNK_DEDUP_TTL_MS,
+    )
+    return (
+        R2Store(cast(R2Bucket, bucket)),
+        GameplayQueuePublisher(environment),
+        ChunkGateClient(
+            cast(DurableObjectNamespace, namespace),
+            lease_ms=lease_ms,
+            dedupe_ttl_ms=dedupe_ttl_ms,
+        ),
+    )
 
-    user_id = chunk.get("user_id", "usr_legacy")
-    user = await session.get(User, user_id)
-    if user is None:
-        user = User(id=user_id)
-        session.add(user)
-        await session.flush([user])
 
-    game = await session.get(GameSession, chunk["game_id"])
-    if game is None:
-        game = GameSession(
-            id=chunk["game_id"],
+async def _release_without_masking(
+    gate: ChunkGateClient,
+    payload_sha256: str,
+) -> None:
+    with suppress(Exception):
+        await gate.release(payload_sha256)
+
+
+async def ingest_chunk(
+    env: object,
+    user_id: str,
+    raw_body: bytes,
+    now_ms: int,
+) -> IngestAcknowledgment:
+    envelope = parse_chunk_envelope(raw_body, user_id)
+    payload_sha256 = hashlib.sha256(raw_body).hexdigest()
+
+    try:
+        store, queue, gate = _build_adapters(env)
+        reservation = await gate.reserve(
+            user_id,
+            envelope.chunk_id,
+            payload_sha256,
+            now_ms,
+        )
+    except Exception as error:
+        raise IngestionUnavailable("event ingestion unavailable") from error
+
+    if reservation.status == "duplicate":
+        if reservation.ack is None:
+            raise IngestionUnavailable("event ingestion unavailable")
+        return reservation.ack.model_copy(update={"duplicate": True})
+    if reservation.status == "conflict":
+        raise ChunkConflict("chunk ID already contains different bytes")
+    if reservation.status == "publishing":
+        raise IngestionUnavailable("chunk is currently publishing; retry later")
+
+    try:
+        r2_key = await store.put_raw(
             user_id=user_id,
-            game_type=chunk["game_type"],
-            game_version=chunk["game_version"],
-            event_count=0,
-            chunk_count=0,
+            game_id=envelope.game_id,
+            chunk_id=envelope.chunk_id,
+            raw_body=raw_body,
+            payload_sha256=payload_sha256,
         )
-        session.add(game)
-        await session.flush([game])
-    elif (
-        game.user_id != user_id
-        or game.game_type != chunk["game_type"]
-        or game.game_version != chunk["game_version"]
-    ):
-        raise ChunkConflictError("game identity does not match previously ingested chunks")
-
-    stored = IngestedChunk(
-        id=chunk["chunk_id"],
-        game_id=chunk["game_id"],
-        user_id=user_id,
-        schema_version=chunk["schema_version"],
-        chunk_sequence=chunk["chunk_sequence"],
-        first_event_sequence=chunk["first_event_sequence"],
-        last_event_sequence=chunk["last_event_sequence"],
-        event_count=chunk["event_count"],
-        created_at_ms=round(chunk["created_at_ms"]),
-        payload_sha256=digest,
-        raw_payload=raw_payload,
-    )
-    session.add(stored)
-    await session.flush([stored])
-    for event in chunk["events"]:
-        session.add(
-            GameplayEvent(
-                id=event["event_id"],
-                chunk_id=chunk["chunk_id"],
-                game_id=chunk["game_id"],
-                user_id=user_id,
-                event_sequence=event["event_sequence"],
-                event_type=event["event_type"],
-                visibility=event.get("visibility", "policy"),
-                client_time_ms=round(event["client_time_ms"]),
-                monotonic_time_us=round(
-                    event.get("monotonic_time_us", event.get("monotonic_time_ms", 0) * 1000)
-                ),
-                simulation_tick=event.get("simulation_tick"),
-                payload=event["payload"],
-            )
+        pointer = GameplayPointer(
+            r2_key=r2_key,
+            payload_sha256=payload_sha256,
+            user_id=user_id,
+            game_id=envelope.game_id,
+            chunk_id=envelope.chunk_id,
+            received_at_ms=now_ms,
         )
-    game.event_count += chunk["event_count"]
-    game.chunk_count += 1
-    session.add(
-        ProcessingJob(
-            id=f"process:{chunk['chunk_id']}",
-            chunk_id=chunk["chunk_id"],
+        await queue.publish(pointer)
+        acknowledgment = IngestAcknowledgment(
+            duplicate=False,
+            game_id=envelope.game_id,
+            chunk_id=envelope.chunk_id,
+            chunk_sequence=envelope.chunk_sequence,
+            accepted_event_range=EventRange(
+                first=envelope.first_event_sequence,
+                last=envelope.last_event_sequence,
+            ),
+            server_received_at_ms=now_ms,
         )
-    )
-    await session.flush()
-    return IngestionResult(
-        chunk=chunk, duplicate=False, server_received_at_ms=int(time.time() * 1000)
-    )
+        await gate.accept(payload_sha256, acknowledgment, now_ms)
+        return acknowledgment
+    except ObjectConflict as error:
+        await _release_without_masking(gate, payload_sha256)
+        raise ChunkConflict("chunk ID already contains different bytes") from error
+    except ChunkConflict:
+        await _release_without_masking(gate, payload_sha256)
+        raise
+    except Exception as error:
+        await _release_without_masking(gate, payload_sha256)
+        raise IngestionUnavailable("event ingestion unavailable") from error
