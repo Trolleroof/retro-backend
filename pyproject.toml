@@ -1,29 +1,22 @@
 [project]
 name = "retro-backend"
-version = "0.1.0"
+version = "0.2.0"
 description = "Gameplay ingestion, storage, and processing backend for Retro Arcade"
-requires-python = ">=3.11,<3.15"
+requires-python = ">=3.13,<3.14"
 dependencies = [
-    "alembic>=1.14.0",
-    "fastapi[standard]>=0.115.0",
-    "prometheus-client>=0.21.0",
-    "psycopg[binary]>=3.2.0",
-    "pydantic-settings>=2.7.0",
-    "redis>=5.2.0",
-    "sqlalchemy[asyncio]>=2.0.36",
-    "tenacity>=9.0.0",
-    "uvicorn[standard]>=0.34.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.28.0",
+    "pydantic>=2.10.0",
 ]
 
 [dependency-groups]
 dev = [
-    "aiosqlite>=0.20.0",
     "basedpyright>=1.29.0",
-    "fakeredis>=2.26.0",
-    "httpx>=0.28.0",
     "pytest>=8.3.0",
     "pytest-asyncio>=0.25.0",
     "ruff>=0.11.0",
+    "workers-py>=1.15.0",
+    "workers-runtime-sdk>=0.3.1",
 ]
 
 [tool.pytest.ini_options]
@@ -31,7 +24,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
@@ -42,8 +35,21 @@ ignore = ["E501"]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Header"]
 
 [tool.basedpyright]
-pythonVersion = "3.11"
+pythonVersion = "3.13"
 include = ["src", "tests"]
+# These legacy surfaces are replaced by later tasks in the approved rewrite plan.
+exclude = [
+    "src/retro_backend/api/routes.py",
+    "src/retro_backend/config.py",
+    "src/retro_backend/database.py",
+    "src/retro_backend/main.py",
+    "src/retro_backend/models.py",
+    "src/retro_backend/redis_client.py",
+    "src/retro_backend/services/ingestion.py",
+    "src/retro_backend/worker.py",
+    "tests/test_ingestion_api.py",
+    "tests/test_worker.py",
+]
 reportMissingTypeStubs = false
 reportAny = false
 reportExplicitAny = false

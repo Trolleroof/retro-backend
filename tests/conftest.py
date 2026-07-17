@@ -1,26 +1,49 @@
 import json
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
-
-from retro_backend.config import Settings
-from retro_backend.main import create_app
-from retro_backend.models import Base
 
 ROOT = Path(__file__).resolve().parents[1]
 V2_FIXTURE = ROOT / "contracts/fixtures/interaction-trace-chunk-v2.json"
 
 
-def _enable_sqlite_foreign_keys(dbapi_connection: Any, _: Any) -> None:
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+class FakeD1PreparedStatement:
+    def __init__(self, database: "FakeD1", sql: str) -> None:
+        self.database = database
+        self.sql = sql
+
+    def bind(self, *values: object) -> "FakeD1PreparedStatement":
+        self.database.bind_calls.append(values)
+        return self
+
+    async def first(self) -> object | None:
+        self.database.first_calls.append(self.sql)
+        if not self.database.first_rows:
+            return None
+        return self.database.first_rows.pop(0)
+
+    async def run(self) -> object:
+        self.database.run_calls.append(self.sql)
+        rows = self.database.run_rows.pop(0) if self.database.run_rows else []
+        return {"results": rows}
+
+
+class FakeD1:
+    def __init__(self) -> None:
+        self.prepared_sql: list[str] = []
+        self.bind_calls: list[tuple[object, ...]] = []
+        self.first_calls: list[str] = []
+        self.run_calls: list[str] = []
+        self.first_rows: list[object | None] = []
+        self.run_rows: list[list[object]] = []
+
+    def prepare(self, sql: str) -> FakeD1PreparedStatement:
+        self.prepared_sql.append(sql)
+        return FakeD1PreparedStatement(self, sql)
 
 
 @pytest.fixture
@@ -34,35 +57,23 @@ def fixture_payload(fixture_bytes: bytes) -> dict[str, Any]:
 
 
 @pytest.fixture
-async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine = create_async_engine(
-        "sqlite+aiosqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    event.listen(engine.sync_engine, "connect", _enable_sqlite_foreign_keys)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    yield factory
-    await engine.dispose()
+def fake_d1() -> FakeD1:
+    return FakeD1()
 
 
 @pytest.fixture
-async def client(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> AsyncIterator[AsyncClient]:
-    settings = Settings(
-        environment="test",
-        database_url="sqlite+aiosqlite://",
-        ingest_api_key="test-secret",
-        redis_url=None,
-    )
-    app = create_app(settings=settings, session_factory=session_factory)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as value:
-        yield value
+def fake_env(fake_d1: FakeD1) -> SimpleNamespace:
+    return SimpleNamespace(DB=fake_d1)
 
 
 @pytest.fixture
-def auth_headers() -> dict[str, str]:
-    return {"Authorization": "Bearer test-secret", "Content-Type": "application/json"}
+async def app_client(fake_env: SimpleNamespace) -> AsyncIterator[AsyncClient]:
+    from retro_backend.app import app
+
+    app.state.env = fake_env
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        yield client
+    del app.state.env
