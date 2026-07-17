@@ -16,6 +16,7 @@ from alembic import context, op
 from retro_backend.migration_safety import (
     LEGACY_GAMEPLAY_TABLES,
     assert_legacy_tables_empty,
+    legacy_lock_sql,
     offline_legacy_guard_sql,
 )
 
@@ -26,6 +27,9 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    for statement in legacy_lock_sql():
+        op.execute(sa.text(statement))
+
     if context.is_offline_mode():
         op.execute(sa.text(offline_legacy_guard_sql()))
     else:

@@ -68,6 +68,54 @@ class S3ObjectStorage:
             response = await client.get_object(Bucket=self._bucket, Key=key)
             return bytes(await response["Body"].read())
 
+    async def get_with_version(self, key: str) -> tuple[bytes, str] | None:
+        try:
+            async with self._client() as client:
+                response = await client.get_object(Bucket=self._bucket, Key=key)
+                body = bytes(await response["Body"].read())
+        except ClientError as error:
+            code = str(error.response.get("Error", {}).get("Code", ""))
+            if code in {"404", "NoSuchKey", "NotFound"}:
+                return None
+            raise
+        version = response.get("ETag")
+        if not isinstance(version, str) or not version:
+            raise OSError(f"object {key} did not return an ETag")
+        return body, version
+
+    async def put_if_version(
+        self,
+        key: str,
+        body: bytes,
+        metadata: dict[str, str],
+        expected_version: str | None,
+    ) -> bool:
+        condition = (
+            {"IfNoneMatch": "*"}
+            if expected_version is None
+            else {"IfMatch": expected_version}
+        )
+        try:
+            async with self._client() as client:
+                await client.put_object(
+                    Bucket=self._bucket,
+                    Key=key,
+                    Body=body,
+                    Metadata=metadata,
+                    ContentType="application/json",
+                    **condition,
+                )
+        except ClientError as error:
+            code = str(error.response.get("Error", {}).get("Code", ""))
+            status = int(error.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+            if code in {"PreconditionFailed", "ConditionalRequestConflict"} or status in {
+                409,
+                412,
+            }:
+                return False
+            raise
+        return True
+
     async def iter_keys(self, prefix: str) -> AsyncIterator[str]:
         async with self._client() as client:
             paginator = client.get_paginator("list_objects_v2")

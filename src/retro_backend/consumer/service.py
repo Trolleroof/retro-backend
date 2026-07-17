@@ -71,6 +71,8 @@ class ConsumerService:
                     self._metrics.mark_heartbeat()
                 for record in records:
                     await self._worker.handle(record)
+                    if self._metrics is not None:
+                        self._metrics.mark_heartbeat()
                 now = asyncio.get_running_loop().time()
                 if now >= next_flush:
                     await self._worker.flush_all()

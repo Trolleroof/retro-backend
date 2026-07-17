@@ -16,6 +16,12 @@ class LegacyDataExportRequiredError(RuntimeError):
     """Legacy gameplay rows must be exported before their tables can be removed."""
 
 
+def legacy_lock_sql() -> tuple[str, ...]:
+    return tuple(
+        f'LOCK TABLE "{table}" IN ACCESS EXCLUSIVE MODE' for table in LEGACY_GAMEPLAY_TABLES
+    )
+
+
 def assert_legacy_tables_empty(row_counts: Mapping[str, int]) -> None:
     populated = {name: count for name, count in row_counts.items() if count > 0}
     if not populated:

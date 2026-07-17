@@ -43,3 +43,13 @@ def test_consumer_health_requires_running_and_fresh_heartbeat() -> None:
 def test_consumer_health_rejects_missing_or_malformed_metrics() -> None:
     assert not metrics_are_healthy(b"", now=1.0, stale_seconds=20.0)
     assert not metrics_are_healthy(b"retro_consumer_running nope\n", now=1.0, stale_seconds=20.0)
+
+
+def test_recent_record_progress_keeps_health_fresh_when_poll_heartbeat_is_stale() -> None:
+    registry = CollectorRegistry()
+    metrics = ConsumerMetrics(registry)
+    metrics.mark_running(now=100.0)
+    metrics.mark_heartbeat(now=100.0)
+    metrics.mark_progress(now=118.0)
+
+    assert metrics_are_healthy(generate_latest(registry), now=120.0, stale_seconds=10.0)

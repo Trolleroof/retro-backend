@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 from collections.abc import AsyncIterator
@@ -6,6 +7,7 @@ from datetime import date
 
 import pyarrow.parquet as pq
 import pytest
+from typing_extensions import override
 
 from retro_backend.compaction import compact_day
 from retro_backend.consumer.parquet import PARQUET_FIELDS, encode_rows
@@ -17,6 +19,7 @@ class Storage:
     def __init__(self) -> None:
         self.objects: dict[str, tuple[bytes, dict[str, str]]] = {}
         self.put_order: list[str] = []
+        self.versions: dict[str, int] = {}
 
     async def head(self, key: str) -> ObjectInfo | None:
         value = self.objects.get(key)
@@ -27,9 +30,30 @@ class Storage:
     async def put(self, key: str, body: bytes, metadata: dict[str, str]) -> None:
         self.put_order.append(key)
         self.objects[key] = (body, metadata)
+        self.versions[key] = self.versions.get(key, 0) + 1
 
     async def get(self, key: str) -> bytes:
         return self.objects[key][0]
+
+    async def get_with_version(self, key: str) -> tuple[bytes, str] | None:
+        if key not in self.objects:
+            return None
+        version = self.versions.setdefault(key, 1)
+        return self.objects[key][0], str(version)
+
+    async def put_if_version(
+        self,
+        key: str,
+        body: bytes,
+        metadata: dict[str, str],
+        expected_version: str | None,
+    ) -> bool:
+        current = await self.get_with_version(key)
+        current_version = current[1] if current is not None else None
+        if current_version != expected_version:
+            return False
+        await self.put(key, body, metadata)
+        return True
 
     async def iter_keys(self, prefix: str) -> AsyncIterator[str]:
         for key in sorted(key for key in self.objects if key.startswith(prefix)):
@@ -196,3 +220,57 @@ async def test_failed_generation_never_replaces_latest_manifest() -> None:
         )
 
     assert storage.objects[first.manifest_key] == previous_manifest
+
+
+@pytest.mark.asyncio
+async def test_older_compaction_cannot_overwrite_newer_latest_manifest() -> None:
+    class InterleavingStorage(Storage):
+        def __init__(self) -> None:
+            super().__init__()
+            self.old_publish_blocked = asyncio.Event()
+            self.release_old_publish = asyncio.Event()
+            self.blocked_once = False
+
+        @override
+        async def put_if_version(
+            self,
+            key: str,
+            body: bytes,
+            metadata: dict[str, str],
+            expected_version: str | None,
+        ) -> bool:
+            document = json.loads(body)
+            if document["source_object_count"] == 1 and not self.blocked_once:
+                self.blocked_once = True
+                self.old_publish_blocked.set()
+                await self.release_old_publish.wait()
+            return await super().put_if_version(
+                key,
+                body,
+                metadata,
+                expected_version,
+            )
+
+    storage = InterleavingStorage()
+    prefix = "raw/date=2026-07-17/"
+    storage.objects[f"{prefix}a.parquet"] = (encode_rows([event_row()]), {})
+    writer = IdempotentObjectWriter(storage)
+
+    older_task = asyncio.create_task(
+        compact_day(storage=storage, writer=writer, day=date(2026, 7, 17))
+    )
+    await asyncio.wait_for(storage.old_publish_blocked.wait(), timeout=0.1)
+    storage.objects[f"{prefix}b.parquet"] = (
+        encode_rows([event_row(event_id="evt_late", broker_offset=9)]),
+        {},
+    )
+
+    newer = await compact_day(storage=storage, writer=writer, day=date(2026, 7, 17))
+    storage.release_old_publish.set()
+    older = await older_task
+
+    assert newer and newer.published
+    assert older and not older.published
+    latest = manifest(storage, newer.manifest_key)
+    assert latest["generation"] == newer.generation
+    assert latest["source_object_count"] == 2

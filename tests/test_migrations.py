@@ -5,6 +5,7 @@ from alembic import command
 from alembic.config import Config
 
 from retro_backend.migration_safety import (
+    LEGACY_GAMEPLAY_TABLES,
     LegacyDataExportRequiredError,
     assert_legacy_tables_empty,
 )
@@ -26,6 +27,13 @@ def test_migrations_render_complete_offline_sql(capsys: pytest.CaptureFixture[st
     )
     assert "md5(id || ':retro-migration-a') || md5(id || ':retro-migration-b')" in sql
     assert "NULL-migration" not in sql
+    first_check = sql.index("EXISTS (SELECT 1")
+    for table in LEGACY_GAMEPLAY_TABLES:
+        lock = f'LOCK TABLE "{table}" IN ACCESS EXCLUSIVE MODE'
+        drop = f"DROP TABLE {table}"
+        assert lock in sql
+        assert sql.index(lock) < first_check
+        assert sql.index(lock) < sql.index(drop)
 
 
 def test_populated_legacy_tables_require_export_before_drop() -> None:

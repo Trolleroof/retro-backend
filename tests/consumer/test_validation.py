@@ -49,6 +49,34 @@ def test_decode_v2_record_flattens_every_event_with_authoritative_identity(
     assert [row.event_sequence for row in rows] == [1, 2, 3, 4, 5]
 
 
+def test_payload_json_preserves_the_complete_original_parsed_payload(
+    payload: dict[str, object],
+) -> None:
+    events = payload["events"]
+    assert isinstance(events, list)
+    observation = events[1]
+    assert isinstance(observation, dict)
+    original_payload = observation["payload"]
+    assert isinstance(original_payload, dict)
+    assert "capture_timing" not in original_payload
+    assert "caused_by_event_id" not in original_payload
+
+    rows = decode_v2_record(make_record(payload))
+
+    expected = json.dumps(original_payload, sort_keys=True, separators=(",", ":"))
+    assert rows[1].payload_json == expected
+    decoded = json.loads(rows[1].payload_json)
+    assert decoded == original_payload
+    cells = decoded["cells"]
+    assert isinstance(cells, list)
+    cell = cells[0]
+    assert isinstance(cell, dict)
+    assert type(cell["foreground"]) is int
+    assert cell["foreground"] == 15
+    assert "capture_timing" not in decoded
+    assert "caused_by_event_id" not in decoded
+
+
 @pytest.mark.parametrize(
     ("case", "message"),
     [

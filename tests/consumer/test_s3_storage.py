@@ -19,7 +19,7 @@ class Client:
         self.puts.append(kwargs)
 
     async def get_object(self, **_: object) -> dict[str, object]:
-        return {"Body": Body()}
+        return {"Body": Body(), "ETag": '"etag-1"'}
 
     def get_paginator(self, _: str) -> "Paginator":
         return Paginator()
@@ -66,8 +66,17 @@ async def test_s3_storage_exposes_idempotency_and_compaction_operations() -> Non
 
     assert head and head.size == 6 and head.metadata == {"sha256": "abc"}
     assert await storage.get("raw/a.parquet") == b"stored"
+    assert await storage.get_with_version("latest.json") == (b"stored", '"etag-1"')
+    assert await storage.put_if_version(
+        "latest.json", b"first", {"sha256": "one"}, None
+    )
+    assert await storage.put_if_version(
+        "latest.json", b"second", {"sha256": "two"}, '"etag-1"'
+    )
     assert [key async for key in storage.iter_keys("raw/")] == [
         "raw/a.parquet",
         "raw/b.parquet",
     ]
     assert session.value.puts[0]["Bucket"] == "events"
+    assert session.value.puts[1]["IfNoneMatch"] == "*"
+    assert session.value.puts[2]["IfMatch"] == '"etag-1"'

@@ -1,12 +1,17 @@
+import asyncio
 import hashlib
+from types import SimpleNamespace
 
 import pytest
+from fakeredis import FakeServer
+from fakeredis import _basefakesocket as fakeredis_socket
 from fakeredis.aioredis import FakeRedis
 from redis.exceptions import RedisError
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session
 
+from retro_backend import token_cli
 from retro_backend.auth_cache import (
     NEGATIVE_CACHE_VALUE,
     POSITIVE_AUTH_TTL_SECONDS,
@@ -130,10 +135,84 @@ async def test_rotation_tombstone_covers_long_transaction_and_is_reasserted_afte
     rotated_digest = hashlib.sha256(rotated.encode()).hexdigest()
 
     assert tombstone_observations == [
-        (None, original_digest, False),
+        (ROTATION_TOMBSTONE_TTL_SECONDS, original_digest, False),
         (ROTATION_TOMBSTONE_TTL_SECONDS, rotated_digest, False),
     ]
     assert await redis.ttl(old_cache_key) > POSITIVE_AUTH_TTL_SECONDS
+
+
+async def test_rotation_tombstone_lease_renews_without_becoming_permanent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    redis = FakeRedis(decode_responses=True)
+    key = "retro:auth:old-digest"
+    value = f"{NEGATIVE_CACHE_VALUE}:owned"
+    await redis.set(key, value, ex=ROTATION_TOMBSTONE_TTL_SECONDS)
+    wake = asyncio.Event()
+    renewed = asyncio.Event()
+    intervals: list[float] = []
+    renewal_calls = 0
+    original_eval = redis.eval
+
+    async def controlled_sleep(delay: float) -> None:
+        intervals.append(delay)
+        await wake.wait()
+        wake.clear()
+
+    async def recording_eval(
+        script: str,
+        numkeys: int,
+        *args: str | int | float | bytes,
+    ) -> object:
+        nonlocal renewal_calls
+        result = await original_eval(script, numkeys, *args)
+        renewal_calls += 1
+        renewed.set()
+        return result
+
+    monkeypatch.setattr(redis, "eval", recording_eval)
+    lease_type = token_cli.TombstoneLease
+    lease = lease_type(
+        redis,
+        key,
+        value,
+        ttl_seconds=ROTATION_TOMBSTONE_TTL_SECONDS,
+        interval_seconds=7,
+        sleep=controlled_sleep,
+    )
+    lease.start()
+
+    wake.set()
+    await renewed.wait()
+
+    assert intervals and set(intervals) == {7}
+    assert renewal_calls == 1
+    assert 0 < await redis.ttl(key) <= ROTATION_TOMBSTONE_TTL_SECONDS
+
+    await lease.stop()
+    wake.set()
+    await asyncio.sleep(0)
+    assert renewal_calls == 1
+
+
+async def test_abandoned_precommit_tombstone_expires_without_wall_clock_sleep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = 1_000.0
+    monkeypatch.setattr(
+        fakeredis_socket,
+        "time",
+        SimpleNamespace(time=lambda: now),
+    )
+    redis = FakeRedis(server=FakeServer(), decode_responses=True)
+    key = "retro:auth:old-digest"
+    value = f"{NEGATIVE_CACHE_VALUE}:owned"
+
+    await redis.set(key, value, ex=ROTATION_TOMBSTONE_TTL_SECONDS)
+    assert await redis.get(key) == value
+
+    now += ROTATION_TOMBSTONE_TTL_SECONDS + 1
+    assert await redis.get(key) is None
 
 
 async def test_rotate_tombstones_old_cache_before_committing_new_hash(

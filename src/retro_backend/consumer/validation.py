@@ -323,18 +323,24 @@ def decode_v2_record(record: BrokerRecord) -> list[EventRow]:
     _validate_broker_coordinates(record)
     authenticated_user = _authenticated_user(record)
     try:
-        chunk = TraceChunkV2.model_validate_json(record.value)
-    except (ValidationError, ValueError) as error:
+        parsed = json.loads(record.value)
+        chunk = TraceChunkV2.model_validate(parsed)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, ValueError) as error:
         raise RecordValidationError(str(error)) from error
     if chunk.user_id != authenticated_user:
         raise RecordValidationError("embedded user_id must match the authenticated user")
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("events"), list):
+        raise RecordValidationError("events must be an array")
+    source_events = parsed["events"]
 
     rows: list[EventRow] = []
     try:
-        for event in chunk.events:
-            payload = event.payload.model_dump(mode="json")
+        for index, event in enumerate(chunk.events):
+            source_event = source_events[index]
+            if not isinstance(source_event, dict) or "payload" not in source_event:
+                raise ValueError("event payload is missing")
             payload_json = json.dumps(
-                payload,
+                source_event["payload"],
                 sort_keys=True,
                 separators=(",", ":"),
                 allow_nan=False,

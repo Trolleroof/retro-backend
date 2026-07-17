@@ -51,11 +51,11 @@ uv run python -m retro_backend.token_cli --user-id usr_example --rotate
 
 Clients send the issued value as `Authorization: Bearer <token>`. There is no shared ingestion-key setting.
 
-Users retained by the forward migration receive inaccessible placeholder hashes. Each migrated user must be issued a usable token with `--rotate`; token recovery is impossible because raw tokens are never stored. Rotation installs a non-expiring old-token tombstone for the database transaction, then reasserts it after commit with a TTL longer than the positive auth-cache TTL.
+Users retained by the forward migration receive inaccessible placeholder hashes. Each migrated user must be issued a usable token with `--rotate`; token recovery is impossible because raw tokens are never stored. Rotation installs a long but finite old-token tombstone and renews that owned lease throughout the database transaction. A process killed before commit eventually falls back to the unchanged database token after the lease expires. After commit, rotation reasserts the tombstone with a revocation TTL longer than the positive auth-cache TTL.
 
 ### Legacy migration safety
 
-Migration `0002_streaming_ingestion` checks `game_sessions`, `ingested_chunks`, `gameplay_events`, and `processing_jobs` before dropping anything. If any contains a row, Alembic fails with an export-required error. Export and verify the legacy data using an operator-controlled process, clear those tables, and rerun the migration. Alembic performs no S3 or other network export work. A fresh or empty install ends with only `users` and `high_scores`.
+Migration `0002_streaming_ingestion` acquires PostgreSQL `ACCESS EXCLUSIVE` locks on `game_sessions`, `ingested_chunks`, `gameplay_events`, and `processing_jobs` before checking or dropping anything, and holds them through the transactional drops. If any contains a row, Alembic fails with an export-required error. Export and verify the legacy data using an operator-controlled process, clear those tables, and rerun the migration. Alembic performs no S3 or other network export work. A fresh or empty install ends with only `users` and `high_scores`.
 
 ## Configuration
 
@@ -110,9 +110,9 @@ raw/date=YYYY-MM-DD/topic=<topic>/partition=<partition>/offsets=<offset>-<offset
 
 Each object stores its SHA-256 and source offset as metadata. A crash replay HEAD-checks the same key: identical bytes are accepted without another upload, while different bytes are a terminal integrity conflict. This one-record boundary cannot change with timing, shutdown, or replay, so overlapping raw ranges cannot be created. Processing, commits, and revocation are generation-locked; revocation waits for an in-flight durability unit and clears offset state before reassignment initializes from its first record. Kafka membership loss, S3 auth/config errors, nonretryable 4xx responses, and object conflicts are terminal. Only network, timeout, throttle, and server-side failures use bounded exponential backoff.
 
-Metrics include running state, poll heartbeat, durable progress time, outcome counts, object counts, and committed next offsets. Compose health requires `retro_consumer_running 1` and a heartbeat newer than `RETRO_CONSUMER_HEALTH_STALE_SECONDS`; a responsive metrics thread alone is not healthy.
+Metrics include running state, poll heartbeat, durable progress time, outcome counts, object counts, and committed next offsets. Compose health requires `retro_consumer_running 1` and recent activity, evaluated as the newer of poll heartbeat and durable record progress, within `RETRO_CONSUMER_HEALTH_STALE_SECONDS`; a responsive metrics thread alone is not healthy.
 
-Parquet contains only `schema_version`, authenticated identity, game/chunk/event fields, canonical `payload_json`, broker partition/offset, and ingestion time. It contains no auth tokens or score columns.
+Parquet contains only `schema_version`, authenticated identity, game/chunk/event fields, canonical `payload_json`, broker partition/offset, and ingestion time. Strict Pydantic models validate each payload, but `payload_json` is serialized from the original parsed payload with sorted keys and compact separators, preserving absent versus null fields and integer versus floating-point values. It contains no auth tokens or score columns.
 
 ## Daily compaction
 
@@ -124,7 +124,7 @@ make compact DATE=2026-07-17
 docker compose --profile maintenance run --rm compactor --date 2026-07-17
 ```
 
-Compaction streams one raw date prefix through a temporary on-disk SQLite index and deduplicates by `(user_id, event_id)`, keeping the earliest broker position. It reads bounded Arrow batches and writes bounded immutable parts under `compacted/date=YYYY-MM-DD/generations/<source-manifest>/`. Only after every part is durable does it atomically publish `compacted/date=YYYY-MM-DD/latest.json`. Readers must use that pointer; late data produces a new complete generation without double-counting, while raw objects and all prior generations remain untouched. Schedule the command daily in the deployment scheduler; Compose exposes it as a one-shot maintenance job.
+Compaction streams one raw date prefix through a temporary on-disk SQLite index and deduplicates by `(user_id, event_id)`, keeping the earliest broker position. It reads bounded Arrow batches and writes bounded immutable parts under `compacted/date=YYYY-MM-DD/generations/<source-manifest>/`. Only after every part is durable does it publish `compacted/date=YYYY-MM-DD/latest.json` with an S3 ETag compare-and-swap. On contention it re-reads the pointer and advances only when its immutable source-object count is strictly newer; an older compactor cannot replace a newer snapshot. Readers must use that pointer; late data produces a new complete generation without double-counting, while raw objects and all prior generations remain untouched. Schedule the command daily in the deployment scheduler; Compose exposes it as a one-shot maintenance job.
 
 Supported score game types are `2048`, `tetris`, `snake`, `minesweeper`, `sokoban`, `connect4`, `lightsout`, and `sudoku`. A result changes the personal best only when its score is higher; lower and equal retries preserve the original achievement timestamp.
 

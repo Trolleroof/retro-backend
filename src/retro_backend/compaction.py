@@ -30,7 +30,15 @@ class CompactionStorage(Protocol):
 
     async def get(self, key: str) -> bytes: ...
 
-    async def put(self, key: str, body: bytes, metadata: dict[str, str]) -> None: ...
+    async def get_with_version(self, key: str) -> tuple[bytes, str] | None: ...
+
+    async def put_if_version(
+        self,
+        key: str,
+        body: bytes,
+        metadata: dict[str, str],
+        expected_version: str | None,
+    ) -> bool: ...
 
 
 class CompactionWriter(Protocol):
@@ -48,6 +56,7 @@ class CompactionResult:
     input_rows: int
     output_rows: int
     existed: bool
+    published: bool
 
 
 def _required_int(row: dict[str, object], name: str) -> int:
@@ -148,6 +157,47 @@ def _manifest_bytes(document: dict[str, object]) -> bytes:
     return json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
 
 
+def _source_object_count(document: dict[str, object]) -> int:
+    value = document.get("source_object_count")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("latest compaction manifest has an invalid source_object_count")
+    return value
+
+
+async def _publish_latest(
+    *,
+    storage: CompactionStorage,
+    key: str,
+    body: bytes,
+    metadata: dict[str, str],
+    candidate: dict[str, object],
+) -> bool:
+    candidate_count = _source_object_count(candidate)
+    candidate_generation = candidate["generation"]
+    while True:
+        current = await storage.get_with_version(key)
+        expected_version: str | None = None
+        if current is not None:
+            current_body, expected_version = current
+            current_document = json.loads(current_body)
+            if not isinstance(current_document, dict):
+                raise ValueError("latest compaction manifest must be an object")
+            if current_document.get("generation") == candidate_generation:
+                return False
+            # Raw objects are immutable and never deleted. Therefore a strictly
+            # larger object count is a deterministic superset metric; equal or
+            # smaller snapshots may never replace the current generation.
+            if candidate_count <= _source_object_count(current_document):
+                return False
+        if await storage.put_if_version(
+            key,
+            body,
+            metadata,
+            expected_version,
+        ):
+            return True
+
+
 async def compact_day(
     *,
     storage: CompactionStorage,
@@ -227,24 +277,31 @@ async def compact_day(
                 part_number += 1
 
             manifest_key = f"{compacted_prefix.strip('/')}/date={day.isoformat()}/latest.json"
-            manifest = _manifest_bytes(
-                {
-                    "schema_version": 1,
-                    "date": day.isoformat(),
-                    "generation": generation,
-                    "source_object_count": input_objects,
-                    "input_row_count": input_rows,
-                    "output_row_count": output_rows,
-                    "parts": part_documents,
-                }
-            )
+            manifest_document: dict[str, object] = {
+                "schema_version": 1,
+                "date": day.isoformat(),
+                "generation": generation,
+                "source_object_count": input_objects,
+                "source_generation_metric": {
+                    "object_count": input_objects,
+                    "manifest_sha256": generation,
+                },
+                "input_row_count": input_rows,
+                "output_row_count": output_rows,
+                "parts": part_documents,
+            }
+            manifest = _manifest_bytes(manifest_document)
             manifest_digest = hashlib.sha256(manifest).hexdigest()
-            # S3 PUT is atomic at the object level. Publishing this mutable pointer
-            # last makes all listed immutable parts authoritative as one generation.
-            await storage.put(
-                manifest_key,
-                manifest,
-                {"sha256": manifest_digest, "generation": generation},
+            published = await _publish_latest(
+                storage=storage,
+                key=manifest_key,
+                body=manifest,
+                metadata={
+                    "sha256": manifest_digest,
+                    "generation": generation,
+                    "source-object-count": str(input_objects),
+                },
+                candidate=manifest_document,
             )
             return CompactionResult(
                 manifest_key=manifest_key,
@@ -254,6 +311,7 @@ async def compact_day(
                 input_rows=input_rows,
                 output_rows=output_rows,
                 existed=all_parts_existed,
+                published=published,
             )
         finally:
             connection.close()

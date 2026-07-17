@@ -26,11 +26,15 @@ def metrics_are_healthy(payload: bytes, *, now: float, stale_seconds: float) -> 
         payload,
         "retro_consumer_last_heartbeat_timestamp_seconds",
     )
-    return (
-        running == 1.0
-        and heartbeat is not None
-        and 0 <= now - heartbeat <= stale_seconds
+    progress = _unlabelled_metric(
+        payload,
+        "retro_consumer_last_progress_timestamp_seconds",
     )
+    timestamps = [value for value in (heartbeat, progress) if value is not None]
+    if running != 1.0 or not timestamps:
+        return False
+    freshness = max(timestamps)
+    return 0 <= now - freshness <= stale_seconds
 
 
 def main() -> None:
