@@ -8,6 +8,8 @@ Retro Arcade's authenticated producer API. It accepts versioned gameplay chunks,
 - **PostgreSQL**: only `users` and `high_scores`. Raw tokens and gameplay events are never stored.
 - **Redis**: positive/negative auth caching and per-user chunk publication state.
 - **Redpanda**: durable event stream. The API uses an idempotent aiokafka producer with `acks=all` and zstd compression.
+- **Consumer**: validates complete v2 traces, writes contiguous partition batches to Parquet, and manually commits offsets only after durable object storage.
+- **S3 / MinIO**: raw immutable Parquet plus separately compacted daily datasets. Raw event data never enters PostgreSQL.
 - **Alembic**: migrates the original event-store schema forward to the two-table schema.
 
 Full event semantics, score derivation, and session projections belong to downstream consumers. The producer API does not inspect event payloads or derive scores.
@@ -20,14 +22,15 @@ uv sync
 docker compose up --build
 ```
 
-The published ports default to PostgreSQL `5432`, Redis `6379`, Redpanda `19092`, and API `8000`. Override `RETRO_POSTGRES_PORT`, `RETRO_REDIS_PORT`, `RETRO_KAFKA_PORT`, or `RETRO_API_PORT` when needed. Host clients use `127.0.0.1:$RETRO_KAFKA_PORT`; Compose services use `redpanda:9092`.
+The published ports default to PostgreSQL `5432`, Redis `6379`, Redpanda `19092`, API `8000`, MinIO `9000`/`9001`, and consumer metrics `9100`. Every host port has a `RETRO_*_PORT` override. Host Kafka clients use `127.0.0.1:$RETRO_KAFKA_PORT`; Compose services use `redpanda:9092`.
 
 To run services separately:
 
 ```bash
-docker compose up -d postgres redis redpanda redpanda-init
+docker compose up -d postgres redis redpanda redpanda-init minio minio-init
 uv run alembic upgrade head
 uv run uvicorn retro_backend.main:app --reload
+uv run python -m retro_backend.consumer.main
 ```
 
 ## Token issuance
@@ -54,12 +57,19 @@ Users retained by the forward migration receive inaccessible placeholder hashes.
 - `RETRO_REDIS_URL`
 - `RETRO_KAFKA_BOOTSTRAP_SERVERS`
 - `RETRO_KAFKA_TOPIC` (default `retro-game-events`)
+- `RETRO_KAFKA_DLQ_TOPIC` (default `retro-game-events-dlq`)
+- `RETRO_KAFKA_CONSUMER_GROUP_ID` (default `retro-parquet-writer-v1`; keep stable)
 - `RETRO_MAX_REQUEST_BYTES` (default 256 KiB)
 - `RETRO_MAX_GAME_RESULT_BYTES` (default 16 KiB)
 - `RETRO_CHUNK_PUBLISHING_TTL_SECONDS` (default 30)
 - `RETRO_CHUNK_DEDUP_TTL_SECONDS` (default 48 hours)
 - `RETRO_KAFKA_SEND_TIMEOUT_SECONDS` (default 20; must be shorter than the publication lease)
 - `RETRO_READINESS_TIMEOUT_SECONDS` (default 2)
+- `RETRO_CONSUMER_BATCH_MAX_RECORDS`, `RETRO_CONSUMER_BATCH_MAX_ROWS`, and `RETRO_CONSUMER_BATCH_MAX_BYTES`
+- `RETRO_CONSUMER_FLUSH_INTERVAL_SECONDS`, `RETRO_CONSUMER_POLL_TIMEOUT_MS`, and `RETRO_CONSUMER_POLL_MAX_RECORDS`
+- `RETRO_CONSUMER_RETRY_INITIAL_SECONDS`, `RETRO_CONSUMER_RETRY_MAX_SECONDS`, and `RETRO_CONSUMER_SHUTDOWN_RETRY_ATTEMPTS`
+- `RETRO_S3_ENDPOINT_URL`, `RETRO_S3_REGION`, `RETRO_S3_ACCESS_KEY_ID`, and `RETRO_S3_SECRET_ACCESS_KEY`
+- `RETRO_S3_BUCKET`, `RETRO_S3_RAW_PREFIX`, and `RETRO_S3_COMPACTED_PREFIX`
 
 ## API
 
@@ -78,10 +88,37 @@ Chunk publication is **at least once**, not API-level exactly once. The broker c
 
 Consumers must therefore deduplicate by the authenticated `retro-user-id` plus `retro-chunk-id`, and by authenticated user plus each payload `event_id` when materializing individual events. The API preserves the request bytes and exposes those identities without deriving event semantics, so a future consumer can perform this deduplication before applying side effects.
 
+## Parquet consumer
+
+The consumer accepts only complete interaction-trace v2 chunks. The `retro-user-id` Kafka header is authoritative; embedded chunk and event identities must match it. Invalid JSON, unsupported schemas, missing headers, and semantic mismatches are published to the DLQ with source topic/partition/offset and rejection reason headers. The source offset is committed only after that DLQ publish is acknowledged.
+
+Valid records are buffered independently per topic-partition, split at UTC day boundaries, and written with the fixed event schema under deterministic keys:
+
+```text
+raw/date=YYYY-MM-DD/topic=<topic>/partition=<partition>/offsets=<first>-<last>.parquet
+```
+
+Each object stores its SHA-256 and source offset range as metadata. A replay HEAD-checks the same key: identical bytes are accepted without another upload, while different bytes are treated as a conflict. The worker uses manual Kafka commits and advances only to `last_offset + 1` after the contiguous object is verified. Bounded exponential backoff handles transient Kafka and S3 failures; shutdown and partition revocation flush owned buffers before the consumer leaves the group.
+
+Parquet contains only `schema_version`, authenticated identity, game/chunk/event fields, canonical `payload_json`, broker partition/offset, and ingestion time. It contains no auth tokens or score columns.
+
+## Daily compaction
+
+Compact the previous UTC day, or select a day explicitly:
+
+```bash
+make compact
+make compact DATE=2026-07-17
+docker compose --profile maintenance run --rm compactor --date 2026-07-17
+```
+
+Compaction reads one raw date prefix, keeps the earliest broker position for each `event_id`, and writes an idempotent manifest-keyed object under `compacted/date=YYYY-MM-DD/`. It never deletes or rewrites raw objects. Schedule the command daily in the deployment scheduler; Compose exposes it as a one-shot maintenance job rather than embedding a second scheduler.
+
 Supported score game types are `2048`, `tetris`, `snake`, `minesweeper`, `sokoban`, `connect4`, `lightsout`, and `sudoku`. A result changes the personal best only when its score is higher; lower and equal retries preserve the original achievement timestamp.
 
 ## Verification
 
 ```bash
 make verify
+docker compose config --quiet
 ```

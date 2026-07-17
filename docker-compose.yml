@@ -54,11 +54,46 @@ services:
     image: docker.redpanda.com/redpandadata/redpanda:v24.3.10
     environment:
       RETRO_KAFKA_TOPIC: ${RETRO_KAFKA_TOPIC:-retro-game-events}
+      RETRO_KAFKA_DLQ_TOPIC: ${RETRO_KAFKA_DLQ_TOPIC:-retro-game-events-dlq}
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - rpk topic create "$$RETRO_KAFKA_TOPIC" --brokers redpanda:9092 || rpk topic describe "$$RETRO_KAFKA_TOPIC" --brokers redpanda:9092
+      - |
+        rpk topic create "$$RETRO_KAFKA_TOPIC" --brokers redpanda:9092 || rpk topic describe "$$RETRO_KAFKA_TOPIC" --brokers redpanda:9092
+        rpk topic create "$$RETRO_KAFKA_DLQ_TOPIC" --brokers redpanda:9092 || rpk topic describe "$$RETRO_KAFKA_DLQ_TOPIC" --brokers redpanda:9092
     depends_on:
       redpanda:
+        condition: service_healthy
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${RETRO_S3_ACCESS_KEY_ID:-retro}
+      MINIO_ROOT_PASSWORD: ${RETRO_S3_SECRET_ACCESS_KEY:-retro-secret}
+    ports:
+      - "${RETRO_MINIO_PORT:-9000}:9000"
+      - "${RETRO_MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - retro-minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z
+    environment:
+      RETRO_S3_ACCESS_KEY_ID: ${RETRO_S3_ACCESS_KEY_ID:-retro}
+      RETRO_S3_SECRET_ACCESS_KEY: ${RETRO_S3_SECRET_ACCESS_KEY:-retro-secret}
+      RETRO_S3_BUCKET: ${RETRO_S3_BUCKET:-retro-game-events}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$$RETRO_S3_ACCESS_KEY_ID" "$$RETRO_S3_SECRET_ACCESS_KEY"
+        mc mb --ignore-existing "local/$$RETRO_S3_BUCKET"
+    depends_on:
+      minio:
         condition: service_healthy
 
   migrate:
@@ -69,6 +104,15 @@ services:
       RETRO_REDIS_URL: redis://redis:6379/0
       RETRO_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       RETRO_KAFKA_TOPIC: ${RETRO_KAFKA_TOPIC:-retro-game-events}
+      RETRO_KAFKA_DLQ_TOPIC: ${RETRO_KAFKA_DLQ_TOPIC:-retro-game-events-dlq}
+      RETRO_KAFKA_CONSUMER_GROUP_ID: ${RETRO_KAFKA_CONSUMER_GROUP_ID:-retro-parquet-writer-v1}
+      RETRO_S3_ENDPOINT_URL: http://minio:9000
+      RETRO_S3_REGION: ${RETRO_S3_REGION:-us-east-1}
+      RETRO_S3_ACCESS_KEY_ID: ${RETRO_S3_ACCESS_KEY_ID:-retro}
+      RETRO_S3_SECRET_ACCESS_KEY: ${RETRO_S3_SECRET_ACCESS_KEY:-retro-secret}
+      RETRO_S3_BUCKET: ${RETRO_S3_BUCKET:-retro-game-events}
+      RETRO_S3_RAW_PREFIX: ${RETRO_S3_RAW_PREFIX:-raw}
+      RETRO_S3_COMPACTED_PREFIX: ${RETRO_S3_COMPACTED_PREFIX:-compacted}
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,7 +135,41 @@ services:
       timeout: 3s
       retries: 20
 
+  consumer:
+    build: .
+    command: ["uv", "run", "--no-sync", "python", "-m", "retro_backend.consumer.main"]
+    environment:
+      <<: *backend-env
+      RETRO_CONSUMER_METRICS_PORT: 9100
+      RETRO_CONSUMER_BATCH_MAX_RECORDS: ${RETRO_CONSUMER_BATCH_MAX_RECORDS:-100}
+      RETRO_CONSUMER_BATCH_MAX_ROWS: ${RETRO_CONSUMER_BATCH_MAX_ROWS:-5000}
+      RETRO_CONSUMER_BATCH_MAX_BYTES: ${RETRO_CONSUMER_BATCH_MAX_BYTES:-8388608}
+      RETRO_CONSUMER_FLUSH_INTERVAL_SECONDS: ${RETRO_CONSUMER_FLUSH_INTERVAL_SECONDS:-10}
+    ports:
+      - "${RETRO_CONSUMER_METRICS_HOST_PORT:-9100}:9100"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/metrics')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  compactor:
+    profiles: ["maintenance"]
+    build: .
+    entrypoint: ["uv", "run", "--no-sync", "python", "-m", "retro_backend.compaction"]
+    command: []
+    environment: *backend-env
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
 volumes:
   retro-postgres:
   retro-redis:
   retro-redpanda:
+  retro-minio:
