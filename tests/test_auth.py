@@ -6,8 +6,8 @@ from fakeredis.aioredis import FakeRedis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from retro_backend.auth import resolve_user_id
+from retro_backend.auth_cache import NEGATIVE_CACHE_VALUE
 from retro_backend.models import User
-from retro_backend.token_cli import NEGATIVE_CACHE_VALUE
 
 
 async def test_auth_cache_miss_queries_postgres_and_sets_positive_ttl(

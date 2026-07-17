@@ -110,3 +110,134 @@ def test_decode_v2_record_requires_one_utf8_user_header(payload: dict[str, objec
         decode_v2_record(missing)
     with pytest.raises(RecordValidationError, match="retro-user-id"):
         decode_v2_record(duplicate)
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("chunk_sequence",), True),
+        (("chunk_sequence",), 2**70),
+        (("events", 0, "event_sequence"), True),
+        (("events", 0, "monotonic_time_us"), True),
+        (("events", 0, "monotonic_time_us"), 2**70),
+        (("events", 0, "simulation_tick"), -1),
+        (("events", 0, "simulation_tick"), 2**70),
+        (("events", 0, "payload", "viewport", "width"), True),
+        (("events", 0, "payload", "viewport", "height"), -1),
+        (("events", 4, "payload", "score_before"), "0"),
+        (("events", 4, "payload", "terminal"), 0),
+    ],
+)
+def test_decode_v2_record_rejects_coercion_and_out_of_range_values(
+    payload: dict[str, object], path: tuple[str | int, ...], value: object
+) -> None:
+    invalid = copy.deepcopy(payload)
+    target: object = invalid
+    for component in path[:-1]:
+        if isinstance(target, dict):
+            if not isinstance(component, str):
+                raise AssertionError("invalid dictionary test mutation path")
+            target = target[component]
+            continue
+        if isinstance(target, list):
+            if not isinstance(component, int):
+                raise AssertionError("invalid list test mutation path")
+            target = target[component]
+            continue
+        raise AssertionError("invalid test mutation path")
+    final = path[-1]
+    if isinstance(target, dict):
+        if not isinstance(final, str):
+            raise AssertionError("invalid dictionary test mutation target")
+        target[final] = value
+    elif isinstance(target, list):
+        if not isinstance(final, int):
+            raise AssertionError("invalid list test mutation target")
+        target[final] = value
+    else:
+        raise AssertionError("invalid test mutation target")
+
+    with pytest.raises(RecordValidationError):
+        decode_v2_record(make_record(invalid))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("partition", -1),
+        ("partition", 2**40),
+        ("offset", True),
+        ("offset", 2**70),
+        ("timestamp_ms", -1),
+        ("timestamp_ms", 2**70),
+    ],
+)
+def test_decode_v2_record_rejects_out_of_range_broker_coordinates(
+    payload: dict[str, object], field: str, value: object
+) -> None:
+    record = replace(make_record(payload), **{field: value})
+
+    with pytest.raises(RecordValidationError, match=field):
+        decode_v2_record(record)
+
+
+def _with_episode_ended(payload: dict[str, object]) -> dict[str, object]:
+    result = copy.deepcopy(payload)
+    events = result["events"]
+    assert isinstance(events, list)
+    previous = events[-1]
+    assert isinstance(previous, dict)
+    event = copy.deepcopy(previous)
+    event.update(
+        {
+            "event_id": "evt_018f0000-0000-7000-8000-000000000008",
+            "event_sequence": 6,
+            "event_type": "episode_ended",
+            "monotonic_time_us": 103000,
+            "payload": {
+                "reason": "game_over",
+                "final_event_sequence": 6,
+                "final_score": 123,
+                "duration_us": 103000,
+                "completed": True,
+            },
+        }
+    )
+    events.append(event)
+    result["last_event_sequence"] = 6
+    result["event_count"] = 6
+    return result
+
+
+def test_decode_v2_record_accepts_complete_episode_ended_payload(
+    payload: dict[str, object],
+) -> None:
+    rows = decode_v2_record(make_record(_with_episode_ended(payload)))
+
+    assert rows[-1].event_type == "episode_ended"
+    assert json.loads(rows[-1].payload_json)["completed"] is True
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("completed", 1),
+        ("duration_us", 2**70),
+        ("final_event_sequence", 5),
+        ("reason", "crashed"),
+    ],
+)
+def test_decode_v2_record_rejects_malformed_episode_ended_payload(
+    payload: dict[str, object], field: str, value: object
+) -> None:
+    invalid = _with_episode_ended(payload)
+    events = invalid["events"]
+    assert isinstance(events, list)
+    event = events[-1]
+    assert isinstance(event, dict)
+    event_payload = event["payload"]
+    assert isinstance(event_payload, dict)
+    event_payload[field] = value
+
+    with pytest.raises(RecordValidationError):
+        decode_v2_record(make_record(invalid))

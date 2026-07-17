@@ -214,6 +214,22 @@ async def test_ingestion_accepts_semantically_invalid_events_for_consumer_valida
     assert producer.calls[0]["value"] == raw
 
 
+async def test_ingestion_rejects_schema_v1_before_broker_publication(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_payload: dict[str, Any],
+    producer: RecordingProducer,
+) -> None:
+    fixture_payload["schema_version"] = 1
+    raw = json.dumps(fixture_payload, separators=(",", ":")).encode()
+
+    response = await client.post("/v1/game-event-chunks", content=raw, headers=auth_headers)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "schema_version must be 2"
+    assert producer.calls == []
+
+
 async def test_v2_chunk_user_must_match_authenticated_user(
     client: AsyncClient,
     auth_headers: dict[str, str],

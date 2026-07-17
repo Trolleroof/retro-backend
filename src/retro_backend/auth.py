@@ -10,16 +10,15 @@ from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .database import get_session
-from .models import User
-from .token_cli import (
+from .auth_cache import (
     NEGATIVE_AUTH_TTL_SECONDS,
     NEGATIVE_CACHE_VALUE,
+    POSITIVE_AUTH_TTL_SECONDS,
     ROTATION_TOMBSTONE_PREFIX,
-    hash_token,
 )
-
-POSITIVE_AUTH_TTL_SECONDS = 900
+from .database import get_session
+from .models import User
+from .token_cli import hash_token
 
 
 def _cached_user_id(cached: bytes | str | None) -> str | None:

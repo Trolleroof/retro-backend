@@ -41,7 +41,7 @@ services:
       - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
       - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:${RETRO_KAFKA_PORT:-19092}
     ports:
-      - "${RETRO_KAFKA_PORT:-19092}:19092"
+      - "127.0.0.1:${RETRO_KAFKA_PORT:-19092}:19092"
     volumes:
       - retro-redpanda:/var/lib/redpanda/data
     healthcheck:
@@ -103,6 +103,14 @@ services:
       RETRO_DATABASE_URL: postgresql+psycopg://retro:retro@postgres:5432/retro
       RETRO_REDIS_URL: redis://redis:6379/0
       RETRO_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      RETRO_KAFKA_SECURITY_PROTOCOL: ${RETRO_KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+      RETRO_KAFKA_SASL_MECHANISM: ${RETRO_KAFKA_SASL_MECHANISM:-}
+      RETRO_KAFKA_SASL_USERNAME: ${RETRO_KAFKA_SASL_USERNAME:-}
+      RETRO_KAFKA_SASL_PASSWORD: ${RETRO_KAFKA_SASL_PASSWORD:-}
+      RETRO_KAFKA_SSL_CAFILE: ${RETRO_KAFKA_SSL_CAFILE:-}
+      RETRO_KAFKA_SSL_CERTFILE: ${RETRO_KAFKA_SSL_CERTFILE:-}
+      RETRO_KAFKA_SSL_KEYFILE: ${RETRO_KAFKA_SSL_KEYFILE:-}
+      RETRO_KAFKA_SSL_PASSWORD: ${RETRO_KAFKA_SSL_PASSWORD:-}
       RETRO_KAFKA_TOPIC: ${RETRO_KAFKA_TOPIC:-retro-game-events}
       RETRO_KAFKA_DLQ_TOPIC: ${RETRO_KAFKA_DLQ_TOPIC:-retro-game-events-dlq}
       RETRO_KAFKA_CONSUMER_GROUP_ID: ${RETRO_KAFKA_CONSUMER_GROUP_ID:-retro-parquet-writer-v1}
@@ -113,6 +121,8 @@ services:
       RETRO_S3_BUCKET: ${RETRO_S3_BUCKET:-retro-game-events}
       RETRO_S3_RAW_PREFIX: ${RETRO_S3_RAW_PREFIX:-raw}
       RETRO_S3_COMPACTED_PREFIX: ${RETRO_S3_COMPACTED_PREFIX:-compacted}
+      RETRO_COMPACTION_READ_BATCH_ROWS: ${RETRO_COMPACTION_READ_BATCH_ROWS:-1000}
+      RETRO_COMPACTION_PART_MAX_ROWS: ${RETRO_COMPACTION_PART_MAX_ROWS:-500}
     depends_on:
       postgres:
         condition: service_healthy
@@ -141,10 +151,7 @@ services:
     environment:
       <<: *backend-env
       RETRO_CONSUMER_METRICS_PORT: 9100
-      RETRO_CONSUMER_BATCH_MAX_RECORDS: ${RETRO_CONSUMER_BATCH_MAX_RECORDS:-100}
-      RETRO_CONSUMER_BATCH_MAX_ROWS: ${RETRO_CONSUMER_BATCH_MAX_ROWS:-5000}
-      RETRO_CONSUMER_BATCH_MAX_BYTES: ${RETRO_CONSUMER_BATCH_MAX_BYTES:-8388608}
-      RETRO_CONSUMER_FLUSH_INTERVAL_SECONDS: ${RETRO_CONSUMER_FLUSH_INTERVAL_SECONDS:-10}
+      RETRO_CONSUMER_HEALTH_STALE_SECONDS: ${RETRO_CONSUMER_HEALTH_STALE_SECONDS:-30}
     ports:
       - "${RETRO_CONSUMER_METRICS_HOST_PORT:-9100}:9100"
     depends_on:
@@ -153,7 +160,7 @@ services:
       minio-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/metrics')"]
+      test: ["CMD-SHELL", "python -m retro_backend.consumer.healthcheck --stale-seconds $$RETRO_CONSUMER_HEALTH_STALE_SECONDS"]
       interval: 5s
       timeout: 3s
       retries: 20

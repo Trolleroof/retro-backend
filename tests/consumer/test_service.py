@@ -56,12 +56,20 @@ class FakeWorker:
     def __init__(self) -> None:
         self.handled: list[BrokerRecord] = []
         self.flushes: list[set[Partition] | None] = []
+        self.assignments: list[set[Partition]] = []
+        self.revocations: list[set[Partition]] = []
 
     async def handle(self, record: BrokerRecord) -> None:
         self.handled.append(record)
 
     async def flush_all(self, partitions: set[Partition] | None = None) -> None:
         self.flushes.append(partitions)
+
+    async def assign(self, partitions: set[Partition]) -> None:
+        self.assignments.append(partitions)
+
+    async def revoke(self, partitions: set[Partition]) -> None:
+        self.revocations.append(partitions)
 
 
 @pytest.mark.asyncio
@@ -100,4 +108,23 @@ async def test_rebalance_listener_flushes_only_revoked_partitions() -> None:
 
     await service.on_partitions_revoked(revoked)
 
-    assert worker.flushes == [revoked]
+    assert worker.revocations == [revoked]
+
+
+@pytest.mark.asyncio
+async def test_rebalance_listener_forwards_new_assignment_generation() -> None:
+    stop, worker = asyncio.Event(), FakeWorker()
+    source = FakeSource(stop)
+    service = ConsumerService(
+        source=source,
+        worker=worker,
+        stop_event=stop,
+        poll_timeout_ms=10,
+        poll_max_records=10,
+        flush_interval_seconds=60,
+    )
+    assigned = {Partition("events", 2)}
+
+    await service.on_partitions_assigned(assigned)
+
+    assert worker.assignments == [assigned]

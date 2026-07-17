@@ -11,6 +11,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from prometheus_client import start_http_server
 
 from ..config import Settings, get_settings
+from ..kafka_config import kafka_client_options
 from .dlq import KafkaDlqPublisher
 from .kafka import AiokafkaRecordSource
 from .metrics import ConsumerMetrics
@@ -39,7 +40,7 @@ async def run(settings: Settings) -> None:
     _install_signal_handlers(stop_event)
     source = AiokafkaRecordSource(
         AIOKafkaConsumer(
-            bootstrap_servers=settings.kafka_bootstrap_servers,
+            **kafka_client_options(settings),
             group_id=settings.kafka_consumer_group_id,
             enable_auto_commit=False,
             auto_offset_reset="earliest",
@@ -48,7 +49,7 @@ async def run(settings: Settings) -> None:
         topic=settings.kafka_topic,
     )
     dlq_producer = AIOKafkaProducer(
-        bootstrap_servers=settings.kafka_bootstrap_servers,
+        **kafka_client_options(settings),
         acks="all",
         enable_idempotence=True,
         compression_type="zstd",
@@ -86,9 +87,6 @@ async def run(settings: Settings) -> None:
             policy=retry_policy,
             stop_event=stop_event,
         ),
-        max_records=settings.consumer_batch_max_records,
-        max_rows=settings.consumer_batch_max_rows,
-        max_bytes=settings.consumer_batch_max_bytes,
         metrics=metrics,
     )
     service = ConsumerService(
@@ -98,9 +96,10 @@ async def run(settings: Settings) -> None:
         poll_timeout_ms=settings.consumer_poll_timeout_ms,
         poll_max_records=settings.consumer_poll_max_records,
         flush_interval_seconds=settings.consumer_flush_interval_seconds,
+        metrics=metrics,
     )
 
-    start_http_server(settings.consumer_metrics_port)
+    start_http_server(settings.consumer_metrics_port, registry=metrics.registry)
     await dlq_producer.start()
     try:
         await service.run()

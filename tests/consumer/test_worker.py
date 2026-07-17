@@ -1,12 +1,14 @@
+import asyncio
 import json
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from typing_extensions import override
 
 from retro_backend.consumer.s3_writer import ObjectReceipt
 from retro_backend.consumer.types import BrokerRecord, EventBatch, Partition
-from retro_backend.consumer.worker import ConsumerWorker
+from retro_backend.consumer.worker import ConsumerWorker, OffsetGapError, PartitionNotOwnedError
 
 FIXTURE = (
     Path(__file__).resolve().parents[2]
@@ -62,15 +64,12 @@ class FakeDlq:
 
 
 def worker(
-    committer: FakeCommitter, writer: FakeWriter, dlq: FakeDlq, *, max_records: int = 1
+    committer: FakeCommitter, writer: FakeWriter, dlq: FakeDlq
 ) -> ConsumerWorker:
     return ConsumerWorker(
         committer=committer,
         batch_writer=writer,
         dlq=dlq,
-        max_records=max_records,
-        max_rows=100,
-        max_bytes=1_000_000,
     )
 
 
@@ -108,6 +107,21 @@ async def test_worker_dlq_ack_precedes_malformed_record_commit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_worker_routes_int64_overflow_to_dlq_instead_of_poison_retry() -> None:
+    committer, writer, dlq = FakeCommitter(), FakeWriter(), FakeDlq()
+    invalid = record(8)
+    payload = json.loads(invalid.value)
+    payload["events"][0]["monotonic_time_us"] = 2**70
+    invalid = replace(invalid, value=json.dumps(payload).encode())
+
+    await worker(committer, writer, dlq).handle(invalid)
+
+    assert dlq.records
+    assert committer.commits == [(Partition("retro-game-events", 1), 9)]
+    assert not writer.batches
+
+
+@pytest.mark.asyncio
 async def test_worker_does_not_commit_when_dlq_publish_fails() -> None:
     committer, writer, dlq = FakeCommitter(), FakeWriter(), FakeDlq()
     dlq.failure = RuntimeError("broker unavailable")
@@ -119,22 +133,22 @@ async def test_worker_does_not_commit_when_dlq_publish_fails() -> None:
 
 
 @pytest.mark.asyncio
-async def test_worker_flushes_valid_prefix_before_dlq_record() -> None:
+async def test_worker_writes_each_record_as_its_own_raw_object() -> None:
     committer, writer, dlq = FakeCommitter(), FakeWriter(), FakeDlq()
-    value = worker(committer, writer, dlq, max_records=10)
+    value = worker(committer, writer, dlq)
 
     await value.handle(record(3))
-    assert not committer.commits
-    await value.handle(record(4, valid=False))
+    await value.handle(record(4))
 
     assert [offset for _, offset in committer.commits] == [4, 5]
-    assert writer.batches[0].end_offset == 3
+    assert [(batch.start_offset, batch.end_offset) for batch in writer.batches] == [(3, 3), (4, 4)]
+    assert all(batch.record_count == 1 for batch in writer.batches)
 
 
 @pytest.mark.asyncio
 async def test_worker_splits_batches_at_utc_day_boundary() -> None:
     committer, writer, dlq = FakeCommitter(), FakeWriter(), FakeDlq()
-    value = worker(committer, writer, dlq, max_records=10)
+    value = worker(committer, writer, dlq)
 
     await value.handle(replace(record(3), timestamp_ms=86_399_999))
     await value.handle(replace(record(4), timestamp_ms=86_400_000))
@@ -142,3 +156,74 @@ async def test_worker_splits_batches_at_utc_day_boundary() -> None:
 
     assert [(batch.start_offset, batch.end_offset) for batch in writer.batches] == [(3, 3), (4, 4)]
     assert [offset for _, offset in committer.commits] == [4, 5]
+
+
+@pytest.mark.asyncio
+async def test_worker_reassignment_initializes_contiguity_from_first_new_record() -> None:
+    committer, writer, dlq = FakeCommitter(), FakeWriter(), FakeDlq()
+    value = worker(committer, writer, dlq)
+    partition = Partition("retro-game-events", 1)
+
+    await value.assign({partition})
+    await value.handle(record(3))
+    await value.revoke({partition})
+    await value.assign({partition})
+    await value.handle(record(11))
+
+    assert [offset for _, offset in committer.commits] == [4, 12]
+    assert [(batch.start_offset, batch.end_offset) for batch in writer.batches] == [(3, 3), (11, 11)]
+
+
+class BlockingWriter(FakeWriter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    @override
+    async def write(self, batch: EventBatch) -> ObjectReceipt:
+        self.batches.append(batch)
+        self.started.set()
+        await self.release.wait()
+        return ObjectReceipt("key", "digest", 1, False)
+
+
+@pytest.mark.asyncio
+async def test_revoke_waits_for_inflight_write_then_detaches_partition() -> None:
+    committer, writer, dlq = FakeCommitter(), BlockingWriter(), FakeDlq()
+    value = worker(committer, writer, dlq)
+    partition = Partition("retro-game-events", 1)
+    await value.assign({partition})
+
+    handling = asyncio.create_task(value.handle(record(3)))
+    await writer.started.wait()
+    revoking = asyncio.create_task(value.revoke({partition}))
+    await asyncio.sleep(0)
+    assert not revoking.done()
+
+    writer.release.set()
+    await handling
+    await revoking
+
+    with pytest.raises(PartitionNotOwnedError):
+        await value.handle(record(4))
+    assert len(writer.batches) == 1
+    assert committer.commits == [(partition, 4)]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_duplicate_record_cannot_write_or_commit_twice() -> None:
+    committer, writer, dlq = FakeCommitter(), BlockingWriter(), FakeDlq()
+    value = worker(committer, writer, dlq)
+
+    first = asyncio.create_task(value.handle(record(3)))
+    await writer.started.wait()
+    duplicate = asyncio.create_task(value.handle(record(3)))
+    await asyncio.sleep(0)
+    writer.release.set()
+    await first
+    with pytest.raises(OffsetGapError):
+        await duplicate
+
+    assert len(writer.batches) == 1
+    assert len(committer.commits) == 1

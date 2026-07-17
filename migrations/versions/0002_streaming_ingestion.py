@@ -13,6 +13,12 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import context, op
 
+from retro_backend.migration_safety import (
+    LEGACY_GAMEPLAY_TABLES,
+    assert_legacy_tables_empty,
+    offline_legacy_guard_sql,
+)
+
 revision: str = "0002_streaming_ingestion"
 down_revision: str | None = "0001_initial_backend"
 branch_labels: str | Sequence[str] | None = None
@@ -20,6 +26,21 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    if context.is_offline_mode():
+        op.execute(sa.text(offline_legacy_guard_sql()))
+    else:
+        bind = op.get_bind()
+        assert_legacy_tables_empty(
+            {
+                table: int(
+                    bind.execute(
+                        sa.text(f'SELECT EXISTS (SELECT 1 FROM "{table}" LIMIT 1)')
+                    ).scalar_one()
+                )
+                for table in LEGACY_GAMEPLAY_TABLES
+            }
+        )
+
     op.drop_table("processing_jobs")
     op.drop_table("gameplay_events")
     op.drop_table("ingested_chunks")

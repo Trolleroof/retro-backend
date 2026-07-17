@@ -12,15 +12,15 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from .auth_cache import (
+    ROTATION_TOMBSTONE_PREFIX,
+    ROTATION_TOMBSTONE_TTL_SECONDS,
+)
 from .config import get_settings
 from .contracts import USER_ID
 from .database import create_database_engine, create_session_factory
 from .models import User
 from .redis_client import create_redis
-
-NEGATIVE_AUTH_TTL_SECONDS = 30
-NEGATIVE_CACHE_VALUE = "!"
-ROTATION_TOMBSTONE_PREFIX = f"{NEGATIVE_CACHE_VALUE}:"
 
 COMPARE_DELETE_SCRIPT = """
 if redis.call('GET', KEYS[1]) == ARGV[1] then
@@ -63,6 +63,7 @@ async def issue_token(
     token = generate_token()
     tombstone_key: str | None = None
     tombstone_value: str | None = None
+    database_committed = False
     async with session_factory() as session:
         try:
             async with session.begin():
@@ -82,13 +83,26 @@ async def issue_token(
                     installed = await redis.set(
                         tombstone_key,
                         tombstone_value,
-                        ex=NEGATIVE_AUTH_TTL_SECONDS,
                     )
                     if not installed:
                         raise TokenRotationError("could not install old-token tombstone")
                     user.auth_token_hash = digest
-        except BaseException:
+            database_committed = True
             if redis is not None and tombstone_key is not None and tombstone_value is not None:
+                reasserted = await redis.set(
+                    tombstone_key,
+                    tombstone_value,
+                    ex=ROTATION_TOMBSTONE_TTL_SECONDS,
+                )
+                if not reasserted:
+                    raise TokenRotationError("could not reassert old-token tombstone")
+        except BaseException:
+            if (
+                not database_committed
+                and redis is not None
+                and tombstone_key is not None
+                and tombstone_value is not None
+            ):
                 await _remove_tombstone_if_owned(redis, tombstone_key, tombstone_value)
             raise
     return token

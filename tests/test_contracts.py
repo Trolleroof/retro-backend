@@ -11,12 +11,18 @@ V1_FIXTURE = ROOT / "contracts/fixtures/game-event-chunk-v1.json"
 V2_FIXTURE = ROOT / "contracts/fixtures/interaction-trace-chunk-v2.json"
 
 
-@pytest.mark.parametrize("fixture", [V1_FIXTURE, V2_FIXTURE])
-def test_accepts_versioned_client_envelopes(fixture: Path) -> None:
-    payload = json.loads(fixture.read_bytes())
+def test_accepts_v2_client_envelope() -> None:
+    payload = json.loads(V2_FIXTURE.read_bytes())
     validated = validate_chunk_envelope(payload)
     assert validated["schema_version"] == payload["schema_version"]
     assert validated["chunk_id"] == payload["chunk_id"]
+
+
+def test_rejects_v1_client_envelope() -> None:
+    payload = json.loads(V1_FIXTURE.read_bytes())
+
+    with pytest.raises(ValidationError, match="schema_version must be 2"):
+        validate_chunk_envelope(payload)
 
 
 def test_envelope_validation_does_not_inspect_event_semantics() -> None:

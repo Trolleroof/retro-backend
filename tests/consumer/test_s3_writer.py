@@ -33,9 +33,9 @@ def batch() -> EventBatch:
     return EventBatch(
         partition=Partition("retro-game-events", 2),
         start_offset=10,
-        end_offset=11,
-        record_count=2,
-        rows=(event_row(broker_offset=10), event_row(event_id="evt_2", broker_offset=11)),
+        end_offset=10,
+        record_count=1,
+        rows=(event_row(broker_offset=10),),
     )
 
 
@@ -48,12 +48,12 @@ async def test_parquet_batch_writer_uses_deterministic_offset_key_and_checksum()
 
     assert receipt.key == (
         "raw/date=1970-01-01/topic=retro-game-events/partition=00002/"
-        "offsets=00000000000000000010-00000000000000000011.parquet"
+        "offsets=00000000000000000010-00000000000000000010.parquet"
     )
     body, metadata = storage.objects[receipt.key]
     assert metadata["sha256"] == hashlib.sha256(body).hexdigest()
     assert metadata["start-offset"] == "10"
-    assert metadata["end-offset"] == "11"
+    assert metadata["end-offset"] == "10"
 
 
 @pytest.mark.asyncio
@@ -78,3 +78,21 @@ async def test_existing_different_object_is_a_conflict() -> None:
 
     with pytest.raises(ObjectConflictError):
         await writer.write(batch())
+
+
+@pytest.mark.asyncio
+async def test_raw_writer_rejects_nondeterministic_multi_record_boundaries() -> None:
+    storage = FakeStorage()
+    writer = ParquetBatchWriter(IdempotentObjectWriter(storage), prefix="raw")
+    invalid = EventBatch(
+        partition=Partition("retro-game-events", 2),
+        start_offset=10,
+        end_offset=11,
+        record_count=2,
+        rows=(event_row(broker_offset=10), event_row(event_id="evt_2", broker_offset=11)),
+    )
+
+    with pytest.raises(ValueError, match="exactly one Kafka record"):
+        await writer.write(invalid)
+
+    assert not storage.objects

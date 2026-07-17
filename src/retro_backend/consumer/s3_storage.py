@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 from botocore.config import Config
@@ -55,7 +56,11 @@ class S3ObjectStorage:
                 Key=key,
                 Body=body,
                 Metadata=metadata,
-                ContentType="application/vnd.apache.parquet",
+                ContentType=(
+                    "application/json"
+                    if key.endswith(".json")
+                    else "application/vnd.apache.parquet"
+                ),
             )
 
     async def get(self, key: str) -> bytes:
@@ -63,12 +68,10 @@ class S3ObjectStorage:
             response = await client.get_object(Bucket=self._bucket, Key=key)
             return bytes(await response["Body"].read())
 
-    async def list_keys(self, prefix: str) -> list[str]:
-        keys: list[str] = []
+    async def iter_keys(self, prefix: str) -> AsyncIterator[str]:
         async with self._client() as client:
             paginator = client.get_paginator("list_objects_v2")
             async for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
-                keys.extend(
-                    str(value["Key"]) for value in page.get("Contents", []) if "Key" in value
-                )
-        return sorted(keys)
+                for value in page.get("Contents", []):
+                    if "Key" in value:
+                        yield str(value["Key"])

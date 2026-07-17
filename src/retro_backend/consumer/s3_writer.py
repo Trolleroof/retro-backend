@@ -67,6 +67,10 @@ class ParquetBatchWriter:
         self._prefix = prefix.strip("/")
 
     async def write(self, batch: EventBatch) -> ObjectReceipt:
+        if batch.record_count != 1 or batch.start_offset != batch.end_offset:
+            raise ValueError("raw Parquet objects must contain exactly one Kafka record")
+        if not batch.rows or any(row.broker_offset != batch.start_offset for row in batch.rows):
+            raise ValueError("raw Parquet rows must all belong to the object's Kafka offset")
         topic = re.sub(r"[^A-Za-z0-9._-]", "_", batch.partition.topic)
         day = datetime.fromtimestamp(batch.rows[0].ingested_at_ms / 1000, tz=UTC).date()
         key = (

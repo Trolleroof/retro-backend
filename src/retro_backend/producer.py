@@ -9,6 +9,7 @@ from typing import Protocol
 from aiokafka import AIOKafkaProducer
 
 from .config import Settings
+from .kafka_config import kafka_client_options
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,7 @@ class KafkaEventProducer:
 
     async def start(self) -> None:
         producer = AIOKafkaProducer(
-            bootstrap_servers=self._settings.kafka_bootstrap_servers,
+            **kafka_client_options(self._settings),
             acks="all",
             enable_idempotence=True,
             compression_type="zstd",

@@ -49,8 +49,8 @@ def validate_chunk_envelope(value: Any) -> dict[str, Any]:
     if missing:
         raise ValidationError(f"missing required fields: {', '.join(missing)}")
     schema_version = chunk["schema_version"]
-    if schema_version not in {1, 2}:
-        raise ValidationError("schema_version must be 1 or 2")
+    if isinstance(schema_version, bool) or schema_version != 2:
+        raise ValidationError("schema_version must be 2")
 
     game_id = _string(chunk["game_id"], "game_id")
     chunk_id = _string(chunk["chunk_id"], "chunk_id")
@@ -58,10 +58,9 @@ def validate_chunk_envelope(value: Any) -> dict[str, Any]:
         raise ValidationError("game_id has an invalid format")
     if not CHUNK_ID.fullmatch(chunk_id):
         raise ValidationError("chunk_id has an invalid format")
-    if schema_version == 2:
-        user_id = _string(chunk.get("user_id"), "user_id")
-        if not USER_ID.fullmatch(user_id):
-            raise ValidationError("user_id has an invalid format")
+    user_id = _string(chunk.get("user_id"), "user_id")
+    if not USER_ID.fullmatch(user_id):
+        raise ValidationError("user_id has an invalid format")
 
     _string(chunk["game_type"], "game_type")
     _string(chunk["game_version"], "game_version")
@@ -83,8 +82,6 @@ def validate_chunk_envelope(value: Any) -> dict[str, Any]:
 
 def validate_authenticated_identity(chunk: dict[str, Any], authenticated_user_id: str) -> None:
     """Reject v2 identity claims that disagree with the authenticated producer."""
-    if chunk["schema_version"] != 2:
-        return
     if chunk["user_id"] != authenticated_user_id:
         raise ValidationError("user_id must match the authenticated user")
     for index, event in enumerate(chunk["events"]):

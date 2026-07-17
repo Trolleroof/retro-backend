@@ -66,5 +66,8 @@ async def test_s3_storage_exposes_idempotency_and_compaction_operations() -> Non
 
     assert head and head.size == 6 and head.metadata == {"sha256": "abc"}
     assert await storage.get("raw/a.parquet") == b"stored"
-    assert await storage.list_keys("raw/") == ["raw/a.parquet", "raw/b.parquet"]
+    assert [key async for key in storage.iter_keys("raw/")] == [
+        "raw/a.parquet",
+        "raw/b.parquet",
+    ]
     assert session.value.puts[0]["Bucket"] == "events"

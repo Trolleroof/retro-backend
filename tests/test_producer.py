@@ -53,6 +53,7 @@ async def test_kafka_producer_uses_durable_idempotent_configuration(monkeypatch:
     assert created["acks"] == "all"
     assert created["enable_idempotence"] is True
     assert created["compression_type"] == "zstd"
+    assert created["security_protocol"] == "PLAINTEXT"
     assert created["instance"].started is True
 
     metadata = await producer.send(topic="test-events", value=b"{}", key=b"game_1", headers=[])

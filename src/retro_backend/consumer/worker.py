@@ -1,14 +1,22 @@
-"""Transport-neutral batch and acknowledgment ordering."""
+"""Generation-safe record persistence and acknowledgment ordering."""
 
 from __future__ import annotations
 
+import asyncio
 from typing import Protocol
 
-from .buffer import OffsetGapError, PartitionBuffer
 from .metrics import ConsumerMetrics
 from .s3_writer import BatchWriter
-from .types import BrokerRecord, Partition
+from .types import BrokerRecord, EventBatch, Partition
 from .validation import RecordValidationError, decode_v2_record
+
+
+class PartitionNotOwnedError(RuntimeError):
+    """A record arrived after the partition was revoked from this generation."""
+
+
+class OffsetGapError(RuntimeError):
+    """A partition delivered a noncontiguous offset within one assignment."""
 
 
 class OffsetCommitter(Protocol):
@@ -26,27 +34,38 @@ class ConsumerWorker:
         committer: OffsetCommitter,
         batch_writer: BatchWriter,
         dlq: DlqPublisher,
-        max_records: int,
-        max_rows: int,
-        max_bytes: int,
         metrics: ConsumerMetrics | None = None,
     ) -> None:
         self._committer = committer
         self._batch_writer = batch_writer
         self._dlq = dlq
-        self._limits = (max_records, max_rows, max_bytes)
-        self._buffers: dict[Partition, PartitionBuffer] = {}
         self._next_offsets: dict[Partition, int] = {}
+        self._owned_partitions: set[Partition] = set()
+        self._assignments_seen = False
+        self._generation_lock = asyncio.Lock()
         self._metrics = metrics
 
-    def _buffer(self, partition: Partition) -> PartitionBuffer:
-        if partition not in self._buffers:
-            self._buffers[partition] = PartitionBuffer(
-                max_records=self._limits[0],
-                max_rows=self._limits[1],
-                max_bytes=self._limits[2],
-            )
-        return self._buffers[partition]
+    async def assign(self, partitions: set[Partition]) -> None:
+        async with self._generation_lock:
+            self._assignments_seen = True
+            for partition in partitions:
+                self._owned_partitions.add(partition)
+                self._next_offsets.pop(partition, None)
+
+    async def revoke(self, partitions: set[Partition]) -> None:
+        # Waiting for this lock lets an already-started durable write and its commit
+        # finish before ownership is detached. New records cannot enter concurrently.
+        async with self._generation_lock:
+            self._assignments_seen = True
+            for partition in partitions:
+                self._owned_partitions.discard(partition)
+                self._next_offsets.pop(partition, None)
+
+    def _assert_owned(self, partition: Partition) -> None:
+        if self._assignments_seen and partition not in self._owned_partitions:
+            raise PartitionNotOwnedError(f"partition {partition} is not owned by this generation")
+        if not self._assignments_seen:
+            self._owned_partitions.add(partition)
 
     def _assert_contiguous(self, record: BrokerRecord) -> None:
         expected = self._next_offsets.get(record.topic_partition)
@@ -54,50 +73,49 @@ class ConsumerWorker:
             raise OffsetGapError(f"expected offset {expected}, received {record.offset}")
 
     async def handle(self, record: BrokerRecord) -> None:
-        self._assert_contiguous(record)
-        partition = record.topic_partition
-        try:
-            rows = decode_v2_record(record)
-        except RecordValidationError as error:
-            await self.flush(partition)
-            await self._dlq.publish(record, str(error))
+        async with self._generation_lock:
+            partition = record.topic_partition
+            self._assert_owned(partition)
+            self._assert_contiguous(record)
+            try:
+                rows = decode_v2_record(record)
+            except RecordValidationError as error:
+                await self._dlq.publish(record, str(error))
+                await self._committer.commit(partition, record.offset + 1)
+                if self._metrics is not None:
+                    self._metrics.records.labels(outcome="dlq").inc()
+                    self._set_committed_metric(partition, record.offset + 1)
+                    self._metrics.mark_progress()
+                self._next_offsets[partition] = record.offset + 1
+                return
+
+            batch = EventBatch(
+                partition=partition,
+                start_offset=record.offset,
+                end_offset=record.offset,
+                record_count=1,
+                rows=tuple(rows),
+            )
+            await self._batch_writer.write(batch)
+            if self._metrics is not None:
+                self._metrics.parquet_objects.inc()
             await self._committer.commit(partition, record.offset + 1)
             if self._metrics is not None:
-                self._metrics.records.labels(outcome="dlq").inc()
-                self._metrics.committed_offset.labels(
-                    topic=partition.topic, partition=str(partition.partition)
-                ).set(record.offset + 1)
+                self._metrics.records.labels(outcome="accepted").inc()
+                self._set_committed_metric(partition, record.offset + 1)
+                self._metrics.mark_progress()
             self._next_offsets[partition] = record.offset + 1
-            return
 
-        buffer = self._buffer(partition)
-        record_day = record.timestamp_ms // 86_400_000
-        if buffer.utc_day is not None and buffer.utc_day != record_day:
-            await self.flush(partition)
-            buffer = self._buffer(partition)
-        should_flush = buffer.add(record, rows)
-        self._next_offsets[partition] = record.offset + 1
-        if self._metrics is not None:
-            self._metrics.records.labels(outcome="accepted").inc()
-        if should_flush:
-            await self.flush(partition)
-
-    async def flush(self, partition: Partition) -> None:
-        buffer = self._buffers.get(partition)
-        if buffer is None or buffer.empty:
-            return
-        batch = buffer.batch()
-        await self._batch_writer.write(batch)
-        if self._metrics is not None:
-            self._metrics.parquet_objects.inc()
-        await self._committer.commit(partition, batch.end_offset + 1)
-        if self._metrics is not None:
-            self._metrics.committed_offset.labels(
-                topic=partition.topic, partition=str(partition.partition)
-            ).set(batch.end_offset + 1)
-        del self._buffers[partition]
+    def _set_committed_metric(self, partition: Partition, next_offset: int) -> None:
+        assert self._metrics is not None
+        self._metrics.committed_offset.labels(
+            topic=partition.topic,
+            partition=str(partition.partition),
+        ).set(next_offset)
 
     async def flush_all(self, partitions: set[Partition] | None = None) -> None:
-        selected = partitions if partitions is not None else set(self._buffers)
-        for partition in sorted(selected, key=lambda value: (value.topic, value.partition)):
-            await self.flush(partition)
+        # One broker record is already a complete durability unit. Acquiring the
+        # lock is still useful at shutdown: it waits for any in-flight unit.
+        _ = partitions
+        async with self._generation_lock:
+            return None
