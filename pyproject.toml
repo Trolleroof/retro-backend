@@ -1,9 +1,10 @@
 [project]
 name = "retro-backend"
 version = "0.1.0"
-description = "Gameplay ingestion, storage, and processing backend for Retro Arcade"
+description = "Authenticated gameplay event producer and score backend for Retro Arcade"
 requires-python = ">=3.11,<3.15"
 dependencies = [
+    "aiokafka[zstd]>=0.12.0",
     "alembic>=1.14.0",
     "fastapi[standard]>=0.115.0",
     "prometheus-client>=0.21.0",

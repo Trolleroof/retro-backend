@@ -1,62 +1,73 @@
 # retro-backend
 
-Operational backend for Retro Arcade gameplay data. The arcade client records durable, game-agnostic interaction chunks; this service authenticates and validates those chunks, stores exact request bytes plus normalized events in PostgreSQL, and projects them through a separate worker process. RL training is intentionally outside this repository.
+Retro Arcade's authenticated producer API. It accepts versioned gameplay chunks, performs only lightweight envelope validation, and publishes the original HTTP bytes to Redpanda for consumer-side semantic validation. PostgreSQL stores users and per-game personal bests; Redis provides bearer-auth caching and chunk deduplication.
 
 ## Architecture
 
-- **FastAPI API**: health, authenticated chunk ingestion, game metadata, and ordered event queries.
-- **PostgreSQL**: authoritative users, game sessions, exact immutable chunks, normalized events, and durable processing jobs.
-- **Worker**: claims jobs with `FOR UPDATE SKIP LOCKED`, projects session ranges/completion, and can later host enrichment/export work.
-- **Redis**: readiness, accepted-chunk notifications, and future coordination. PostgreSQL remains authoritative if Redis is unavailable.
-- **Alembic**: owns production schema migrations.
+- **FastAPI**: health, authenticated chunk production, game-result submission, and leaderboards.
+- **PostgreSQL**: only `users` and `high_scores`. Raw tokens and gameplay events are never stored.
+- **Redis**: positive/negative auth caching and per-user chunk publication state.
+- **Redpanda**: durable event stream. The API uses an idempotent aiokafka producer with `acks=all` and zstd compression.
+- **Alembic**: migrates the original event-store schema forward to the two-table schema.
 
-This follows Groudon's Python foundation (`uv`, FastAPI, async SQLAlchemy, PostgreSQL, Alembic, Redis, pytest, Ruff, BasedPyright) and its separate ingestion/consumer process shape. Retro starts with a PostgreSQL job queue rather than Redpanda; the worker interface can move to a stream without changing the client contract.
+Full event semantics, score derivation, and session projections belong to downstream consumers. The producer API does not inspect event payloads or derive scores.
 
 ## Local development
 
 ```bash
 cp .env.example .env
 uv sync
-docker compose up -d postgres redis
+docker compose up --build
+```
+
+The published ports default to PostgreSQL `5432`, Redis `6379`, Redpanda `19092`, and API `8000`. Override `RETRO_POSTGRES_PORT`, `RETRO_REDIS_PORT`, `RETRO_KAFKA_PORT`, or `RETRO_API_PORT` when needed.
+
+To run services separately:
+
+```bash
+docker compose up -d postgres redis redpanda redpanda-init
 uv run alembic upgrade head
 uv run uvicorn retro_backend.main:app --reload
 ```
 
-Run the worker in a second terminal:
+## Token issuance
+
+Issue a user's token once after migrations have run:
 
 ```bash
-uv run python -m retro_backend.worker
+uv run python -m retro_backend.token_cli --user-id usr_example
 ```
 
-Or start the complete stack:
+The command prints the only copy of the opaque token. PostgreSQL stores only its SHA-256 hash. To invalidate the old token and issue a replacement:
 
 ```bash
-docker compose up --build
+uv run python -m retro_backend.token_cli --user-id usr_example --rotate
 ```
 
-The published ports default to PostgreSQL `5432`, Redis `6379`, and API `8000`.
-Override `RETRO_POSTGRES_PORT`, `RETRO_REDIS_PORT`, or `RETRO_API_PORT` when those
-ports are already occupied; container-to-container URLs do not change.
+Clients send the issued value as `Authorization: Bearer <token>`. There is no shared ingestion-key setting.
 
-## Client configuration
+## Configuration
 
-```bash
-export GAMEPIGEON_INGEST_URL=http://127.0.0.1:8000/v1/game-event-chunks
-export GAMEPIGEON_INGEST_API_KEY=development-only-change-me
-```
-
-Requests use `Authorization: Bearer <key>`. Production must replace the development key.
+- `RETRO_DATABASE_URL`
+- `RETRO_REDIS_URL`
+- `RETRO_KAFKA_BOOTSTRAP_SERVERS`
+- `RETRO_KAFKA_TOPIC` (default `retro-game-events`)
+- `RETRO_MAX_REQUEST_BYTES` (default 256 KiB)
+- `RETRO_CHUNK_PUBLISHING_TTL_SECONDS` (default 30)
+- `RETRO_CHUNK_DEDUP_TTL_SECONDS` (default 48 hours)
 
 ## API
 
 - `GET /health/live`
 - `GET /health/ready`
 - `POST /v1/game-event-chunks`
-- `GET /v1/games/{game_id}`
-- `GET /v1/games/{game_id}/events?visibility=policy`
+- `POST /v1/game-results`
+- `GET /v1/high-scores/{game_type}?limit=100`
 - `GET /metrics`
 
-Identical `(game_id, chunk_id)` retries are accepted idempotently. Reusing a chunk ID or chunk sequence with different bytes returns `409`. The database transaction stores the exact payload, normalized events, session counters, and processing job before returning `202`.
+`POST /v1/game-event-chunks` supports v1 and v2 envelopes, keys records by `game_id`, attaches the authenticated user as the `retro-user-id` Kafka header, and publishes the exact request bytes. Duplicate chunk IDs for the same user return the cached broker partition and offset without republishing.
+
+Supported score game types are `2048`, `tetris`, `snake`, `minesweeper`, `sokoban`, `connect4`, `lightsout`, and `sudoku`. A result changes the personal best only when its score is higher; lower and equal retries preserve the original achievement timestamp.
 
 ## Verification
 

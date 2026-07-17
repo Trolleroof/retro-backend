@@ -1,17 +1,19 @@
+import hashlib
 import json
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fakeredis.aioredis import FakeRedis
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from retro_backend.config import Settings
-from retro_backend.main import create_app
-from retro_backend.models import Base
+from retro_backend.models import Base, User
+from retro_backend.producer import BrokerMetadata
 
 ROOT = Path(__file__).resolve().parents[1]
 V2_FIXTURE = ROOT / "contracts/fixtures/interaction-trace-chunk-v2.json"
@@ -51,18 +53,78 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
 @pytest.fixture
 async def client(
     session_factory: async_sessionmaker[AsyncSession],
+    fake_redis: FakeRedis,
+    producer: "RecordingProducer",
+    auth_token: str,
+    fixture_payload: dict[str, Any],
 ) -> AsyncIterator[AsyncClient]:
+    from retro_backend.main import create_app
+
+    async with session_factory() as session:
+        session.add(
+            User(
+                id=fixture_payload["user_id"],
+                auth_token_hash=hashlib.sha256(auth_token.encode()).hexdigest(),
+            )
+        )
+        await session.commit()
     settings = Settings(
         environment="test",
         database_url="sqlite+aiosqlite://",
-        ingest_api_key="test-secret",
         redis_url=None,
     )
-    app = create_app(settings=settings, session_factory=session_factory)
+    app = create_app(
+        settings=settings,
+        session_factory=session_factory,
+        redis=fake_redis,
+        producer=producer,
+    )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as value:
         yield value
 
 
 @pytest.fixture
-def auth_headers() -> dict[str, str]:
-    return {"Authorization": "Bearer test-secret", "Content-Type": "application/json"}
+def auth_token() -> str:
+    return "retro_test-secret"
+
+
+@pytest.fixture
+def auth_headers(auth_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {auth_token}", "Content-Type": "application/json"}
+
+
+@pytest.fixture
+def fake_redis() -> FakeRedis:
+    return FakeRedis(decode_responses=True)
+
+
+class RecordingProducer:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self.failure: Exception | None = None
+        self.started = False
+        self.stopped = False
+
+    async def start(self) -> None:
+        self.started = True
+
+    async def stop(self) -> None:
+        self.stopped = True
+
+    async def send(
+        self,
+        *,
+        topic: str,
+        value: bytes,
+        key: bytes,
+        headers: list[tuple[str, bytes]],
+    ) -> BrokerMetadata:
+        self.calls.append({"topic": topic, "value": value, "key": key, "headers": headers})
+        if self.failure is not None:
+            raise self.failure
+        return BrokerMetadata(partition=3, offset=42)
+
+
+@pytest.fixture
+def producer() -> RecordingProducer:
+    return RecordingProducer()

@@ -27,14 +27,48 @@ services:
       timeout: 3s
       retries: 20
 
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.10
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "${RETRO_KAFKA_PORT:-19092}:19092"
+    volumes:
+      - retro-redpanda:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --brokers=localhost:9092 | grep -q 'Healthy:.*true'"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.10
+    environment:
+      RETRO_KAFKA_TOPIC: ${RETRO_KAFKA_TOPIC:-retro-game-events}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - rpk topic create "$$RETRO_KAFKA_TOPIC" --brokers redpanda:9092 || rpk topic describe "$$RETRO_KAFKA_TOPIC" --brokers redpanda:9092
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
   migrate:
     build: .
     command: ["uv", "run", "--no-sync", "alembic", "upgrade", "head"]
     environment: &backend-env
       RETRO_DATABASE_URL: postgresql+psycopg://retro:retro@postgres:5432/retro
       RETRO_REDIS_URL: redis://redis:6379/0
-      RETRO_REDIS_REQUIRED: "true"
-      RETRO_INGEST_API_KEY: ${RETRO_INGEST_API_KEY:-development-only-change-me}
+      RETRO_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      RETRO_KAFKA_TOPIC: ${RETRO_KAFKA_TOPIC:-retro-game-events}
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,22 +83,15 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
       interval: 5s
       timeout: 3s
       retries: 20
 
-  worker:
-    build: .
-    command: ["uv", "run", "--no-sync", "python", "-m", "retro_backend.worker"]
-    environment: *backend-env
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-
 volumes:
   retro-postgres:
   retro-redis:
+  retro-redpanda:

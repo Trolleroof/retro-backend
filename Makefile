@@ -1,4 +1,4 @@
-.PHONY: dev down migrate api worker test lint typecheck verify
+.PHONY: dev down migrate api token test lint typecheck verify
 
 dev:
 	docker compose up --build
@@ -12,8 +12,8 @@ migrate:
 api:
 	uv run uvicorn retro_backend.main:app --reload
 
-worker:
-	uv run python -m retro_backend.worker
+token:
+	uv run python -m retro_backend.token_cli --user-id "$(USER_ID)"
 
 test:
 	uv run pytest

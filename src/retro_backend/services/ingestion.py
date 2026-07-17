@@ -1,133 +1,110 @@
-"""Transactional ingestion and idempotency service."""
+"""Redis-deduplicated event publication."""
 
 from __future__ import annotations
 
-import hashlib
-import json
 import time
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio import Redis
 
-from ..contracts import validate_chunk
-from ..models import GameplayEvent, GameSession, IngestedChunk, ProcessingJob, User
+from ..config import Settings
+from ..producer import BrokerMetadata, EventProducer
+
+PUBLISHING = "publishing"
 
 
-class ChunkConflictError(RuntimeError):
+class ChunkPublishingError(RuntimeError):
+    pass
+
+
+class BrokerPublishError(RuntimeError):
     pass
 
 
 @dataclass(frozen=True)
 class IngestionResult:
-    chunk: dict[str, Any]
+    envelope: dict[str, Any]
     duplicate: bool
+    broker: BrokerMetadata
     server_received_at_ms: int
 
     def acknowledgment(self) -> dict[str, Any]:
         return {
             "accepted": True,
             "duplicate": self.duplicate,
-            "game_id": self.chunk["game_id"],
-            "chunk_id": self.chunk["chunk_id"],
-            "chunk_sequence": self.chunk["chunk_sequence"],
+            "game_id": self.envelope["game_id"],
+            "chunk_id": self.envelope["chunk_id"],
+            "chunk_sequence": self.envelope["chunk_sequence"],
             "accepted_event_range": {
-                "first": self.chunk["first_event_sequence"],
-                "last": self.chunk["last_event_sequence"],
+                "first": self.envelope["first_event_sequence"],
+                "last": self.envelope["last_event_sequence"],
             },
             "server_received_at_ms": self.server_received_at_ms,
+            "broker_partition": self.broker.partition,
+            "broker_offset": self.broker.offset,
         }
 
 
-async def ingest_chunk(session: AsyncSession, raw_payload: bytes) -> IngestionResult:
-    chunk = validate_chunk(json.loads(raw_payload))
-    digest = hashlib.sha256(raw_payload).hexdigest()
-    existing = await session.get(IngestedChunk, chunk["chunk_id"])
-    if existing is not None:
-        if existing.payload_sha256 != digest or existing.raw_payload != raw_payload:
-            raise ChunkConflictError("chunk ID already contains different bytes")
+def _parse_broker_metadata(value: str) -> BrokerMetadata | None:
+    try:
+        partition, offset = value.split(":", maxsplit=1)
+        return BrokerMetadata(partition=int(partition), offset=int(offset))
+    except (TypeError, ValueError):
+        return None
+
+
+async def publish_chunk(
+    *,
+    redis: Redis,
+    producer: EventProducer,
+    settings: Settings,
+    user_id: str,
+    envelope: dict[str, Any],
+    raw_payload: bytes,
+) -> IngestionResult:
+    dedup_key = f"retro:chunk:{user_id}:{envelope['chunk_id']}"
+    acquired = await redis.set(
+        dedup_key,
+        PUBLISHING,
+        ex=settings.chunk_publishing_ttl_seconds,
+        nx=True,
+    )
+    if not acquired:
+        existing = await redis.get(dedup_key)
+        if isinstance(existing, bytes):
+            existing = existing.decode("utf-8")
+        if existing == PUBLISHING or existing is None:
+            raise ChunkPublishingError("chunk is currently publishing; retry later")
+        metadata = _parse_broker_metadata(existing)
+        if metadata is None:
+            raise ChunkPublishingError("chunk acknowledgment is temporarily unavailable")
         return IngestionResult(
-            chunk=chunk, duplicate=True, server_received_at_ms=int(time.time() * 1000)
+            envelope=envelope,
+            duplicate=True,
+            broker=metadata,
+            server_received_at_ms=int(time.time() * 1000),
         )
 
-    sequence_owner = await session.scalar(
-        select(IngestedChunk).where(
-            IngestedChunk.game_id == chunk["game_id"],
-            IngestedChunk.chunk_sequence == chunk["chunk_sequence"],
+    try:
+        metadata = await producer.send(
+            topic=settings.kafka_topic,
+            value=raw_payload,
+            key=envelope["game_id"].encode("utf-8"),
+            headers=[("retro-user-id", user_id.encode("utf-8"))],
         )
+    except Exception as error:
+        await redis.delete(dedup_key)
+        raise BrokerPublishError("event broker unavailable") from error
+
+    await redis.set(
+        dedup_key,
+        f"{metadata.partition}:{metadata.offset}",
+        ex=settings.chunk_dedup_ttl_seconds,
     )
-    if sequence_owner is not None:
-        raise ChunkConflictError("chunk sequence already belongs to a different chunk")
-
-    user_id = chunk.get("user_id", "usr_legacy")
-    user = await session.get(User, user_id)
-    if user is None:
-        user = User(id=user_id)
-        session.add(user)
-        await session.flush([user])
-
-    game = await session.get(GameSession, chunk["game_id"])
-    if game is None:
-        game = GameSession(
-            id=chunk["game_id"],
-            user_id=user_id,
-            game_type=chunk["game_type"],
-            game_version=chunk["game_version"],
-            event_count=0,
-            chunk_count=0,
-        )
-        session.add(game)
-        await session.flush([game])
-    elif (
-        game.user_id != user_id
-        or game.game_type != chunk["game_type"]
-        or game.game_version != chunk["game_version"]
-    ):
-        raise ChunkConflictError("game identity does not match previously ingested chunks")
-
-    stored = IngestedChunk(
-        id=chunk["chunk_id"],
-        game_id=chunk["game_id"],
-        user_id=user_id,
-        schema_version=chunk["schema_version"],
-        chunk_sequence=chunk["chunk_sequence"],
-        first_event_sequence=chunk["first_event_sequence"],
-        last_event_sequence=chunk["last_event_sequence"],
-        event_count=chunk["event_count"],
-        created_at_ms=round(chunk["created_at_ms"]),
-        payload_sha256=digest,
-        raw_payload=raw_payload,
-    )
-    session.add(stored)
-    await session.flush([stored])
-    for event in chunk["events"]:
-        session.add(
-            GameplayEvent(
-                id=event["event_id"],
-                chunk_id=chunk["chunk_id"],
-                game_id=chunk["game_id"],
-                user_id=user_id,
-                event_sequence=event["event_sequence"],
-                event_type=event["event_type"],
-                visibility=event.get("visibility", "policy"),
-                client_time_ms=round(event["client_time_ms"]),
-                monotonic_time_us=round(
-                    event.get("monotonic_time_us", event.get("monotonic_time_ms", 0) * 1000)
-                ),
-                simulation_tick=event.get("simulation_tick"),
-                payload=event["payload"],
-            )
-        )
-    game.event_count += chunk["event_count"]
-    game.chunk_count += 1
-    session.add(
-        ProcessingJob(
-            id=f"process:{chunk['chunk_id']}",
-            chunk_id=chunk["chunk_id"],
-        )
-    )
-    await session.flush()
     return IngestionResult(
-        chunk=chunk, duplicate=False, server_received_at_ms=int(time.time() * 1000)
+        envelope=envelope,
+        duplicate=False,
+        broker=metadata,
+        server_received_at_ms=int(time.time() * 1000),
     )

@@ -16,12 +16,11 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     database_url: str = "postgresql+psycopg://retro:retro@127.0.0.1:5432/retro"
     redis_url: str | None = "redis://127.0.0.1:6379/0"
-    redis_required: bool = False
-    ingest_api_key: str = "development-only-change-me"
+    kafka_bootstrap_servers: str = "127.0.0.1:9092"
+    kafka_topic: str = "retro-game-events"
     max_request_bytes: int = 256 * 1024
-    worker_poll_seconds: float = 0.5
-    worker_lease_seconds: int = 60
-    worker_max_attempts: int = 5
+    chunk_publishing_ttl_seconds: int = 30
+    chunk_dedup_ttl_seconds: int = 48 * 60 * 60
     log_level: str = "INFO"
 
 

@@ -1,11 +1,17 @@
 import json
-from typing import Any
+from typing import Any, Protocol
 
+from fakeredis.aioredis import FakeRedis
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from retro_backend.models import GameplayEvent, GameSession, IngestedChunk, ProcessingJob
+from retro_backend.models import HighScore, User
+
+
+class RecordingProducer(Protocol):
+    calls: list[dict[str, Any]]
+    failure: Exception | None
 
 
 async def test_ingestion_requires_bearer_token(client: AsyncClient, fixture_bytes: bytes) -> None:
@@ -13,16 +19,18 @@ async def test_ingestion_requires_bearer_token(client: AsyncClient, fixture_byte
     assert response.status_code == 401
 
 
-async def test_ingestion_persists_exact_chunk_events_and_job(
+async def test_ingestion_publishes_exact_bytes_without_database_writes(
     client: AsyncClient,
     auth_headers: dict[str, str],
     fixture_bytes: bytes,
     fixture_payload: dict[str, Any],
+    producer: RecordingProducer,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     response = await client.post(
         "/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers
     )
+
     assert response.status_code == 202
     assert response.json() == {
         "accepted": True,
@@ -35,66 +43,119 @@ async def test_ingestion_persists_exact_chunk_events_and_job(
             "last": fixture_payload["last_event_sequence"],
         },
         "server_received_at_ms": response.json()["server_received_at_ms"],
+        "broker_partition": 3,
+        "broker_offset": 42,
     }
-
+    assert producer.calls == [
+        {
+            "topic": "retro-game-events",
+            "value": fixture_bytes,
+            "key": fixture_payload["game_id"].encode(),
+            "headers": [("retro-user-id", fixture_payload["user_id"].encode())],
+        }
+    ]
     async with session_factory() as session:
-        chunk = await session.get(IngestedChunk, fixture_payload["chunk_id"])
-        assert chunk is not None
-        assert chunk.raw_payload == fixture_bytes
-        assert await session.scalar(select(func.count(GameplayEvent.id))) == len(
-            fixture_payload["events"]
-        )
-        assert await session.scalar(select(func.count(ProcessingJob.id))) == 1
-        game = await session.get(GameSession, fixture_payload["game_id"])
-        assert game is not None
-        assert game.user_id == fixture_payload["user_id"]
+        assert await session.scalar(select(func.count(User.id))) == 1
+        assert await session.scalar(select(func.count(HighScore.user_id))) == 0
 
 
-async def test_identical_retry_is_idempotent(
+async def test_duplicate_returns_cached_broker_ack_without_republishing(
     client: AsyncClient,
     auth_headers: dict[str, str],
     fixture_bytes: bytes,
-    session_factory: async_sessionmaker[AsyncSession],
+    producer: RecordingProducer,
 ) -> None:
     first = await client.post("/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers)
     second = await client.post("/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers)
+
     assert first.status_code == second.status_code == 202
     assert second.json()["duplicate"] is True
-    async with session_factory() as session:
-        assert await session.scalar(select(func.count(IngestedChunk.id))) == 1
+    assert second.json()["broker_partition"] == 3
+    assert second.json()["broker_offset"] == 42
+    assert len(producer.calls) == 1
 
 
-async def test_conflicting_chunk_reuse_returns_409(
+async def test_publishing_chunk_returns_retryable_503(
     client: AsyncClient,
     auth_headers: dict[str, str],
     fixture_bytes: bytes,
     fixture_payload: dict[str, Any],
+    fake_redis: FakeRedis,
 ) -> None:
-    await client.post("/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers)
-    fixture_payload["created_at_ms"] += 1
+    key = f"retro:chunk:{fixture_payload['user_id']}:{fixture_payload['chunk_id']}"
+    await fake_redis.set(key, "publishing", ex=30)
+
     response = await client.post(
+        "/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "chunk is currently publishing; retry later"
+
+
+async def test_publish_failure_clears_dedup_key(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_bytes: bytes,
+    fixture_payload: dict[str, Any],
+    fake_redis: FakeRedis,
+    producer: RecordingProducer,
+) -> None:
+    producer.failure = RuntimeError("broker unavailable")
+    response = await client.post(
+        "/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "event broker unavailable"
+    key = f"retro:chunk:{fixture_payload['user_id']}:{fixture_payload['chunk_id']}"
+    assert await fake_redis.get(key) is None
+
+
+async def test_ingestion_accepts_semantically_invalid_events_for_consumer_validation(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_payload: dict[str, Any],
+    producer: RecordingProducer,
+) -> None:
+    fixture_payload["events"][0]["event_type"] = "consumer_will_reject_this"
+    fixture_payload["events"][0]["payload"] = {"score": -999}
+    raw = json.dumps(fixture_payload, separators=(",", ":")).encode()
+
+    response = await client.post("/v1/game-event-chunks", content=raw, headers=auth_headers)
+    assert response.status_code == 202
+    assert producer.calls[0]["value"] == raw
+
+
+async def test_ingestion_returns_clear_body_errors(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_payload: dict[str, Any],
+) -> None:
+    empty = await client.post("/v1/game-event-chunks", content=b"", headers=auth_headers)
+    malformed = await client.post(
+        "/v1/game-event-chunks", content=b"{", headers=auth_headers
+    )
+    fixture_payload.pop("chunk_id")
+    missing = await client.post(
         "/v1/game-event-chunks",
-        content=json.dumps(fixture_payload, separators=(",", ":")),
+        content=json.dumps(fixture_payload).encode(),
         headers=auth_headers,
     )
-    assert response.status_code == 409
-    assert response.json()["detail"] == "chunk ID already contains different bytes"
+
+    assert empty.status_code == 400
+    assert malformed.status_code == 400
+    assert missing.status_code == 400
 
 
-async def test_game_and_event_query_api(
+async def test_ingestion_rejects_oversized_body(
     client: AsyncClient,
     auth_headers: dict[str, str],
-    fixture_bytes: bytes,
     fixture_payload: dict[str, Any],
 ) -> None:
-    await client.post("/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers)
-    game = await client.get(f"/v1/games/{fixture_payload['game_id']}", headers=auth_headers)
-    events = await client.get(
-        f"/v1/games/{fixture_payload['game_id']}/events", headers=auth_headers
+    fixture_payload["padding"] = "x" * (257 * 1024)
+    response = await client.post(
+        "/v1/game-event-chunks",
+        content=json.dumps(fixture_payload).encode(),
+        headers=auth_headers,
     )
-    assert game.status_code == 200
-    assert game.json()["event_count"] == fixture_payload["event_count"]
-    assert events.status_code == 200
-    assert [event["event_id"] for event in events.json()["events"]] == [
-        event["event_id"] for event in fixture_payload["events"]
-    ]
+    assert response.status_code == 413
