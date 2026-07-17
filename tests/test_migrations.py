@@ -15,3 +15,5 @@ def test_migrations_render_complete_offline_sql(capsys: pytest.CaptureFixture[st
     sql = capsys.readouterr().out
     assert "CREATE TABLE high_scores" in sql
     assert "DROP TABLE processing_jobs" in sql
+    assert "md5(id || ':retro-migration-a') || md5(id || ':retro-migration-b')" in sql
+    assert "NULL-migration" not in sql

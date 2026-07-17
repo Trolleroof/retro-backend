@@ -6,8 +6,10 @@ import argparse
 import asyncio
 import hashlib
 import secrets
+from contextlib import suppress
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import get_settings
@@ -17,10 +19,22 @@ from .redis_client import create_redis
 
 NEGATIVE_AUTH_TTL_SECONDS = 30
 NEGATIVE_CACHE_VALUE = "!"
+ROTATION_TOMBSTONE_PREFIX = f"{NEGATIVE_CACHE_VALUE}:"
+
+COMPARE_DELETE_SCRIPT = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+"""
 
 
 class TokenAlreadyIssuedError(RuntimeError):
     """Raised when rotation was not authorized for an existing user."""
+
+
+class TokenRotationError(RuntimeError):
+    """Raised when a token rotation cannot be completed safely."""
 
 
 def hash_token(token: str) -> str:
@@ -29,6 +43,11 @@ def hash_token(token: str) -> str:
 
 def generate_token() -> str:
     return f"retro_{secrets.token_urlsafe(32)}"
+
+
+async def _remove_tombstone_if_owned(redis: Redis, key: str, value: str) -> None:
+    with suppress(RedisError):
+        await redis.eval(COMPARE_DELETE_SCRIPT, 1, key, value)
 
 
 async def issue_token(
@@ -41,23 +60,36 @@ async def issue_token(
     if not user_id:
         raise ValueError("user ID must not be empty")
     token = generate_token()
-    previous_digest: str | None = None
-    async with session_factory() as session, session.begin():
-        user = await session.get(User, user_id)
-        if user is not None and not rotate:
-            raise TokenAlreadyIssuedError(f"user {user_id!r} already has a token; use --rotate")
-        digest = hash_token(token)
-        if user is None:
-            session.add(User(id=user_id, auth_token_hash=digest))
-        else:
-            previous_digest = user.auth_token_hash
-            user.auth_token_hash = digest
-    if previous_digest is not None and redis is not None:
-        await redis.set(
-            f"retro:auth:{previous_digest}",
-            NEGATIVE_CACHE_VALUE,
-            ex=NEGATIVE_AUTH_TTL_SECONDS,
-        )
+    tombstone_key: str | None = None
+    tombstone_value: str | None = None
+    async with session_factory() as session:
+        try:
+            async with session.begin():
+                user = await session.get(User, user_id, with_for_update=True)
+                if user is not None and not rotate:
+                    raise TokenAlreadyIssuedError(
+                        f"user {user_id!r} already has a token; use --rotate"
+                    )
+                digest = hash_token(token)
+                if user is None:
+                    session.add(User(id=user_id, auth_token_hash=digest))
+                else:
+                    if redis is None:
+                        raise TokenRotationError("Redis is required for token rotation")
+                    tombstone_key = f"retro:auth:{user.auth_token_hash}"
+                    tombstone_value = f"{ROTATION_TOMBSTONE_PREFIX}{secrets.token_urlsafe(24)}"
+                    installed = await redis.set(
+                        tombstone_key,
+                        tombstone_value,
+                        ex=NEGATIVE_AUTH_TTL_SECONDS,
+                    )
+                    if not installed:
+                        raise TokenRotationError("could not install old-token tombstone")
+                    user.auth_token_hash = digest
+        except BaseException:
+            if redis is not None and tombstone_key is not None and tombstone_value is not None:
+                await _remove_tombstone_if_owned(redis, tombstone_key, tombstone_value)
+            raise
     return token
 
 

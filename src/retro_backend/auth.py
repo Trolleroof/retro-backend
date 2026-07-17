@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import get_session
 from .models import User
-from .token_cli import NEGATIVE_AUTH_TTL_SECONDS, NEGATIVE_CACHE_VALUE, hash_token
+from .token_cli import (
+    NEGATIVE_AUTH_TTL_SECONDS,
+    NEGATIVE_CACHE_VALUE,
+    ROTATION_TOMBSTONE_PREFIX,
+    hash_token,
+)
 
 POSITIVE_AUTH_TTL_SECONDS = 900
 
@@ -20,7 +25,11 @@ POSITIVE_AUTH_TTL_SECONDS = 900
 def _cached_user_id(cached: bytes | str | None) -> str | None:
     if isinstance(cached, bytes):
         cached = cached.decode("utf-8")
-    if cached is None or hmac.compare_digest(cached, NEGATIVE_CACHE_VALUE):
+    if (
+        cached is None
+        or hmac.compare_digest(cached, NEGATIVE_CACHE_VALUE)
+        or cached.startswith(ROTATION_TOMBSTONE_PREFIX)
+    ):
         return None
     return cached
 

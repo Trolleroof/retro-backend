@@ -55,6 +55,18 @@ async def test_auth_cache_hit_returns_user_without_postgres(
         assert await resolve_user_id(token, session, redis) == "usr_cached"
 
 
+async def test_rotation_tombstone_marker_is_a_negative_cache_hit(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    token = "retro_rotated"
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    redis = FakeRedis(decode_responses=True)
+    await redis.set(f"retro:auth:{digest}", f"{NEGATIVE_CACHE_VALUE}:rotation-marker", ex=30)
+
+    async with session_factory() as session:
+        assert await resolve_user_id(token, session, redis) is None
+
+
 async def test_authentication_does_not_log_sensitive_values(
     session_factory: async_sessionmaker[AsyncSession], caplog: pytest.LogCaptureFixture
 ) -> None:

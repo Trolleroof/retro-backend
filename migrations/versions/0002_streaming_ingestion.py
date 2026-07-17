@@ -36,7 +36,7 @@ def upgrade() -> None:
         op.execute(
             sa.text(
                 "UPDATE users SET auth_token_hash = "
-                "md5(id || ':retro-migration-a') || md5(id || ':retro-migration-b')"
+                r"md5(id || '\:retro-migration-a') || md5(id || '\:retro-migration-b')"
             )
         )
     else:

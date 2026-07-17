@@ -59,6 +59,9 @@ class KafkaEventProducer:
             return False
         try:
             async with asyncio.timeout(self._settings.readiness_timeout_seconds):
+                refreshed = await self._producer.client.force_metadata_update()
+                if not refreshed:
+                    return False
                 partitions = await self._producer.partitions_for(self._settings.kafka_topic)
         except Exception:
             return False
