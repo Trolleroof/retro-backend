@@ -11,7 +11,9 @@
     "chunk_id",
     "chunk_sequence",
     "accepted_event_range",
-    "server_received_at_ms"
+    "server_received_at_ms",
+    "broker_partition",
+    "broker_offset"
   ],
   "properties": {
     "accepted": { "type": "boolean" },
@@ -28,6 +30,8 @@
         "last": { "type": "integer", "minimum": 1 }
       }
     },
-    "server_received_at_ms": { "type": "number", "minimum": 0 }
+    "server_received_at_ms": { "type": "number", "minimum": 0 },
+    "broker_partition": { "type": "integer", "minimum": 0 },
+    "broker_offset": { "type": "integer", "minimum": 0 }
   }
 }

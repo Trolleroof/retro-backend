@@ -1,12 +1,17 @@
 import json
+from pathlib import Path
 from typing import Any, Protocol
 
 from fakeredis.aioredis import FakeRedis
 from httpx import AsyncClient
+from jsonschema import Draft202012Validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from retro_backend.models import HighScore, User
+
+ROOT = Path(__file__).resolve().parents[1]
+INGEST_RESPONSE_SCHEMA = ROOT / "contracts/ingest-response-v1.schema.json"
 
 
 class RecordingProducer(Protocol):
@@ -17,6 +22,20 @@ class RecordingProducer(Protocol):
 async def test_ingestion_requires_bearer_token(client: AsyncClient, fixture_bytes: bytes) -> None:
     response = await client.post("/v1/game-event-chunks", content=fixture_bytes)
     assert response.status_code == 401
+
+
+async def test_runtime_acknowledgment_validates_against_response_schema(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_bytes: bytes,
+) -> None:
+    response = await client.post(
+        "/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers
+    )
+
+    assert response.status_code == 202
+    schema = json.loads(INGEST_RESPONSE_SCHEMA.read_bytes())
+    Draft202012Validator(schema).validate(response.json())
 
 
 async def test_ingestion_publishes_exact_bytes_without_database_writes(
