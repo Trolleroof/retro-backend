@@ -35,6 +35,36 @@ class QueueBinding(Protocol):
     async def send(self, message: object) -> object: ...
 
 
+class QueueMessage(Protocol):
+    @property
+    def id(self) -> object: ...
+
+    @property
+    def timestamp(self) -> object: ...
+
+    @property
+    def body(self) -> object: ...
+
+    def ack(self) -> None: ...
+
+    def retry(self) -> None: ...
+
+
+class QueueBatch(Protocol):
+    @property
+    def queue(self) -> object: ...
+
+    @property
+    def messages(self) -> object: ...
+
+
+class R2ObjectBody(Protocol):
+    @property
+    def customMetadata(self) -> object: ...
+
+    async def arrayBuffer(self) -> object: ...
+
+
 class RateLimiterBinding(Protocol):
     async def limit(self, options: dict[str, str]) -> object: ...
 

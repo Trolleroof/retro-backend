@@ -1,6 +1,7 @@
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -54,15 +55,40 @@ class FakeR2PutCall:
     options: dict[str, object]
 
 
+class FakeJsArrayBuffer:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+        self.to_bytes_calls = 0
+
+    def to_bytes(self) -> bytes:
+        self.to_bytes_calls += 1
+        return self.body
+
+
+class FakeR2Object:
+    def __init__(self, body: object, custom_metadata: object) -> None:
+        self._body = body
+        self.customMetadata = custom_metadata
+        self.array_buffer_calls = 0
+
+    async def arrayBuffer(self) -> object:
+        self.array_buffer_calls += 1
+        return self._body
+
+
 class FakeR2Bucket:
     def __init__(self, operation_order: list[str]) -> None:
         self.operation_order = operation_order
         self.objects: dict[str, object] = {}
         self.head_calls: list[str] = []
         self.head_results: list[object | None] = []
+        self.get_calls: list[str] = []
+        self.get_results: list[object | None] = []
         self.put_calls: list[FakeR2PutCall] = []
         self.put_results: list[object | None] = []
         self.head_failure: Exception | None = None
+        self.get_failure: Exception | None = None
+        self.get_failures: dict[str, Exception] = {}
         self.put_failure: Exception | None = None
 
     async def head(self, key: str) -> object | None:
@@ -71,6 +97,17 @@ class FakeR2Bucket:
             raise self.head_failure
         if self.head_results:
             return self.head_results.pop(0)
+        return self.objects.get(key)
+
+    async def get(self, key: str) -> object | None:
+        self.operation_order.append("r2.get")
+        self.get_calls.append(key)
+        if key in self.get_failures:
+            raise self.get_failures[key]
+        if self.get_failure is not None:
+            raise self.get_failure
+        if self.get_results:
+            return self.get_results.pop(0)
         return self.objects.get(key)
 
     async def put(
@@ -90,7 +127,28 @@ class FakeR2Bucket:
                 self.objects[key] = result
             return result
 
-        stored = SimpleNamespace(customMetadata=options["customMetadata"])
+        stored = FakeR2Object(value, options["customMetadata"])
+        self.objects[key] = stored
+        return stored
+
+    def seed_raw(
+        self,
+        key: str,
+        body: bytes,
+        payload_sha256: str | None,
+        *,
+        proxy_metadata: bool = False,
+        proxy_buffer: bool = False,
+    ) -> FakeR2Object:
+        metadata: object
+        if proxy_metadata:
+            metadata = SimpleNamespace(payload_sha256=payload_sha256)
+        else:
+            metadata = (
+                {} if payload_sha256 is None else {"payload_sha256": payload_sha256}
+            )
+        buffer: object = FakeJsArrayBuffer(body) if proxy_buffer else body
+        stored = FakeR2Object(buffer, metadata)
         self.objects[key] = stored
         return stored
 
@@ -108,9 +166,65 @@ class FakeR2Bucket:
             metadata = (
                 {} if payload_sha256 is None else {"payload_sha256": payload_sha256}
             )
-        stored = SimpleNamespace(customMetadata=metadata)
+        stored = FakeR2Object(b"", metadata)
         self.objects[key] = stored
         return stored
+
+
+class FakeQueueMessage:
+    def __init__(
+        self,
+        body: object,
+        *,
+        message_id: str = "msg_01",
+        timestamp: object | None = None,
+        operation_order: list[str] | None = None,
+    ) -> None:
+        self.body = body
+        self.id = message_id
+        self.timestamp = (
+            timestamp if timestamp is not None else datetime(2026, 7, 17, tzinfo=UTC)
+        )
+        self.operation_order = operation_order if operation_order is not None else []
+        self.ack_calls = 0
+        self.retry_calls = 0
+
+    @property
+    def acked(self) -> bool:
+        return self.ack_calls > 0
+
+    @property
+    def retried(self) -> bool:
+        return self.retry_calls > 0
+
+    def ack(self) -> None:
+        self.operation_order.append(f"ack:{self.id}")
+        self.ack_calls += 1
+
+    def retry(self) -> None:
+        self.operation_order.append(f"retry:{self.id}")
+        self.retry_calls += 1
+
+
+class FakeQueueBatch:
+    def __init__(self, queue: str, messages: Sequence[object]) -> None:
+        self.queue = queue
+        self.messages = messages
+
+
+@pytest.fixture
+def queue_message_factory() -> type[FakeQueueMessage]:
+    return FakeQueueMessage
+
+
+@pytest.fixture
+def queue_batch_factory() -> type[FakeQueueBatch]:
+    return FakeQueueBatch
+
+
+@pytest.fixture
+def array_buffer_factory() -> type[FakeJsArrayBuffer]:
+    return FakeJsArrayBuffer
 
 
 class FakeQueueBinding:
