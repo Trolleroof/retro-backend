@@ -197,7 +197,13 @@ def parse_chunk_envelope(raw_body: bytes, user_id: str) -> ChunkEnvelope:
         if not isinstance(payload, Mapping):
             raise ValueError("chunk envelope must be an object")
         envelope = ChunkEnvelope.model_validate(payload)
-    except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, ValueError) as error:
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ValidationError,
+        ValueError,
+        RecursionError,
+    ) as error:
         raise ContractError("invalid chunk envelope") from error
 
     envelope.validate_authenticated_identity(user_id)

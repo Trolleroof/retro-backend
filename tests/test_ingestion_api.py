@@ -180,6 +180,27 @@ async def test_empty_and_invalid_json_return_400_after_rate_limit(
     assert fake_env.operation_order == []
 
 
+async def test_deeply_nested_json_under_limit_returns_safe_400(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+) -> None:
+    _authorize(fake_d1, fixture_payload)
+    body = (b"[" * 10_000) + b"0" + (b"]" * 10_000)
+    assert len(body) < 262_144
+
+    response = await app_client.post(
+        "/v1/game-event-chunks",
+        content=body,
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "invalid chunk envelope"}
+    assert fake_env.operation_order == []
+
+
 async def test_schema_v1_returns_400(
     app_client: AsyncClient,
     fake_d1: Any,
