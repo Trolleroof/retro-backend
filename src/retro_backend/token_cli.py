@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import hashlib
 import secrets
+import sys
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
@@ -116,6 +117,18 @@ def generate_token() -> str:
     return f"retro_{secrets.token_urlsafe(32)}"
 
 
+def _warn_postcommit_reassertion_failure() -> None:
+    warning = (
+        "WARNING: token rotation committed, but Redis tombstone TTL reassertion failed; "
+        + "the new token is valid and must be retained; repair Redis and reassert the "
+        + "old-token revocation before the existing finite tombstone expires."
+    )
+    print(
+        warning,
+        file=sys.stderr,
+    )
+
+
 async def _remove_tombstone_if_owned(redis: Redis, key: str, value: str) -> None:
     with suppress(RedisError):
         await redis.eval(COMPARE_DELETE_SCRIPT, 1, key, value)
@@ -173,13 +186,17 @@ async def issue_token(
                 if tombstone_lease is not None:
                     await tombstone_lease.stop()
             if redis is not None and tombstone_key is not None and tombstone_value is not None:
-                reasserted = await redis.set(
-                    tombstone_key,
-                    tombstone_value,
-                    ex=ROTATION_TOMBSTONE_TTL_SECONDS,
-                )
-                if not reasserted:
-                    raise TokenRotationError("could not reassert old-token tombstone")
+                try:
+                    reasserted = await redis.set(
+                        tombstone_key,
+                        tombstone_value,
+                        ex=ROTATION_TOMBSTONE_TTL_SECONDS,
+                    )
+                except RedisError:
+                    _warn_postcommit_reassertion_failure()
+                else:
+                    if not reasserted:
+                        _warn_postcommit_reassertion_failure()
         except BaseException:
             if (
                 not database_committed

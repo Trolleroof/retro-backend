@@ -320,3 +320,39 @@ async def test_rotate_removes_tombstone_when_database_commit_fails(
         user = await session.get(User, "usr_alice")
         assert user is not None
         assert user.auth_token_hash == original_digest
+
+
+async def test_postcommit_tombstone_reassert_failure_returns_new_token(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    redis = FakeRedis(decode_responses=True)
+    original = await issue_token(session_factory, "usr_alice", redis=redis)
+    original_digest = hashlib.sha256(original.encode()).hexdigest()
+    old_cache_key = f"retro:auth:{original_digest}"
+    original_set = redis.set
+    tombstone_writes = 0
+
+    async def fail_reassert(name: str, value: str, *, ex: int | None = None) -> object:
+        nonlocal tombstone_writes
+        if name == old_cache_key and value.startswith(f"{NEGATIVE_CACHE_VALUE}:"):
+            tombstone_writes += 1
+            if tombstone_writes == 2:
+                raise RedisError("Redis unavailable after commit")
+        return await original_set(name, value, ex=ex)
+
+    monkeypatch.setattr(redis, "set", fail_reassert)
+    rotated = await issue_token(session_factory, "usr_alice", rotate=True, redis=redis)
+
+    async with session_factory() as session:
+        user = await session.get(User, "usr_alice")
+        assert user is not None
+        assert user.auth_token_hash == hashlib.sha256(rotated.encode()).hexdigest()
+    tombstone = await redis.get(old_cache_key)
+    assert isinstance(tombstone, str)
+    assert tombstone.startswith(f"{NEGATIVE_CACHE_VALUE}:")
+    assert 0 < await redis.ttl(old_cache_key) <= ROTATION_TOMBSTONE_TTL_SECONDS
+    warning = capsys.readouterr().err
+    assert "token rotation committed" in warning
+    assert "repair Redis" in warning

@@ -274,3 +274,40 @@ async def test_older_compaction_cannot_overwrite_newer_latest_manifest() -> None
     latest = manifest(storage, newer.manifest_key)
     assert latest["generation"] == newer.generation
     assert latest["source_object_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_larger_non_superset_source_snapshot_cannot_replace_latest() -> None:
+    storage = Storage()
+    prefix = "raw/date=2026-07-17/"
+    first_key = f"{prefix}a.parquet"
+    shared_key = f"{prefix}b.parquet"
+    storage.objects[first_key] = (encode_rows([event_row()]), {})
+    storage.objects[shared_key] = (
+        encode_rows([event_row(event_id="evt_b", broker_offset=1)]),
+        {},
+    )
+    writer = IdempotentObjectWriter(storage)
+    current = await compact_day(storage=storage, writer=writer, day=date(2026, 7, 17))
+    assert current and current.published
+    assert manifest(storage, current.manifest_key)["source_keys"] == [first_key, shared_key]
+    previous_latest = storage.objects[current.manifest_key]
+
+    del storage.objects[first_key]
+    storage.objects[f"{prefix}c.parquet"] = (
+        encode_rows([event_row(event_id="evt_c", broker_offset=2)]),
+        {},
+    )
+    storage.objects[f"{prefix}d.parquet"] = (
+        encode_rows([event_row(event_id="evt_d", broker_offset=3)]),
+        {},
+    )
+    candidate = await compact_day(
+        storage=storage,
+        writer=writer,
+        day=date(2026, 7, 17),
+    )
+
+    assert candidate and candidate.input_objects == 3
+    assert not candidate.published
+    assert storage.objects[current.manifest_key] == previous_latest

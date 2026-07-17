@@ -27,13 +27,27 @@ def test_migrations_render_complete_offline_sql(capsys: pytest.CaptureFixture[st
     )
     assert "md5(id || ':retro-migration-a') || md5(id || ':retro-migration-b')" in sql
     assert "NULL-migration" not in sql
+    expected_lock_order = (
+        "processing_jobs",
+        "gameplay_events",
+        "ingested_chunks",
+        "game_sessions",
+    )
+    assert expected_lock_order == LEGACY_GAMEPLAY_TABLES
     first_check = sql.index("EXISTS (SELECT 1")
+    lock_positions: list[int] = []
+    drop_positions: list[int] = []
     for table in LEGACY_GAMEPLAY_TABLES:
         lock = f'LOCK TABLE "{table}" IN ACCESS EXCLUSIVE MODE'
         drop = f"DROP TABLE {table}"
         assert lock in sql
-        assert sql.index(lock) < first_check
-        assert sql.index(lock) < sql.index(drop)
+        lock_positions.append(sql.index(lock))
+        drop_positions.append(sql.index(drop))
+        assert lock_positions[-1] < first_check
+        assert lock_positions[-1] < drop_positions[-1]
+    assert lock_positions == sorted(lock_positions)
+    assert drop_positions == sorted(drop_positions)
+    assert max(lock_positions) < first_check < min(drop_positions)
 
 
 def test_populated_legacy_tables_require_export_before_drop() -> None:

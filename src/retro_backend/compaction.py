@@ -157,11 +157,17 @@ def _manifest_bytes(document: dict[str, object]) -> bytes:
     return json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _source_object_count(document: dict[str, object]) -> int:
-    value = document.get("source_object_count")
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError("latest compaction manifest has an invalid source_object_count")
-    return value
+def _source_keys(document: dict[str, object]) -> frozenset[str]:
+    value = document.get("source_keys")
+    if not isinstance(value, list) or any(not isinstance(key, str) or not key for key in value):
+        raise ValueError("latest compaction manifest has invalid source_keys")
+    keys = frozenset(value)
+    if len(keys) != len(value) or value != sorted(value):
+        raise ValueError("latest compaction manifest source_keys must be unique and sorted")
+    count = document.get("source_object_count")
+    if isinstance(count, bool) or not isinstance(count, int) or count != len(keys):
+        raise ValueError("latest compaction manifest source_object_count does not match source_keys")
+    return keys
 
 
 async def _publish_latest(
@@ -172,7 +178,7 @@ async def _publish_latest(
     metadata: dict[str, str],
     candidate: dict[str, object],
 ) -> bool:
-    candidate_count = _source_object_count(candidate)
+    candidate_keys = _source_keys(candidate)
     candidate_generation = candidate["generation"]
     while True:
         current = await storage.get_with_version(key)
@@ -184,10 +190,8 @@ async def _publish_latest(
                 raise ValueError("latest compaction manifest must be an object")
             if current_document.get("generation") == candidate_generation:
                 return False
-            # Raw objects are immutable and never deleted. Therefore a strictly
-            # larger object count is a deterministic superset metric; equal or
-            # smaller snapshots may never replace the current generation.
-            if candidate_count <= _source_object_count(current_document):
+            current_keys = _source_keys(current_document)
+            if not candidate_keys > current_keys:
                 return False
         if await storage.put_if_version(
             key,
@@ -212,8 +216,7 @@ async def compact_day(
         raise ValueError("compaction row bounds must be positive")
 
     raw_path = f"{raw_prefix.strip('/')}/date={day.isoformat()}/"
-    source_hash = hashlib.sha256()
-    input_objects = 0
+    source_keys: list[str] = []
     input_rows = 0
 
     with tempfile.TemporaryDirectory(prefix="retro-compaction-") as directory:
@@ -221,10 +224,7 @@ async def compact_day(
         try:
             _create_index(connection)
             async for key in storage.iter_keys(raw_path):
-                input_objects += 1
-                key_bytes = key.encode()
-                source_hash.update(len(key_bytes).to_bytes(8, "big"))
-                source_hash.update(key_bytes)
+                source_keys.append(key)
                 parquet_file = pq.ParquetFile(io.BytesIO(await storage.get(key)))
                 if tuple(parquet_file.schema_arrow.names) != PARQUET_FIELDS:
                     raise ValueError(f"raw object {key} does not use the gameplay event schema")
@@ -234,9 +234,16 @@ async def compact_day(
                         input_rows += 1
                 connection.commit()
 
-            if input_objects == 0:
+            if not source_keys:
                 return None
 
+            source_keys.sort()
+            source_hash = hashlib.sha256()
+            for key in source_keys:
+                key_bytes = key.encode()
+                source_hash.update(len(key_bytes).to_bytes(8, "big"))
+                source_hash.update(key_bytes)
+            input_objects = len(source_keys)
             generation = source_hash.hexdigest()
             generation_prefix = (
                 f"{compacted_prefix.strip('/')}/date={day.isoformat()}/"
@@ -282,9 +289,10 @@ async def compact_day(
                 "date": day.isoformat(),
                 "generation": generation,
                 "source_object_count": input_objects,
+                "source_keys": source_keys,
                 "source_generation_metric": {
                     "object_count": input_objects,
-                    "manifest_sha256": generation,
+                    "source_keys_sha256": generation,
                 },
                 "input_row_count": input_rows,
                 "output_row_count": output_rows,

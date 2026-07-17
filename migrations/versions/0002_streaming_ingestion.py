@@ -45,10 +45,8 @@ def upgrade() -> None:
             }
         )
 
-    op.drop_table("processing_jobs")
-    op.drop_table("gameplay_events")
-    op.drop_table("ingested_chunks")
-    op.drop_table("game_sessions")
+    for table in LEGACY_GAMEPLAY_TABLES:
+        op.drop_table(table)
 
     op.alter_column("users", "created_at", new_column_name="joined_at")
     op.add_column("users", sa.Column("auth_token_hash", sa.String(length=64), nullable=True))

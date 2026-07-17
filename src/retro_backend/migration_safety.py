@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+# Child-to-parent FK order, shared by ACCESS EXCLUSIVE locking and table drops.
+# processing_jobs/gameplay_events -> ingested_chunks -> game_sessions.
 LEGACY_GAMEPLAY_TABLES = (
-    "game_sessions",
-    "ingested_chunks",
-    "gameplay_events",
     "processing_jobs",
+    "gameplay_events",
+    "ingested_chunks",
+    "game_sessions",
 )
 
 
