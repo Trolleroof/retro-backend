@@ -110,12 +110,12 @@ class S3ObjectStorage:
                         break
                     if newline > MAX_STREAM_LINE_BYTES:
                         raise OSError(f"object {key} contains an oversized line")
-                    yield bytes(buffer[:newline])
+                    yield bytes(buffer[: newline + 1])
                     del buffer[: newline + 1]
                 if len(buffer) > MAX_STREAM_LINE_BYTES:
                     raise OSError(f"object {key} contains an oversized line")
             if buffer:
-                yield bytes(buffer)
+                raise OSError(f"object {key} contains an unterminated final line")
 
     async def put_if_version(
         self,

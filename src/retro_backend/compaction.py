@@ -13,7 +13,7 @@ from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 import aioboto3
 import pyarrow.parquet as pq
@@ -204,6 +204,23 @@ def _source_key_line(key: str) -> bytes:
     return json.dumps(key, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
 
 
+def _v1_source_keys(document: dict[str, object]) -> list[str] | None:
+    if "source_keys" not in document:
+        return None
+    value = document["source_keys"]
+    if not isinstance(value, list) or any(not isinstance(key, str) or not key for key in value):
+        raise ValueError("v1 latest compaction manifest has invalid source_keys")
+    keys = cast(list[str], value)
+    if len(keys) != _manifest_int(document, "source_object_count"):
+        raise ValueError("v1 latest compaction manifest source_keys count does not match")
+    previous_key: str | None = None
+    for key in keys:
+        if previous_key is not None and key <= previous_key:
+            raise ValueError("v1 latest compaction manifest source_keys must be unique and sorted")
+        previous_key = key
+    return keys
+
+
 async def build_source_index(
     keys: AsyncIterator[str],
     path: Path,
@@ -242,7 +259,8 @@ async def _read_latest(storage: CompactionStorage, key: str) -> LatestSnapshot |
     document = json.loads(body)
     if not isinstance(document, dict):
         raise ValueError("latest compaction manifest must be an object")
-    _manifest_schema(document)
+    if _manifest_schema(document) == 1:
+        _v1_source_keys(document)
     return LatestSnapshot(document, version)
 
 
@@ -255,17 +273,19 @@ async def _validated_source_keys(
     digest = hashlib.sha256()
     count = 0
     previous_key: str | None = None
-    async for encoded in lines:
+    async for encoded_line in lines:
+        if not encoded_line.endswith(b"\n"):
+            raise ValueError("source index contains an unterminated final line")
+        encoded_key = encoded_line[:-1]
         try:
-            key = json.loads(encoded)
+            key = json.loads(encoded_key)
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise ValueError("source index contains invalid NDJSON") from error
-        if not isinstance(key, str) or not key or encoded + b"\n" != _source_key_line(key):
+        if not isinstance(key, str) or not key or encoded_line != _source_key_line(key):
             raise ValueError("source index contains a noncanonical key")
         if previous_key is not None and key <= previous_key:
             raise ValueError("source index keys must be unique and sorted")
-        digest.update(encoded)
-        digest.update(b"\n")
+        digest.update(encoded_line)
         count += 1
         previous_key = key
         yield key
@@ -273,21 +293,22 @@ async def _validated_source_keys(
         raise ValueError("source index count or checksum does not match latest manifest")
 
 
-async def _candidate_is_strict_superset(
+async def _iter_v1_source_keys(keys: list[str]) -> AsyncGenerator[str, None]:
+    for key in keys:
+        yield key
+
+
+async def _candidate_contains_source_keys(
     storage: CompactionStorage,
     *,
-    current: dict[str, object],
     candidate: dict[str, object],
+    current_keys: AsyncGenerator[str, None],
+    current_count: int,
+    strict: bool,
 ) -> bool:
-    current_count = _manifest_int(current, "source_object_count")
     candidate_count = _manifest_int(candidate, "source_object_count")
-    if candidate_count <= current_count:
+    if candidate_count < current_count or (strict and candidate_count == current_count):
         return False
-    current_keys = _validated_source_keys(
-        storage.iter_lines(_manifest_str(current, "source_index_key")),
-        expected_count=current_count,
-        expected_sha256=_manifest_str(current, "source_index_sha256"),
-    )
     candidate_keys = _validated_source_keys(
         storage.iter_lines(_manifest_str(candidate, "source_index_key")),
         expected_count=candidate_count,
@@ -308,6 +329,26 @@ async def _candidate_is_strict_superset(
         await candidate_keys.aclose()
 
 
+async def _candidate_is_strict_superset(
+    storage: CompactionStorage,
+    *,
+    current: dict[str, object],
+    candidate: dict[str, object],
+) -> bool:
+    current_count = _manifest_int(current, "source_object_count")
+    return await _candidate_contains_source_keys(
+        storage,
+        candidate=candidate,
+        current_keys=_validated_source_keys(
+            storage.iter_lines(_manifest_str(current, "source_index_key")),
+            expected_count=current_count,
+            expected_sha256=_manifest_str(current, "source_index_sha256"),
+        ),
+        current_count=current_count,
+        strict=True,
+    )
+
+
 async def _publish_latest(
     *,
     storage: CompactionStorage,
@@ -322,7 +363,17 @@ async def _publish_latest(
         current = await _read_latest(storage, key)
         if current is None or current.version != baseline.version:
             return False
-        if _manifest_int(candidate, "source_object_count") < _manifest_int(
+        source_keys = _v1_source_keys(baseline.document)
+        if source_keys is not None:
+            if not await _candidate_contains_source_keys(
+                storage,
+                candidate=candidate,
+                current_keys=_iter_v1_source_keys(source_keys),
+                current_count=len(source_keys),
+                strict=False,
+            ):
+                return False
+        elif _manifest_int(candidate, "source_object_count") < _manifest_int(
             baseline.document, "source_object_count"
         ):
             return False

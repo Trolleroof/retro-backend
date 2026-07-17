@@ -50,7 +50,9 @@ class Storage:
     async def iter_lines(self, key: str) -> AsyncIterator[bytes]:
         stream = io.BytesIO(self.objects[key][0])
         while line := stream.readline():
-            yield line.removesuffix(b"\n")
+            if not line.endswith(b"\n"):
+                raise ValueError("source index has an unterminated final line")
+            yield line
 
     async def put_if_version(
         self,
@@ -71,21 +73,30 @@ class Storage:
             yield key
 
 
-def old_v1_manifest(*, source_object_count: int, generation: str = "old") -> bytes:
-    return json.dumps(
-        {
-            "schema_version": 1,
-            "date": "2026-07-17",
-            "generation": generation,
-            "source_object_count": source_object_count,
-            "source_generation_metric": {
-                "object_count": source_object_count,
-                "manifest_sha256": generation,
-            },
-            "input_row_count": source_object_count,
-            "output_row_count": source_object_count,
-            "parts": [],
+def old_v1_manifest(
+    *,
+    source_object_count: int,
+    generation: str = "old",
+    source_keys: list[str] | None = None,
+) -> bytes:
+    metric_name = "source_keys_sha256" if source_keys is not None else "manifest_sha256"
+    document: dict[str, object] = {
+        "schema_version": 1,
+        "date": "2026-07-17",
+        "generation": generation,
+        "source_object_count": source_object_count,
+        "source_generation_metric": {
+            "object_count": source_object_count,
+            metric_name: generation,
         },
+        "input_row_count": source_object_count,
+        "output_row_count": source_object_count,
+        "parts": [],
+    }
+    if source_keys is not None:
+        document["source_keys"] = source_keys
+    return json.dumps(
+        document,
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
@@ -418,6 +429,118 @@ async def test_v1_upgrade_rejects_pointer_change_during_raw_listing() -> None:
 
     assert result and not result.published
     assert manifest(storage, latest_key)["generation"] == "concurrent"
+
+
+@pytest.mark.asyncio
+async def test_v1_with_keys_rejects_same_count_non_superset() -> None:
+    storage = Storage()
+    prefix = "raw/date=2026-07-17/"
+    old_keys = [f"{prefix}a.parquet", f"{prefix}b.parquet"]
+    storage.objects[f"{prefix}a.parquet"] = (encode_rows([event_row()]), {})
+    storage.objects[f"{prefix}c.parquet"] = (
+        encode_rows([event_row(event_id="evt_c", broker_offset=2)]),
+        {},
+    )
+    latest_key = "compacted/date=2026-07-17/latest.json"
+    storage.objects[latest_key] = (
+        old_v1_manifest(source_object_count=2, source_keys=old_keys),
+        {},
+    )
+    storage.versions[latest_key] = 4
+    previous = storage.objects[latest_key]
+
+    result = await compact_day(
+        storage=storage,
+        writer=IdempotentObjectWriter(storage),
+        day=date(2026, 7, 17),
+    )
+
+    assert result and not result.published
+    assert storage.objects[latest_key] == previous
+
+
+@pytest.mark.asyncio
+async def test_v1_with_keys_upgrades_true_superset() -> None:
+    storage = Storage()
+    prefix = "raw/date=2026-07-17/"
+    old_keys = [f"{prefix}a.parquet", f"{prefix}b.parquet"]
+    for offset, name in enumerate(("a", "b", "c")):
+        storage.objects[f"{prefix}{name}.parquet"] = (
+            encode_rows([event_row(event_id=f"evt_{name}", broker_offset=offset)]),
+            {},
+        )
+    latest_key = "compacted/date=2026-07-17/latest.json"
+    storage.objects[latest_key] = (
+        old_v1_manifest(source_object_count=2, source_keys=old_keys),
+        {},
+    )
+    storage.versions[latest_key] = 9
+
+    result = await compact_day(
+        storage=storage,
+        writer=IdempotentObjectWriter(storage),
+        day=date(2026, 7, 17),
+    )
+
+    assert result and result.published
+    latest = manifest(storage, latest_key)
+    assert latest["schema_version"] == 2
+    assert latest["source_object_count"] == 3
+
+
+@pytest.mark.parametrize(
+    ("source_keys", "source_object_count"),
+    [
+        (["raw/b.parquet", "raw/a.parquet"], 2),
+        (["raw/a.parquet", "raw/a.parquet"], 2),
+        (["raw/a.parquet"], 2),
+    ],
+)
+@pytest.mark.asyncio
+async def test_v1_with_keys_validates_order_uniqueness_and_count(
+    source_keys: list[str],
+    source_object_count: int,
+) -> None:
+    storage = Storage()
+    raw_key = "raw/date=2026-07-17/a.parquet"
+    storage.objects[raw_key] = (encode_rows([event_row()]), {})
+    latest_key = "compacted/date=2026-07-17/latest.json"
+    storage.objects[latest_key] = (
+        old_v1_manifest(
+            source_object_count=source_object_count,
+            source_keys=source_keys,
+        ),
+        {},
+    )
+
+    with pytest.raises(ValueError, match="source_keys"):
+        await compact_day(
+            storage=storage,
+            writer=IdempotentObjectWriter(storage),
+            day=date(2026, 7, 17),
+        )
+
+
+@pytest.mark.asyncio
+async def test_source_index_missing_final_newline_is_rejected() -> None:
+    storage = Storage()
+    prefix = "raw/date=2026-07-17/"
+    storage.objects[f"{prefix}a.parquet"] = (encode_rows([event_row()]), {})
+    writer = IdempotentObjectWriter(storage)
+    current = await compact_day(storage=storage, writer=writer, day=date(2026, 7, 17))
+    assert current and current.published
+    latest = manifest(storage, current.manifest_key)
+    source_index_key = latest["source_index_key"]
+    assert isinstance(source_index_key, str)
+    body, metadata = storage.objects[source_index_key]
+    storage.objects[source_index_key] = (body.removesuffix(b"\n"), metadata)
+    storage.objects[f"{prefix}b.parquet"] = (
+        encode_rows([event_row(event_id="evt_b", broker_offset=1)]),
+        {},
+    )
+
+    with pytest.raises(ValueError, match="unterminated"):
+        await compact_day(storage=storage, writer=writer, day=date(2026, 7, 17))
 
 
 @pytest.mark.asyncio

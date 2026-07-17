@@ -6,19 +6,25 @@ from retro_backend.consumer.s3_storage import S3ObjectStorage
 
 
 class Body:
+    def __init__(self, chunks: tuple[bytes, ...] | None = None) -> None:
+        self.chunks = (
+            chunks if chunks is not None else (b'"raw/a', b'.parquet"\n"raw/b.parquet"\n')
+        )
+
     async def read(self) -> bytes:
         return b"stored"
 
     async def iter_chunks(self, chunk_size: int = 64 * 1024):  # type: ignore[no-untyped-def]
         _ = chunk_size
-        yield b'"raw/a'
-        yield b'.parquet"\n"raw/b.parquet"\n'
+        for chunk in self.chunks:
+            yield chunk
 
 
 class Client:
-    def __init__(self) -> None:
+    def __init__(self, body: Body | None = None) -> None:
         self.puts: list[dict[str, object]] = []
         self.uploads: list[tuple[str, str, str, dict[str, object]]] = []
+        self.body = body or Body()
 
     async def head_object(self, **_: object) -> dict[str, object]:
         return {"ContentLength": 6, "Metadata": {"sha256": "abc"}}
@@ -36,7 +42,7 @@ class Client:
         self.uploads.append((filename, bucket, key, extra_args))
 
     async def get_object(self, **_: object) -> dict[str, object]:
-        return {"Body": Body(), "ETag": '"etag-1"'}
+        return {"Body": self.body, "ETag": '"etag-1"'}
 
     def get_paginator(self, _: str) -> "Paginator":
         return Paginator()
@@ -59,8 +65,8 @@ class Context:
 
 
 class Session:
-    def __init__(self) -> None:
-        self.value = Client()
+    def __init__(self, body: Body | None = None) -> None:
+        self.value = Client(body)
 
     def client(self, *_args: object, **_kwargs: object) -> Context:
         return Context(self.value)
@@ -100,8 +106,8 @@ async def test_s3_storage_exposes_idempotency_and_compaction_operations(
         "raw/b.parquet",
     ]
     assert [line async for line in storage.iter_lines("source-keys.ndjson")] == [
-        b'"raw/a.parquet"',
-        b'"raw/b.parquet"',
+        b'"raw/a.parquet"\n',
+        b'"raw/b.parquet"\n',
     ]
     assert session.value.puts[0]["Bucket"] == "events"
     assert session.value.puts[1]["IfNoneMatch"] == "*"
@@ -114,3 +120,18 @@ async def test_s3_storage_exposes_idempotency_and_compaction_operations(
             {"Metadata": {"sha256": "source"}, "ContentType": "application/x-ndjson"},
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_s3_line_stream_rejects_missing_final_newline() -> None:
+    storage = S3ObjectStorage(
+        session=Session(Body((b'"raw/a.parquet"',))),  # type: ignore[arg-type]
+        bucket="events",
+        endpoint_url="http://minio:9000",
+        region="us-east-1",
+        access_key_id="key",
+        secret_access_key="secret",
+    )
+
+    with pytest.raises(OSError, match="unterminated"):
+        _ = [line async for line in storage.iter_lines("source-keys.ndjson")]
