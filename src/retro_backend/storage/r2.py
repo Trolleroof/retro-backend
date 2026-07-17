@@ -1,12 +1,27 @@
 """Deterministic R2 keys and conditional exact-byte writes."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from importlib import import_module
 
 from ..bindings import R2Bucket, is_binding_null, value_field
 
 
 class ObjectConflict(RuntimeError):
     """Raised when a deterministic R2 key already owns different bytes."""
+
+
+def _worker_to_js(value: object) -> object:
+    """Convert native Python values at the Pyodide/Workers binding boundary."""
+    try:
+        js_module = import_module("js")
+        ffi_module = import_module("pyodide.ffi")
+    except ModuleNotFoundError:
+        return value
+    return ffi_module.to_js(
+        value,
+        dict_converter=js_module.Object.fromEntries,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,8 +49,14 @@ class RawObjectIdentity:
 
 
 class R2Store:
-    def __init__(self, bucket: R2Bucket) -> None:
+    def __init__(
+        self,
+        bucket: R2Bucket,
+        *,
+        to_js: Callable[[object], object] = _worker_to_js,
+    ) -> None:
         self.bucket = bucket
+        self._to_js = to_js
 
     @staticmethod
     def raw_key(*, user_id: str, game_id: str, chunk_id: str) -> str:
@@ -74,8 +95,10 @@ class R2Store:
             "httpMetadata": {"contentType": "application/json"},
             "customMetadata": identity.custom_metadata(payload_sha256),
         }
+        body_value = self._to_js(raw_body)
+        options_value = self._to_js(options)
         try:
-            result = await self.bucket.put(key, raw_body, options)
+            result = await self.bucket.put(key, body_value, options_value)
         except Exception as error:
             try:
                 race_winner = await self.bucket.head(key)

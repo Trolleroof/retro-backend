@@ -43,6 +43,7 @@ class ChunkGateStub(Protocol):
     async def reserve(
         self,
         payload_sha256: str,
+        lease_token: str,
         now_ms: int,
         lease_ms: int,
     ) -> object: ...
@@ -50,12 +51,13 @@ class ChunkGateStub(Protocol):
     async def accept(
         self,
         payload_sha256: str,
+        lease_token: str,
         acknowledgment: object,
         now_ms: int,
         dedupe_ttl_ms: int,
     ) -> object: ...
 
-    async def release(self, payload_sha256: str) -> object: ...
+    async def release(self, payload_sha256: str, lease_token: str) -> object: ...
 
 
 class DurableObjectNamespace(Protocol):

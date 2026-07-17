@@ -1,6 +1,8 @@
 """R2-first gameplay ingestion coordinated by one per-chunk Durable Object."""
 
 import hashlib
+import time
+from collections.abc import Callable
 from contextlib import suppress
 from typing import cast
 
@@ -21,7 +23,7 @@ from ..contracts import (
 from ..storage.queues import GameplayQueuePublisher
 from ..storage.r2 import ObjectConflict, R2Store
 
-DEFAULT_CHUNK_DEDUP_TTL_MS = 86_400_000
+DEFAULT_CHUNK_DEDUP_TTL_MS = 172_800_000
 DEFAULT_CHUNK_PUBLISHING_LEASE_MS = 30_000
 
 
@@ -66,9 +68,14 @@ def _build_adapters(
 async def _release_without_masking(
     gate: ChunkGateClient,
     payload_sha256: str,
+    lease_token: str,
 ) -> None:
     with suppress(Exception):
-        await gate.release(payload_sha256)
+        await gate.release(payload_sha256, lease_token)
+
+
+def _current_time_ms() -> int:
+    return time.time_ns() // 1_000_000
 
 
 async def ingest_chunk(
@@ -76,6 +83,8 @@ async def ingest_chunk(
     user_id: str,
     raw_body: bytes,
     now_ms: int,
+    *,
+    clock_ms: Callable[[], int] = _current_time_ms,
 ) -> IngestAcknowledgment:
     envelope = parse_chunk_envelope(raw_body, user_id)
     payload_sha256 = hashlib.sha256(raw_body).hexdigest()
@@ -99,6 +108,9 @@ async def ingest_chunk(
         raise ChunkConflict("chunk ID already contains different bytes")
     if reservation.status == "publishing":
         raise IngestionUnavailable("chunk is currently publishing; retry later")
+    lease_token = reservation.lease_token
+    if lease_token is None:
+        raise IngestionUnavailable("event ingestion unavailable")
 
     try:
         r2_key = await store.put_raw(
@@ -128,14 +140,19 @@ async def ingest_chunk(
             ),
             server_received_at_ms=now_ms,
         )
-        await gate.accept(payload_sha256, acknowledgment, now_ms)
+        await gate.accept(
+            payload_sha256,
+            lease_token,
+            acknowledgment,
+            clock_ms(),
+        )
         return acknowledgment
     except ObjectConflict as error:
-        await _release_without_masking(gate, payload_sha256)
+        await _release_without_masking(gate, payload_sha256, lease_token)
         raise ChunkConflict("chunk ID already contains different bytes") from error
     except ChunkConflict:
-        await _release_without_masking(gate, payload_sha256)
+        await _release_without_masking(gate, payload_sha256, lease_token)
         raise
     except Exception as error:
-        await _release_without_masking(gate, payload_sha256)
+        await _release_without_masking(gate, payload_sha256, lease_token)
         raise IngestionUnavailable("event ingestion unavailable") from error

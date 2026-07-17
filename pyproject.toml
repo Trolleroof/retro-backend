@@ -46,9 +46,7 @@ exclude = [
     "src/retro_backend/main.py",
     "src/retro_backend/models.py",
     "src/retro_backend/redis_client.py",
-    "src/retro_backend/services/ingestion.py",
     "src/retro_backend/worker.py",
-    "tests/test_ingestion_api.py",
     "tests/test_worker.py",
 ]
 reportMissingTypeStubs = false

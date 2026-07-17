@@ -41,9 +41,9 @@ async def _read_limited_body(request: Request, *, max_bytes: int) -> bytes:
 
     body = bytearray()
     async for chunk in request.stream():
-        body.extend(chunk)
-        if len(body) > max_bytes:
+        if len(chunk) > max_bytes - len(body):
             raise BodyTooLarge("request body exceeds maximum size")
+        body.extend(chunk)
     return bytes(body)
 
 
@@ -102,9 +102,12 @@ async def submit_chunk(
 ) -> IngestAcknowledgment:
     environment = _required_environment(request)
     await _enforce_rate_limit(environment, user_id)
-    max_bytes = positive_int_field(
-        environment,
-        "MAX_CHUNK_BYTES",
+    max_bytes = min(
+        positive_int_field(
+            environment,
+            "MAX_CHUNK_BYTES",
+            DEFAULT_MAX_CHUNK_BYTES,
+        ),
         DEFAULT_MAX_CHUNK_BYTES,
     )
     try:

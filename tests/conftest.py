@@ -147,10 +147,10 @@ class FakeChunkGateStub:
     def __init__(self, operation_order: list[str], rpc_order: list[str]) -> None:
         self.operation_order = operation_order
         self.rpc_order = rpc_order
-        self.reserve_result: object = {"status": "reserved"}
-        self.reserve_calls: list[tuple[str, int, int]] = []
-        self.accept_calls: list[tuple[str, object, int, int]] = []
-        self.release_calls: list[str] = []
+        self.reserve_result: object | None = None
+        self.reserve_calls: list[tuple[str, str, int, int]] = []
+        self.accept_calls: list[tuple[str, str, object, int, int]] = []
+        self.release_calls: list[tuple[str, str]] = []
         self.reserve_failure: Exception | None = None
         self.accept_failure: Exception | None = None
         self.release_failure: Exception | None = None
@@ -158,19 +158,23 @@ class FakeChunkGateStub:
     async def reserve(
         self,
         payload_sha256: str,
+        lease_token: str,
         now_ms: int,
         lease_ms: int,
     ) -> object:
         self.operation_order.append("gate.reserve")
         self.rpc_order.append("reserve")
-        self.reserve_calls.append((payload_sha256, now_ms, lease_ms))
+        self.reserve_calls.append((payload_sha256, lease_token, now_ms, lease_ms))
         if self.reserve_failure is not None:
             raise self.reserve_failure
-        return self.reserve_result
+        if self.reserve_result is not None:
+            return self.reserve_result
+        return {"status": "reserved", "lease_token": lease_token}
 
     async def accept(
         self,
         payload_sha256: str,
+        lease_token: str,
         acknowledgment: object,
         now_ms: int,
         dedupe_ttl_ms: int,
@@ -178,16 +182,22 @@ class FakeChunkGateStub:
         self.operation_order.append("gate.accept")
         self.rpc_order.append("accept")
         self.accept_calls.append(
-            (payload_sha256, acknowledgment, now_ms, dedupe_ttl_ms)
+            (
+                payload_sha256,
+                lease_token,
+                acknowledgment,
+                now_ms,
+                dedupe_ttl_ms,
+            )
         )
         if self.accept_failure is not None:
             raise self.accept_failure
         return {"accepted": True}
 
-    async def release(self, payload_sha256: str) -> object:
+    async def release(self, payload_sha256: str, lease_token: str) -> object:
         self.operation_order.append("gate.release")
         self.rpc_order.append("release")
-        self.release_calls.append(payload_sha256)
+        self.release_calls.append((payload_sha256, lease_token))
         if self.release_failure is not None:
             raise self.release_failure
         return {"released": True}
@@ -211,7 +221,7 @@ class FakeChunkGateNamespace:
         return self.stub
 
     @property
-    def reserve_result(self) -> object:
+    def reserve_result(self) -> object | None:
         return self.stub.reserve_result
 
     @reserve_result.setter
@@ -219,7 +229,7 @@ class FakeChunkGateNamespace:
         self.stub.reserve_result = value
 
     @property
-    def release_calls(self) -> list[str]:
+    def release_calls(self) -> list[tuple[str, str]]:
         return self.stub.release_calls
 
 
@@ -248,7 +258,7 @@ def fake_env(fake_d1: FakeD1) -> SimpleNamespace:
         CHUNK_GATE=FakeChunkGateNamespace(operation_order),
         INGEST_RATE_LIMITER=FakeRateLimiter(),
         MAX_CHUNK_BYTES="262144",
-        CHUNK_DEDUP_TTL_MS="86400000",
+        CHUNK_DEDUP_TTL_MS="172800000",
         CHUNK_PUBLISHING_LEASE_MS="30000",
         operation_order=operation_order,
     )

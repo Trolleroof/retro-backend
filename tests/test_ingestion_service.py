@@ -1,5 +1,8 @@
 import hashlib
 import json
+import re
+import tomllib
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -18,6 +21,7 @@ from retro_backend.services.ingestion import (
 )
 
 NOW_MS = 1_784_241_600_000
+ACCEPT_MS = NOW_MS + 5
 
 
 def _ack_data(payload: dict[str, Any]) -> dict[str, object]:
@@ -85,6 +89,7 @@ async def test_first_publish_stores_exact_bytes_before_pointer_queue(
         user_id=fixture_payload["user_id"],
         raw_body=fixture_bytes,
         now_ms=NOW_MS,
+        clock_ms=lambda: ACCEPT_MS,
     )
 
     expected_key = (
@@ -112,10 +117,39 @@ async def test_first_publish_stores_exact_bytes_before_pointer_queue(
     assert len(json.dumps(fake_env.GAMEPLAY_QUEUE.send_calls[0])) < 1_024
     assert fixture_bytes not in fake_env.GAMEPLAY_QUEUE.send_calls
     assert result.model_dump(mode="json") == _ack_data(fixture_payload)
-    assert fake_env.CHUNK_GATE.stub.reserve_calls == [(digest, NOW_MS, 30_000)]
+    reserve_call = fake_env.CHUNK_GATE.stub.reserve_calls[0]
+    assert reserve_call[0] == digest
+    assert re.fullmatch(r"[0-9a-f]{64}", reserve_call[1])
+    assert reserve_call[2:] == (NOW_MS, 30_000)
+    lease_token = reserve_call[1]
     assert fake_env.CHUNK_GATE.stub.accept_calls == [
-        (digest, _ack_data(fixture_payload), NOW_MS, 86_400_000)
+        (
+            digest,
+            lease_token,
+            _ack_data(fixture_payload),
+            ACCEPT_MS,
+            172_800_000,
+        )
     ]
+
+
+async def test_accept_uses_fresh_time_without_changing_request_receipt_time(
+    fake_env: Any,
+    fixture_bytes: bytes,
+    fixture_payload: dict[str, Any],
+) -> None:
+    accepted_at_ms = NOW_MS + 29_999
+
+    result = await ingest_chunk(
+        fake_env,
+        fixture_payload["user_id"],
+        fixture_bytes,
+        NOW_MS,
+        clock_ms=lambda: accepted_at_ms,
+    )
+
+    assert result.server_received_at_ms == NOW_MS
+    assert fake_env.CHUNK_GATE.stub.accept_calls[0][-2] == accepted_at_ms
 
 
 async def test_duplicate_returns_validated_cached_ack_without_r2_or_queue(
@@ -204,9 +238,9 @@ async def test_r2_failure_releases_gate_and_returns_retryable_error(
         )
 
     assert fake_env.operation_order == ["gate.reserve", "gate.release"]
-    assert fake_env.CHUNK_GATE.release_calls == [
-        hashlib.sha256(fixture_bytes).hexdigest()
-    ]
+    digest = hashlib.sha256(fixture_bytes).hexdigest()
+    lease_token = fake_env.CHUNK_GATE.stub.reserve_calls[0][1]
+    assert fake_env.CHUNK_GATE.release_calls == [(digest, lease_token)]
     assert fake_env.GAMEPLAY_QUEUE.send_calls == []
 
 
@@ -367,7 +401,9 @@ async def test_mapping_env_uses_explicit_duration_configuration(
     )
 
     digest = hashlib.sha256(fixture_bytes).hexdigest()
-    assert fake_env.CHUNK_GATE.stub.reserve_calls == [(digest, NOW_MS, 777)]
+    reserve_call = fake_env.CHUNK_GATE.stub.reserve_calls[0]
+    assert reserve_call[0] == digest
+    assert reserve_call[2:] == (NOW_MS, 777)
     assert fake_env.CHUNK_GATE.stub.accept_calls[0][-1] == 888
 
 
@@ -404,8 +440,10 @@ async def test_invalid_duration_configuration_uses_safe_defaults(
     )
 
     digest = hashlib.sha256(fixture_bytes).hexdigest()
-    assert fake_env.CHUNK_GATE.stub.reserve_calls == [(digest, NOW_MS, 30_000)]
-    assert fake_env.CHUNK_GATE.stub.accept_calls[0][-1] == 86_400_000
+    reserve_call = fake_env.CHUNK_GATE.stub.reserve_calls[0]
+    assert reserve_call[0] == digest
+    assert reserve_call[2:] == (NOW_MS, 30_000)
+    assert fake_env.CHUNK_GATE.stub.accept_calls[0][-1] == 172_800_000
 
 
 async def test_missing_required_binding_is_safe_unavailable(
@@ -419,3 +457,12 @@ async def test_missing_required_binding_is_safe_unavailable(
             fixture_bytes,
             NOW_MS,
         )
+
+
+def test_replaced_ingestion_surfaces_are_checked_by_basedpyright() -> None:
+    root = Path(__file__).resolve().parents[1]
+    config = tomllib.loads((root / "pyproject.toml").read_text())
+    excluded = config["tool"]["basedpyright"]["exclude"]
+
+    assert "src/retro_backend/services/ingestion.py" not in excluded
+    assert "tests/test_ingestion_api.py" not in excluded

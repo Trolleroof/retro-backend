@@ -9,7 +9,11 @@ from fastapi import Request
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
 
-from retro_backend.api.chunks import BodyTooLarge, _read_limited_body
+import retro_backend.api.chunks as chunks_module
+from retro_backend.api.chunks import (
+    BodyTooLarge,
+    _read_limited_body,  # pyright: ignore[reportPrivateUsage]
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 INGEST_RESPONSE_SCHEMA = json.loads(
@@ -284,6 +288,26 @@ async def test_max_chunk_bytes_uses_configured_positive_integer(
     assert fake_env.operation_order == []
 
 
+async def test_max_chunk_bytes_cannot_exceed_contractual_hard_limit(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+) -> None:
+    _authorize(fake_d1, fixture_payload)
+    fake_env.MAX_CHUNK_BYTES = "1048576"
+
+    response = await app_client.post(
+        "/v1/game-event-chunks",
+        content=b"x" * (262_144 + 1),
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "request body exceeds maximum size"}
+    assert fake_env.operation_order == []
+
+
 @pytest.mark.parametrize(
     "configured",
     ["invalid", "", "9" * 5_000, 0, -1, True, 1.5],
@@ -419,20 +443,63 @@ class CountingStreamingRequest:
             yield chunk
 
 
+class ObservedBuffer:
+    def __init__(self) -> None:
+        self.data = bytearray()
+        self.extend_calls: list[bytes] = []
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __bytes__(self) -> bytes:
+        return bytes(self.data)
+
+    def extend(self, chunk: bytes) -> None:
+        self.extend_calls.append(chunk)
+        self.data.extend(chunk)
+
+
 async def test_limited_reader_stops_immediately_after_crossing_limit() -> None:
     request = CountingStreamingRequest([b"123", b"456", b"must-not-be-read"])
 
     with pytest.raises(BodyTooLarge):
-        await _read_limited_body(cast(Request, request), max_bytes=5)
+        await _read_limited_body(
+            cast(Request, cast(object, request)),
+            max_bytes=5,
+        )
 
     assert request.read_count == 2
+
+
+async def test_limited_reader_does_not_copy_chunk_larger_than_remaining_capacity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed = ObservedBuffer()
+    request = CountingStreamingRequest([b"123", b"x" * 1_000_000])
+    monkeypatch.setattr(
+        chunks_module,
+        "bytearray",
+        lambda: observed,
+        raising=False,
+    )
+
+    with pytest.raises(BodyTooLarge):
+        await _read_limited_body(
+            cast(Request, cast(object, request)),
+            max_bytes=5,
+        )
+
+    assert observed.extend_calls == [b"123"]
 
 
 async def test_limited_reader_rejects_large_content_length_before_streaming() -> None:
     request = CountingStreamingRequest([b"must-not-be-read"], content_length="6")
 
     with pytest.raises(BodyTooLarge):
-        await _read_limited_body(cast(Request, request), max_bytes=5)
+        await _read_limited_body(
+            cast(Request, cast(object, request)),
+            max_bytes=5,
+        )
 
     assert request.read_count == 0
 
@@ -444,6 +511,9 @@ async def test_limited_reader_rejects_extreme_content_length_without_parsing_it(
     )
 
     with pytest.raises(BodyTooLarge):
-        await _read_limited_body(cast(Request, request), max_bytes=5)
+        await _read_limited_body(
+            cast(Request, cast(object, request)),
+            max_bytes=5,
+        )
 
     assert request.read_count == 0

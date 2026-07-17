@@ -2,6 +2,8 @@
 
 import hashlib
 import re
+import secrets
+from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -9,6 +11,7 @@ from .bindings import ChunkGateStub, DurableObjectNamespace
 from .contracts import ChunkReservation, IngestAcknowledgment
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_LEASE_TOKEN_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ChunkGateTransitionError(RuntimeError):
@@ -35,6 +38,15 @@ def _validate_digest(payload_sha256: str) -> None:
         raise ValueError("payload_sha256 must be lowercase hexadecimal SHA-256")
 
 
+def _validate_lease_token(lease_token: str) -> None:
+    if _LEASE_TOKEN_PATTERN.fullmatch(lease_token) is None:
+        raise ValueError("lease_token must be 256-bit lowercase hexadecimal")
+
+
+def _new_lease_token() -> str:
+    return secrets.token_hex(32)
+
+
 class ChunkGateState(BaseModel):
     """Serializable state machine for one logical ``(user_id, chunk_id)``."""
 
@@ -42,6 +54,10 @@ class ChunkGateState(BaseModel):
 
     payload_sha256: str | None = None
     state: str | None = None
+    lease_token: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
     lease_expires_at_ms: int | None = Field(default=None, ge=0)
     acknowledgment: IngestAcknowledgment | None = None
     expires_at_ms: int | None = Field(default=None, ge=0)
@@ -55,6 +71,7 @@ class ChunkGateState(BaseModel):
                 value is not None
                 for value in (
                     self.payload_sha256,
+                    self.lease_token,
                     self.lease_expires_at_ms,
                     self.acknowledgment,
                     self.expires_at_ms,
@@ -64,6 +81,7 @@ class ChunkGateState(BaseModel):
         elif self.state == "publishing":
             if (
                 self.payload_sha256 is None
+                or self.lease_token is None
                 or self.lease_expires_at_ms is None
                 or self.acknowledgment is not None
                 or self.expires_at_ms is not None
@@ -72,6 +90,7 @@ class ChunkGateState(BaseModel):
         elif self.state == "accepted":
             if (
                 self.payload_sha256 is None
+                or self.lease_token is not None
                 or self.lease_expires_at_ms is not None
                 or self.acknowledgment is None
                 or self.expires_at_ms is None
@@ -84,6 +103,7 @@ class ChunkGateState(BaseModel):
     def _clear(self) -> None:
         self.payload_sha256 = None
         self.state = None
+        self.lease_token = None
         self.lease_expires_at_ms = None
         self.acknowledgment = None
         self.expires_at_ms = None
@@ -91,25 +111,29 @@ class ChunkGateState(BaseModel):
     def _begin_publication(
         self,
         payload_sha256: str,
+        lease_token: str,
         *,
         now_ms: int,
         lease_ms: int,
     ) -> ChunkReservation:
         self.payload_sha256 = payload_sha256
         self.state = "publishing"
+        self.lease_token = lease_token
         self.lease_expires_at_ms = now_ms + lease_ms
         self.acknowledgment = None
         self.expires_at_ms = None
-        return ChunkReservation(status="reserved")
+        return ChunkReservation(status="reserved", lease_token=lease_token)
 
     def reserve(
         self,
         payload_sha256: str,
+        lease_token: str,
         *,
         now_ms: int,
         lease_ms: int,
     ) -> ChunkReservation:
         _validate_digest(payload_sha256)
+        _validate_lease_token(lease_token)
         _validate_time_and_duration(now_ms, lease_ms)
 
         if (
@@ -119,6 +143,7 @@ class ChunkGateState(BaseModel):
         ):
             return self._begin_publication(
                 payload_sha256,
+                lease_token,
                 now_ms=now_ms,
                 lease_ms=lease_ms,
             )
@@ -132,6 +157,7 @@ class ChunkGateState(BaseModel):
         if self.state is None:
             return self._begin_publication(
                 payload_sha256,
+                lease_token,
                 now_ms=now_ms,
                 lease_ms=lease_ms,
             )
@@ -144,16 +170,19 @@ class ChunkGateState(BaseModel):
     def accept(
         self,
         payload_sha256: str,
+        lease_token: str,
         acknowledgment: IngestAcknowledgment | dict[str, object],
         *,
         now_ms: int,
         dedupe_ttl_ms: int,
     ) -> bool:
         _validate_digest(payload_sha256)
+        _validate_lease_token(lease_token)
         _validate_time_and_duration(now_ms, dedupe_ttl_ms)
         if (
             self.state != "publishing"
             or self.payload_sha256 != payload_sha256
+            or self.lease_token != lease_token
             or self.lease_expires_at_ms is None
             or now_ms >= self.lease_expires_at_ms
         ):
@@ -163,14 +192,20 @@ class ChunkGateState(BaseModel):
 
         receipt = IngestAcknowledgment.model_validate(acknowledgment)
         self.state = "accepted"
+        self.lease_token = None
         self.lease_expires_at_ms = None
         self.acknowledgment = receipt
         self.expires_at_ms = now_ms + dedupe_ttl_ms
         return True
 
-    def release(self, payload_sha256: str) -> bool:
+    def release(self, payload_sha256: str, lease_token: str) -> bool:
         _validate_digest(payload_sha256)
-        if self.state != "publishing" or self.payload_sha256 != payload_sha256:
+        _validate_lease_token(lease_token)
+        if (
+            self.state != "publishing"
+            or self.payload_sha256 != payload_sha256
+            or self.lease_token != lease_token
+        ):
             return False
         self._clear()
         return True
@@ -195,13 +230,15 @@ class ChunkGateClient:
         *,
         lease_ms: int,
         dedupe_ttl_ms: int,
+        token_factory: Callable[[], str] = _new_lease_token,
     ) -> None:
         _validate_time_and_duration(0, lease_ms)
         _validate_time_and_duration(0, dedupe_ttl_ms)
         self.namespace = namespace
         self.lease_ms = lease_ms
         self.dedupe_ttl_ms = dedupe_ttl_ms
-        self._active_stub: ChunkGateStub | None = None
+        self.token_factory = token_factory
+        self._stubs_by_lease_token: dict[str, ChunkGateStub] = {}
 
     async def reserve(
         self,
@@ -211,31 +248,54 @@ class ChunkGateClient:
         now_ms: int,
     ) -> ChunkReservation:
         _validate_digest(payload_sha256)
+        _validate_now(now_ms)
+        lease_token = self.token_factory()
+        _validate_lease_token(lease_token)
+        if lease_token in self._stubs_by_lease_token:
+            raise RuntimeError("lease token collision")
         name = hashlib.sha256(f"{user_id}:{chunk_id}".encode()).hexdigest()
         object_id = self.namespace.idFromName(name)
         stub = self.namespace.get(object_id)
-        self._active_stub = stub
-        result = await stub.reserve(payload_sha256, now_ms, self.lease_ms)
-        return ChunkReservation.from_binding(result)
+        result = await stub.reserve(
+            payload_sha256,
+            lease_token,
+            now_ms,
+            self.lease_ms,
+        )
+        reservation = ChunkReservation.from_binding(result)
+        if reservation.status == "reserved":
+            if reservation.lease_token != lease_token:
+                raise RuntimeError("chunk gate returned unexpected lease token")
+            self._stubs_by_lease_token[lease_token] = stub
+        return reservation
 
-    def _stub(self) -> ChunkGateStub:
-        if self._active_stub is None:
-            raise RuntimeError("chunk gate has no active reservation")
-        return self._active_stub
+    def _stub(self, lease_token: str) -> ChunkGateStub:
+        _validate_lease_token(lease_token)
+        try:
+            return self._stubs_by_lease_token[lease_token]
+        except KeyError as error:
+            raise RuntimeError("chunk gate has no matching reservation") from error
 
     async def accept(
         self,
         payload_sha256: str,
+        lease_token: str,
         acknowledgment: IngestAcknowledgment | dict[str, object],
         now_ms: int,
     ) -> None:
+        _validate_digest(payload_sha256)
+        _validate_now(now_ms)
         receipt = IngestAcknowledgment.model_validate(acknowledgment)
-        await self._stub().accept(
+        await self._stub(lease_token).accept(
             payload_sha256,
+            lease_token,
             receipt.model_dump(mode="json"),
             now_ms,
             self.dedupe_ttl_ms,
         )
+        del self._stubs_by_lease_token[lease_token]
 
-    async def release(self, payload_sha256: str) -> None:
-        await self._stub().release(payload_sha256)
+    async def release(self, payload_sha256: str, lease_token: str) -> None:
+        _validate_digest(payload_sha256)
+        await self._stub(lease_token).release(payload_sha256, lease_token)
+        del self._stubs_by_lease_token[lease_token]

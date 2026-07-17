@@ -68,10 +68,18 @@ class ChunkReservation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     status: Literal["reserved", "duplicate", "conflict", "publishing"]
+    lease_token: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
     ack: IngestAcknowledgment | None = None
 
     @model_validator(mode="after")
-    def validate_ack_status(self) -> "ChunkReservation":
+    def validate_status_fields(self) -> "ChunkReservation":
+        if self.status == "reserved" and self.lease_token is None:
+            raise ValueError("reserved reservation requires lease token")
+        if self.status != "reserved" and self.lease_token is not None:
+            raise ValueError("only reserved reservation may include lease token")
         if self.status == "duplicate" and self.ack is None:
             raise ValueError("duplicate reservation requires acknowledgment")
         if self.status != "duplicate" and self.ack is not None:
@@ -82,8 +90,11 @@ class ChunkReservation(BaseModel):
     def from_binding(cls, value: object) -> "ChunkReservation":
         """Normalize a structured-clone mapping or Pyodide proxy response."""
         status = value_field(value, "status")
+        lease_token = value_field(value, "lease_token")
         ack_value = value_field(value, "ack")
         data: dict[str, object] = {"status": status}
+        if not is_binding_null(lease_token):
+            data["lease_token"] = lease_token
         if not is_binding_null(ack_value):
             data["ack"] = _acknowledgment_from_binding(ack_value)
         try:
