@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from retro_backend.consumer.s3_storage import S3ObjectStorage
@@ -7,16 +9,31 @@ class Body:
     async def read(self) -> bytes:
         return b"stored"
 
+    async def iter_chunks(self, chunk_size: int = 64 * 1024):  # type: ignore[no-untyped-def]
+        _ = chunk_size
+        yield b'"raw/a'
+        yield b'.parquet"\n"raw/b.parquet"\n'
+
 
 class Client:
     def __init__(self) -> None:
         self.puts: list[dict[str, object]] = []
+        self.uploads: list[tuple[str, str, str, dict[str, object]]] = []
 
     async def head_object(self, **_: object) -> dict[str, object]:
         return {"ContentLength": 6, "Metadata": {"sha256": "abc"}}
 
     async def put_object(self, **kwargs: object) -> None:
         self.puts.append(kwargs)
+
+    async def upload_file(
+        self,
+        filename: str,
+        bucket: str,
+        key: str,
+        extra_args: dict[str, object],
+    ) -> None:
+        self.uploads.append((filename, bucket, key, extra_args))
 
     async def get_object(self, **_: object) -> dict[str, object]:
         return {"Body": Body(), "ETag": '"etag-1"'}
@@ -50,7 +67,9 @@ class Session:
 
 
 @pytest.mark.asyncio
-async def test_s3_storage_exposes_idempotency_and_compaction_operations() -> None:
+async def test_s3_storage_exposes_idempotency_and_compaction_operations(
+    tmp_path: Path,
+) -> None:
     session = Session()
     storage = S3ObjectStorage(
         session=session,  # type: ignore[arg-type]
@@ -63,6 +82,9 @@ async def test_s3_storage_exposes_idempotency_and_compaction_operations() -> Non
 
     head = await storage.head("raw/a.parquet")
     await storage.put("raw/c.parquet", b"body", {"sha256": "digest"})
+    source_path = tmp_path / "source-keys.ndjson"
+    source_path.write_text('"raw/a.parquet"\n')
+    await storage.put_file("source-keys.ndjson", source_path, {"sha256": "source"})
 
     assert head and head.size == 6 and head.metadata == {"sha256": "abc"}
     assert await storage.get("raw/a.parquet") == b"stored"
@@ -77,6 +99,18 @@ async def test_s3_storage_exposes_idempotency_and_compaction_operations() -> Non
         "raw/a.parquet",
         "raw/b.parquet",
     ]
+    assert [line async for line in storage.iter_lines("source-keys.ndjson")] == [
+        b'"raw/a.parquet"',
+        b'"raw/b.parquet"',
+    ]
     assert session.value.puts[0]["Bucket"] == "events"
     assert session.value.puts[1]["IfNoneMatch"] == "*"
     assert session.value.puts[2]["IfMatch"] == '"etag-1"'
+    assert session.value.uploads == [
+        (
+            str(source_path),
+            "events",
+            "source-keys.ndjson",
+            {"Metadata": {"sha256": "source"}, "ContentType": "application/x-ndjson"},
+        )
+    ]

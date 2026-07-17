@@ -1,4 +1,5 @@
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -27,6 +28,10 @@ class FakeStorage:
     async def put(self, key: str, body: bytes, metadata: dict[str, str]) -> None:
         self.puts += 1
         self.objects[key] = (body, metadata)
+
+    async def put_file(self, key: str, path: Path, metadata: dict[str, str]) -> None:
+        self.puts += 1
+        self.objects[key] = (path.read_bytes(), metadata)
 
 
 def batch() -> EventBatch:
@@ -96,3 +101,19 @@ async def test_raw_writer_rejects_nondeterministic_multi_record_boundaries() -> 
         await writer.write(invalid)
 
     assert not storage.objects
+
+
+@pytest.mark.asyncio
+async def test_file_writer_uploads_and_verifies_without_body_buffer(tmp_path: Path) -> None:
+    storage = FakeStorage()
+    writer = IdempotentObjectWriter(storage)
+    path = tmp_path / "source-keys.ndjson"
+    path.write_bytes(b'"raw/a.parquet"\n"raw/b.parquet"\n')
+
+    first = await writer.write_file("generation/source-keys.ndjson", path)
+    second = await writer.write_file("generation/source-keys.ndjson", path)
+
+    assert first.sha256 == hashlib.sha256(path.read_bytes()).hexdigest()
+    assert first.size == path.stat().st_size
+    assert second.existed
+    assert storage.puts == 1

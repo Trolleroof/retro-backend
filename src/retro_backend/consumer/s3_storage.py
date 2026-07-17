@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from .s3_writer import ObjectInfo
+
+MAX_STREAM_LINE_BYTES = 16 * 1024
 
 
 class S3ObjectStorage:
@@ -63,6 +66,18 @@ class S3ObjectStorage:
                 ),
             )
 
+    async def put_file(self, key: str, path: Path, metadata: dict[str, str]) -> None:
+        async with self._client() as client:
+            await client.upload_file(
+                str(path),
+                self._bucket,
+                key,
+                {
+                    "Metadata": metadata,
+                    "ContentType": "application/x-ndjson",
+                },
+            )
+
     async def get(self, key: str) -> bytes:
         async with self._client() as client:
             response = await client.get_object(Bucket=self._bucket, Key=key)
@@ -82,6 +97,25 @@ class S3ObjectStorage:
         if not isinstance(version, str) or not version:
             raise OSError(f"object {key} did not return an ETag")
         return body, version
+
+    async def iter_lines(self, key: str) -> AsyncIterator[bytes]:
+        async with self._client() as client:
+            response = await client.get_object(Bucket=self._bucket, Key=key)
+            buffer = bytearray()
+            async for chunk in response["Body"].iter_chunks(chunk_size=64 * 1024):
+                buffer.extend(chunk)
+                while True:
+                    newline = buffer.find(b"\n")
+                    if newline < 0:
+                        break
+                    if newline > MAX_STREAM_LINE_BYTES:
+                        raise OSError(f"object {key} contains an oversized line")
+                    yield bytes(buffer[:newline])
+                    del buffer[: newline + 1]
+                if len(buffer) > MAX_STREAM_LINE_BYTES:
+                    raise OSError(f"object {key} contains an oversized line")
+            if buffer:
+                yield bytes(buffer)
 
     async def put_if_version(
         self,

@@ -6,6 +6,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol
 
 from .parquet import encode_rows
@@ -35,6 +36,8 @@ class ObjectStorage(Protocol):
 
     async def put(self, key: str, body: bytes, metadata: dict[str, str]) -> None: ...
 
+    async def put_file(self, key: str, path: Path, metadata: dict[str, str]) -> None: ...
+
 
 class BatchWriter(Protocol):
     async def write(self, batch: EventBatch) -> ObjectReceipt: ...
@@ -59,6 +62,31 @@ class IdempotentObjectWriter:
         if stored is None or stored.size != len(body) or stored.metadata.get("sha256") != digest:
             raise OSError(f"object {key} could not be verified after upload")
         return ObjectReceipt(key, digest, len(body), False)
+
+    async def write_file(
+        self,
+        key: str,
+        path: Path,
+        metadata: dict[str, str] | None = None,
+    ) -> ObjectReceipt:
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as source:
+            while chunk := source.read(1024 * 1024):
+                digest.update(chunk)
+                size += len(chunk)
+        checksum = digest.hexdigest()
+        full_metadata = {**(metadata or {}), "sha256": checksum}
+        existing = await self._storage.head(key)
+        if existing is not None:
+            if existing.size == size and existing.metadata.get("sha256") == checksum:
+                return ObjectReceipt(key, checksum, size, True)
+            raise ObjectConflictError(f"object {key} already exists with different bytes")
+        await self._storage.put_file(key, path, full_metadata)
+        stored = await self._storage.head(key)
+        if stored is None or stored.size != size or stored.metadata.get("sha256") != checksum:
+            raise OSError(f"object {key} could not be verified after upload")
+        return ObjectReceipt(key, checksum, size, False)
 
 
 class ParquetBatchWriter:

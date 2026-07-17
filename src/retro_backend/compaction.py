@@ -9,7 +9,7 @@ import io
 import json
 import sqlite3
 import tempfile
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -32,6 +32,8 @@ class CompactionStorage(Protocol):
 
     async def get_with_version(self, key: str) -> tuple[bytes, str] | None: ...
 
+    def iter_lines(self, key: str) -> AsyncIterator[bytes]: ...
+
     async def put_if_version(
         self,
         key: str,
@@ -46,6 +48,13 @@ class CompactionWriter(Protocol):
         self, key: str, body: bytes, metadata: dict[str, str] | None = None
     ) -> ObjectReceipt: ...
 
+    async def write_file(
+        self,
+        key: str,
+        path: Path,
+        metadata: dict[str, str] | None = None,
+    ) -> ObjectReceipt: ...
+
 
 @dataclass(frozen=True, slots=True)
 class CompactionResult:
@@ -57,6 +66,19 @@ class CompactionResult:
     output_rows: int
     existed: bool
     published: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SourceIndex:
+    object_count: int
+    generation: str
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class LatestSnapshot:
+    document: dict[str, object]
+    version: str
 
 
 def _required_int(row: dict[str, object], name: str) -> int:
@@ -157,17 +179,133 @@ def _manifest_bytes(document: dict[str, object]) -> bytes:
     return json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _source_keys(document: dict[str, object]) -> frozenset[str]:
-    value = document.get("source_keys")
-    if not isinstance(value, list) or any(not isinstance(key, str) or not key for key in value):
-        raise ValueError("latest compaction manifest has invalid source_keys")
-    keys = frozenset(value)
-    if len(keys) != len(value) or value != sorted(value):
-        raise ValueError("latest compaction manifest source_keys must be unique and sorted")
-    count = document.get("source_object_count")
-    if isinstance(count, bool) or not isinstance(count, int) or count != len(keys):
-        raise ValueError("latest compaction manifest source_object_count does not match source_keys")
-    return keys
+def _manifest_int(document: dict[str, object], name: str) -> int:
+    value = document.get(name)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"latest compaction manifest has invalid {name}")
+    return value
+
+
+def _manifest_str(document: dict[str, object], name: str) -> str:
+    value = document.get(name)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"latest compaction manifest has invalid {name}")
+    return value
+
+
+def _manifest_schema(document: dict[str, object]) -> int:
+    schema = _manifest_int(document, "schema_version")
+    if schema not in {1, 2}:
+        raise ValueError(f"unsupported latest compaction manifest schema {schema}")
+    return schema
+
+
+def _source_key_line(key: str) -> bytes:
+    return json.dumps(key, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
+
+
+async def build_source_index(
+    keys: AsyncIterator[str],
+    path: Path,
+    process_key: Callable[[str], Awaitable[None]] | None = None,
+) -> SourceIndex:
+    generation_hash = hashlib.sha256()
+    index_hash = hashlib.sha256()
+    object_count = 0
+    previous_key: str | None = None
+    with path.open("wb") as target:
+        async for key in keys:
+            if not key or (previous_key is not None and key <= previous_key):
+                raise ValueError("raw source keys must be listed in unique lexicographic order")
+            key_bytes = key.encode()
+            generation_hash.update(len(key_bytes).to_bytes(8, "big"))
+            generation_hash.update(key_bytes)
+            line = _source_key_line(key)
+            target.write(line)
+            index_hash.update(line)
+            object_count += 1
+            previous_key = key
+            if process_key is not None:
+                await process_key(key)
+    return SourceIndex(
+        object_count=object_count,
+        generation=generation_hash.hexdigest(),
+        sha256=index_hash.hexdigest(),
+    )
+
+
+async def _read_latest(storage: CompactionStorage, key: str) -> LatestSnapshot | None:
+    stored = await storage.get_with_version(key)
+    if stored is None:
+        return None
+    body, version = stored
+    document = json.loads(body)
+    if not isinstance(document, dict):
+        raise ValueError("latest compaction manifest must be an object")
+    _manifest_schema(document)
+    return LatestSnapshot(document, version)
+
+
+async def _validated_source_keys(
+    lines: AsyncIterator[bytes],
+    *,
+    expected_count: int,
+    expected_sha256: str,
+) -> AsyncGenerator[str, None]:
+    digest = hashlib.sha256()
+    count = 0
+    previous_key: str | None = None
+    async for encoded in lines:
+        try:
+            key = json.loads(encoded)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("source index contains invalid NDJSON") from error
+        if not isinstance(key, str) or not key or encoded + b"\n" != _source_key_line(key):
+            raise ValueError("source index contains a noncanonical key")
+        if previous_key is not None and key <= previous_key:
+            raise ValueError("source index keys must be unique and sorted")
+        digest.update(encoded)
+        digest.update(b"\n")
+        count += 1
+        previous_key = key
+        yield key
+    if count != expected_count or digest.hexdigest() != expected_sha256:
+        raise ValueError("source index count or checksum does not match latest manifest")
+
+
+async def _candidate_is_strict_superset(
+    storage: CompactionStorage,
+    *,
+    current: dict[str, object],
+    candidate: dict[str, object],
+) -> bool:
+    current_count = _manifest_int(current, "source_object_count")
+    candidate_count = _manifest_int(candidate, "source_object_count")
+    if candidate_count <= current_count:
+        return False
+    current_keys = _validated_source_keys(
+        storage.iter_lines(_manifest_str(current, "source_index_key")),
+        expected_count=current_count,
+        expected_sha256=_manifest_str(current, "source_index_sha256"),
+    )
+    candidate_keys = _validated_source_keys(
+        storage.iter_lines(_manifest_str(candidate, "source_index_key")),
+        expected_count=candidate_count,
+        expected_sha256=_manifest_str(candidate, "source_index_sha256"),
+    )
+    try:
+        candidate_key = await anext(candidate_keys, None)
+        async for current_key in current_keys:
+            while candidate_key is not None and candidate_key < current_key:
+                candidate_key = await anext(candidate_keys, None)
+            if candidate_key != current_key:
+                return False
+        async for _ in candidate_keys:
+            pass
+        return True
+    finally:
+        await current_keys.aclose()
+        await candidate_keys.aclose()
 
 
 async def _publish_latest(
@@ -177,21 +315,39 @@ async def _publish_latest(
     body: bytes,
     metadata: dict[str, str],
     candidate: dict[str, object],
+    baseline: LatestSnapshot | None,
 ) -> bool:
-    candidate_keys = _source_keys(candidate)
     candidate_generation = candidate["generation"]
+    if baseline is not None and _manifest_schema(baseline.document) == 1:
+        current = await _read_latest(storage, key)
+        if current is None or current.version != baseline.version:
+            return False
+        if _manifest_int(candidate, "source_object_count") < _manifest_int(
+            baseline.document, "source_object_count"
+        ):
+            return False
+        return await storage.put_if_version(
+            key,
+            body,
+            metadata,
+            baseline.version,
+        )
+
     while True:
-        current = await storage.get_with_version(key)
+        current = await _read_latest(storage, key)
         expected_version: str | None = None
         if current is not None:
-            current_body, expected_version = current
-            current_document = json.loads(current_body)
-            if not isinstance(current_document, dict):
-                raise ValueError("latest compaction manifest must be an object")
+            current_document = current.document
+            expected_version = current.version
+            if _manifest_schema(current_document) == 1:
+                return False
             if current_document.get("generation") == candidate_generation:
                 return False
-            current_keys = _source_keys(current_document)
-            if not candidate_keys > current_keys:
+            if not await _candidate_is_strict_superset(
+                storage,
+                current=current_document,
+                candidate=candidate,
+            ):
                 return False
         if await storage.put_if_version(
             key,
@@ -216,15 +372,17 @@ async def compact_day(
         raise ValueError("compaction row bounds must be positive")
 
     raw_path = f"{raw_prefix.strip('/')}/date={day.isoformat()}/"
-    source_keys: list[str] = []
+    manifest_key = f"{compacted_prefix.strip('/')}/date={day.isoformat()}/latest.json"
+    baseline = await _read_latest(storage, manifest_key)
     input_rows = 0
 
     with tempfile.TemporaryDirectory(prefix="retro-compaction-") as directory:
         connection = sqlite3.connect(Path(directory) / "events.sqlite3")
         try:
             _create_index(connection)
-            async for key in storage.iter_keys(raw_path):
-                source_keys.append(key)
+
+            async def process_raw_object(key: str) -> None:
+                nonlocal input_rows
                 parquet_file = pq.ParquetFile(io.BytesIO(await storage.get(key)))
                 if tuple(parquet_file.schema_arrow.names) != PARQUET_FIELDS:
                     raise ValueError(f"raw object {key} does not use the gameplay event schema")
@@ -234,21 +392,32 @@ async def compact_day(
                         input_rows += 1
                 connection.commit()
 
-            if not source_keys:
+            source_path = Path(directory) / "source-keys.ndjson"
+            source = await build_source_index(
+                storage.iter_keys(raw_path),
+                source_path,
+                process_raw_object,
+            )
+            if source.object_count == 0:
                 return None
 
-            source_keys.sort()
-            source_hash = hashlib.sha256()
-            for key in source_keys:
-                key_bytes = key.encode()
-                source_hash.update(len(key_bytes).to_bytes(8, "big"))
-                source_hash.update(key_bytes)
-            input_objects = len(source_keys)
-            generation = source_hash.hexdigest()
+            input_objects = source.object_count
+            generation = source.generation
             generation_prefix = (
                 f"{compacted_prefix.strip('/')}/date={day.isoformat()}/"
                 f"generations/{generation}"
             )
+            source_index_key = f"{generation_prefix}/source-keys.ndjson"
+            source_receipt = await writer.write_file(
+                source_index_key,
+                source_path,
+                {
+                    "generation": generation,
+                    "source-object-count": str(input_objects),
+                },
+            )
+            if source_receipt.sha256 != source.sha256:
+                raise OSError("uploaded source index checksum does not match local index")
             cursor = connection.execute(
                 """
                 SELECT row_json FROM events
@@ -256,7 +425,7 @@ async def compact_day(
                 """
             )
             part_documents: list[dict[str, object]] = []
-            all_parts_existed = True
+            all_parts_existed = source_receipt.existed
             output_rows = 0
             part_number = 0
             while serialized_rows := cursor.fetchmany(part_max_rows):
@@ -283,17 +452,13 @@ async def compact_day(
                 output_rows += len(rows)
                 part_number += 1
 
-            manifest_key = f"{compacted_prefix.strip('/')}/date={day.isoformat()}/latest.json"
             manifest_document: dict[str, object] = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "date": day.isoformat(),
                 "generation": generation,
                 "source_object_count": input_objects,
-                "source_keys": source_keys,
-                "source_generation_metric": {
-                    "object_count": input_objects,
-                    "source_keys_sha256": generation,
-                },
+                "source_index_key": source_index_key,
+                "source_index_sha256": source.sha256,
                 "input_row_count": input_rows,
                 "output_row_count": output_rows,
                 "parts": part_documents,
@@ -310,6 +475,7 @@ async def compact_day(
                     "source-object-count": str(input_objects),
                 },
                 candidate=manifest_document,
+                baseline=baseline,
             )
             return CompactionResult(
                 manifest_key=manifest_key,
