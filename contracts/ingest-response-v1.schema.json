@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tui-gamepigeon.dev/contracts/ingest-response-v1.schema.json",
+  "title": "Game event chunk acknowledgment v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "accepted",
+    "duplicate",
+    "game_id",
+    "chunk_id",
+    "chunk_sequence",
+    "accepted_event_range",
+    "server_received_at_ms"
+  ],
+  "properties": {
+    "accepted": { "type": "boolean" },
+    "duplicate": { "type": "boolean" },
+    "game_id": { "type": "string", "pattern": "^game_" },
+    "chunk_id": { "type": "string", "pattern": "^chk_" },
+    "chunk_sequence": { "type": "integer", "minimum": 1 },
+    "accepted_event_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first", "last"],
+      "properties": {
+        "first": { "type": "integer", "minimum": 1 },
+        "last": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "server_received_at_ms": { "type": "number", "minimum": 0 }
+  }
+}

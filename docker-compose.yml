@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: retro
+      POSTGRES_USER: retro
+      POSTGRES_PASSWORD: retro
+    ports:
+      - "${RETRO_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - retro-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U retro -d retro"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${RETRO_REDIS_PORT:-6379}:6379"
+    volumes:
+      - retro-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: .
+    command: ["uv", "run", "--no-sync", "alembic", "upgrade", "head"]
+    environment: &backend-env
+      RETRO_DATABASE_URL: postgresql+psycopg://retro:retro@postgres:5432/retro
+      RETRO_REDIS_URL: redis://redis:6379/0
+      RETRO_REDIS_REQUIRED: "true"
+      RETRO_INGEST_API_KEY: ${RETRO_INGEST_API_KEY:-development-only-change-me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    environment: *backend-env
+    ports:
+      - "${RETRO_API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    build: .
+    command: ["uv", "run", "--no-sync", "python", "-m", "retro_backend.worker"]
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  retro-postgres:
+  retro-redis:

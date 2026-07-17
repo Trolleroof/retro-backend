@@ -1,0 +1,137 @@
+{
+  "schema_version": 2,
+  "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+  "game_id": "game_018f0000-0000-7000-8000-000000000001",
+  "game_type": "tetris",
+  "game_version": "1",
+  "chunk_id": "chk_018f0000-0000-7000-8000-000000000002",
+  "chunk_sequence": 1,
+  "first_event_sequence": 1,
+  "last_event_sequence": 5,
+  "event_count": 5,
+  "created_at_ms": 1784239200000,
+  "client": {
+    "platform": "tui",
+    "application_version": "0.2.0",
+    "recording_sdk_version": "2"
+  },
+  "events": [
+    {
+      "schema_version": 2,
+      "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+      "game_id": "game_018f0000-0000-7000-8000-000000000001",
+      "chunk_id": "chk_018f0000-0000-7000-8000-000000000002",
+      "event_id": "evt_018f0000-0000-7000-8000-000000000003",
+      "event_sequence": 1,
+      "event_type": "episode_started",
+      "event_version": 1,
+      "visibility": "policy",
+      "client_time_ms": 1784239190000,
+      "monotonic_time_us": 0,
+      "simulation_tick": 0,
+      "payload": {
+        "game_type": "tetris",
+        "game_version": "1",
+        "ruleset_id": "classic",
+        "telemetry_version": 2,
+        "platform": "tui",
+        "viewport": { "width": 80, "height": 24 },
+        "control_schema": ["left", "right", "soft-drop", "rotate-cw", "rotate-ccw", "hard-drop", "tick"],
+        "input_semantics": "terminal_impulse"
+      }
+    },
+    {
+      "schema_version": 2,
+      "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+      "game_id": "game_018f0000-0000-7000-8000-000000000001",
+      "chunk_id": "chk_018f0000-0000-7000-8000-000000000002",
+      "event_id": "evt_018f0000-0000-7000-8000-000000000004",
+      "event_sequence": 2,
+      "event_type": "observation",
+      "event_version": 1,
+      "visibility": "policy",
+      "client_time_ms": 1784239190001,
+      "monotonic_time_us": 1000,
+      "simulation_tick": 0,
+      "payload": {
+        "observation_id": "obs_018f0000-0000-7000-8000-000000000001",
+        "representation": "terminal_grid_v1",
+        "width": 80,
+        "height": 24,
+        "state_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cells": [
+          { "x": 0, "y": 0, "glyph": "T", "foreground": 15, "background": null, "attributes": 1, "width": 1 }
+        ]
+      }
+    },
+    {
+      "schema_version": 2,
+      "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+      "game_id": "game_018f0000-0000-7000-8000-000000000001",
+      "chunk_id": "chk_018f0000-0000-7000-8000-000000000002",
+      "event_id": "evt_018f0000-0000-7000-8000-000000000005",
+      "event_sequence": 3,
+      "event_type": "control_changed",
+      "event_version": 1,
+      "visibility": "policy",
+      "client_time_ms": 1784239190100,
+      "monotonic_time_us": 100000,
+      "simulation_tick": 1,
+      "payload": {
+        "based_on_observation_id": "obs_018f0000-0000-7000-8000-000000000001",
+        "control": "left",
+        "action": "left",
+        "kind": "impulse",
+        "actor": "human"
+      }
+    },
+    {
+      "schema_version": 2,
+      "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+      "game_id": "game_018f0000-0000-7000-8000-000000000001",
+      "chunk_id": "chk_018f0000-0000-7000-8000-000000000002",
+      "event_id": "evt_018f0000-0000-7000-8000-000000000006",
+      "event_sequence": 4,
+      "event_type": "observation",
+      "event_version": 1,
+      "visibility": "policy",
+      "client_time_ms": 1784239190101,
+      "monotonic_time_us": 101000,
+      "simulation_tick": 1,
+      "payload": {
+        "observation_id": "obs_018f0000-0000-7000-8000-000000000002",
+        "representation": "terminal_grid_delta_v1",
+        "base_observation_id": "obs_018f0000-0000-7000-8000-000000000001",
+        "width": 80,
+        "height": 24,
+        "state_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "changed_cells": [],
+        "caused_by_event_id": "evt_018f0000-0000-7000-8000-000000000005"
+      }
+    },
+    {
+      "schema_version": 2,
+      "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+      "game_id": "game_018f0000-0000-7000-8000-000000000001",
+      "chunk_id": "chk_018f0000-0000-7000-8000-000000000002",
+      "event_id": "evt_018f0000-0000-7000-8000-000000000007",
+      "event_sequence": 5,
+      "event_type": "outcome_changed",
+      "event_version": 1,
+      "visibility": "policy",
+      "client_time_ms": 1784239190102,
+      "monotonic_time_us": 102000,
+      "simulation_tick": 1,
+      "payload": {
+        "score_before": 0,
+        "score_after": 0,
+        "score_delta": 0,
+        "engine_reward": 0,
+        "reward_spec_id": "engine_v1",
+        "terminal": false,
+        "caused_by_event_id": "evt_018f0000-0000-7000-8000-000000000005",
+        "progress": { "moved": false, "success": false }
+      }
+    }
+  ]
+}

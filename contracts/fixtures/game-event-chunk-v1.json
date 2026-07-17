@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "game_id": "game_018f0000-0000-7000-8000-000000000001",
+  "game_type": "2048",
+  "game_version": "1",
+  "chunk_id": "chk_018f0000-0000-7000-8000-000000000002",
+  "chunk_sequence": 1,
+  "first_event_sequence": 1,
+  "last_event_sequence": 3,
+  "event_count": 3,
+  "created_at_ms": 1784239200000,
+  "client": {
+    "platform": "tui",
+    "application_version": "0.2.0",
+    "recording_sdk_version": "1"
+  },
+  "events": [
+    {
+      "event_id": "evt_018f0000-0000-7000-8000-000000000003",
+      "event_sequence": 1,
+      "event_type": "game_started",
+      "event_version": 1,
+      "source": "system",
+      "client_time_ms": 1784239190000,
+      "monotonic_time_ms": 0,
+      "payload": {
+        "game_type": "2048",
+        "game_version": "1",
+        "seed": 7,
+        "initial_state": {
+          "board": [[0, 0, 0, 0], [0, 2, 0, 0], [0, 0, 0, 0], [0, 0, 2, 0]],
+          "score": 0,
+          "highest": 2
+        }
+      }
+    },
+    {
+      "event_id": "evt_018f0000-0000-7000-8000-000000000004",
+      "event_sequence": 2,
+      "event_type": "action",
+      "event_version": 1,
+      "source": "player",
+      "client_time_ms": 1784239195001,
+      "monotonic_time_ms": 5001,
+      "payload": {
+        "action": "left",
+        "state_before": {
+          "board": [[2, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+          "score": 0,
+          "highest": 2
+        },
+        "result": {
+          "reward": 4,
+          "moved": true,
+          "done": false,
+          "success": false
+        },
+        "state_after": {
+          "board": [[4, 0, 0, 0], [0, 0, 0, 2], [0, 0, 0, 0], [0, 0, 0, 0]],
+          "score": 4,
+          "highest": 4
+        },
+        "random_effects": {
+          "boardAfterSlide": [[4, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+          "spawn": { "row": 1, "column": 3, "value": 2 }
+        }
+      }
+    },
+    {
+      "event_id": "evt_018f0000-0000-7000-8000-000000000005",
+      "event_sequence": 3,
+      "event_type": "game_ended",
+      "event_version": 1,
+      "source": "system",
+      "client_time_ms": 1784239290000,
+      "monotonic_time_ms": 100000,
+      "payload": {
+        "outcome": "abandoned",
+        "final_state": {
+          "board": [[4, 0, 0, 0], [0, 0, 0, 2], [0, 0, 0, 0], [0, 0, 0, 0]],
+          "score": 4,
+          "highest": 4
+        },
+        "final_score": 4,
+        "success": false,
+        "final_event_sequence": 3
+      }
+    }
+  ]
+}

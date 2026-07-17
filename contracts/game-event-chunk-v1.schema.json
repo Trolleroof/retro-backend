@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tui-gamepigeon.dev/contracts/game-event-chunk-v1.schema.json",
+  "title": "Game event chunk v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "game_id",
+    "game_type",
+    "game_version",
+    "chunk_id",
+    "chunk_sequence",
+    "first_event_sequence",
+    "last_event_sequence",
+    "event_count",
+    "created_at_ms",
+    "client",
+    "events"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "game_id": { "type": "string", "pattern": "^game_" },
+    "game_type": { "type": "string", "minLength": 1 },
+    "game_version": { "type": "string", "minLength": 1 },
+    "chunk_id": { "type": "string", "pattern": "^chk_" },
+    "chunk_sequence": { "type": "integer", "minimum": 1 },
+    "first_event_sequence": { "type": "integer", "minimum": 1 },
+    "last_event_sequence": { "type": "integer", "minimum": 1 },
+    "event_count": { "type": "integer", "minimum": 1 },
+    "created_at_ms": { "type": "number", "minimum": 0 },
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "application_version", "recording_sdk_version"],
+      "properties": {
+        "platform": { "const": "tui" },
+        "application_version": { "type": "string", "minLength": 1 },
+        "recording_sdk_version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/event" }
+    }
+  },
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": [
+        "event_id",
+        "event_sequence",
+        "event_type",
+        "event_version",
+        "source",
+        "client_time_ms",
+        "monotonic_time_ms",
+        "payload"
+      ],
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^evt_" },
+        "event_sequence": { "type": "integer", "minimum": 1 },
+        "event_version": { "const": 1 },
+        "client_time_ms": { "type": "number", "minimum": 0 },
+        "monotonic_time_ms": { "type": "number", "minimum": 0 }
+      }
+    },
+    "step_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reward", "moved", "done", "success"],
+      "properties": {
+        "reward": { "type": "number" },
+        "moved": { "type": "boolean" },
+        "done": { "type": "boolean" },
+        "success": { "type": "boolean" }
+      }
+    },
+    "game_started": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "event_id": true,
+            "event_sequence": true,
+            "event_version": true,
+            "client_time_ms": true,
+            "monotonic_time_ms": true,
+            "event_type": { "const": "game_started" },
+            "source": { "const": "system" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["game_type", "game_version", "seed", "initial_state"],
+              "properties": {
+                "game_type": { "type": "string" },
+                "game_version": { "type": "string" },
+                "seed": { "type": "integer", "minimum": 0 },
+                "initial_state": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "action": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "event_id": true,
+            "event_sequence": true,
+            "event_version": true,
+            "client_time_ms": true,
+            "monotonic_time_ms": true,
+            "event_type": { "const": "action" },
+            "source": { "enum": ["player", "environment"] },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["action", "state_before", "result", "state_after"],
+              "properties": {
+                "action": { "type": "string", "minLength": 1 },
+                "state_before": true,
+                "result": { "$ref": "#/$defs/step_result" },
+                "state_after": true,
+                "random_effects": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "game_ended": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "event_id": true,
+            "event_sequence": true,
+            "event_version": true,
+            "client_time_ms": true,
+            "monotonic_time_ms": true,
+            "event_type": { "const": "game_ended" },
+            "source": { "const": "system" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "outcome",
+                "final_state",
+                "final_score",
+                "success",
+                "final_event_sequence"
+              ],
+              "properties": {
+                "outcome": { "enum": ["completed", "abandoned"] },
+                "final_state": true,
+                "final_score": { "type": "number" },
+                "success": { "type": "boolean" },
+                "final_event_sequence": { "type": "integer", "minimum": 1 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "event": {
+      "oneOf": [
+        { "$ref": "#/$defs/game_started" },
+        { "$ref": "#/$defs/action" },
+        { "$ref": "#/$defs/game_ended" }
+      ]
+    }
+  }
+}
