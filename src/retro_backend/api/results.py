@@ -1,6 +1,7 @@
 """D1-backed game-result and leaderboard routes."""
 
 from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -11,6 +12,10 @@ from ..contracts import GameResultRequest, GameType
 from ..storage.d1 import D1Repository
 
 router = APIRouter()
+
+
+def _utc_timestamp(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def _repository(request: Request) -> D1Repository:
@@ -34,7 +39,7 @@ async def submit_result(
         user_id=user_id,
         game_type=result.game_type,
         score=result.score,
-        achieved_at=result.completed_at.isoformat(),
+        achieved_at=_utc_timestamp(result.completed_at),
     )
     return {
         "accepted": True,

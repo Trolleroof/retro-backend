@@ -96,7 +96,7 @@ async def test_result_route_requires_auth_and_returns_personal_best(
     app_client: AsyncClient,
     fake_d1: Any,
 ) -> None:
-    fake_d1.first_rows.extend([{"id": "usr_example"}, {"score": 32768}])
+    fake_d1.first_rows.extend([{"id": "usr_example"}, {"score": "32768"}])
 
     response = await app_client.post(
         "/v1/game-results",
@@ -112,6 +112,47 @@ async def test_result_route_requires_auth_and_returns_personal_best(
     }
 
 
+async def test_result_route_normalizes_completion_offsets_for_text_ordering(
+    app_client: AsyncClient,
+    fake_d1: Any,
+) -> None:
+    fake_d1.first_rows.extend(
+        [
+            {"id": "usr_example"},
+            {"score": "1"},
+            {"id": "usr_example"},
+            {"score": "1"},
+            {"id": "usr_example"},
+            {"score": "1"},
+        ]
+    )
+    completed_times = [
+        "2026-07-17T20:42:00+02:00",
+        "2026-07-17T13:42:00-05:00",
+        "2026-07-17T13:41:59.999999-05:00",
+    ]
+
+    for completed_at in completed_times:
+        payload = _result_payload(score=1)
+        payload["completed_at"] = completed_at
+        response = await app_client.post(
+            "/v1/game-results",
+            headers={"Authorization": "Bearer opaque"},
+            json=payload,
+        )
+        assert response.status_code == 202
+
+    bound_times = [
+        values[3] for values in fake_d1.bind_calls if len(values) == 4
+    ]
+    assert bound_times == [
+        "2026-07-17T18:42:00.000000Z",
+        "2026-07-17T18:42:00.000000Z",
+        "2026-07-17T18:41:59.999999Z",
+    ]
+    assert bound_times[2] < bound_times[0]
+
+
 async def test_leaderboard_preserves_database_order_and_binds_limit(
     app_client: AsyncClient,
     fake_d1: Any,
@@ -121,12 +162,12 @@ async def test_leaderboard_preserves_database_order_and_binds_limit(
         [
             {
                 "user_id": "usr_first",
-                "score": 32768,
+                "score": "32768",
                 "achieved_at": "2026-07-17T18:42:00Z",
             },
             {
                 "user_id": "usr_second",
-                "score": 16384,
+                "score": "16384",
                 "achieved_at": "2026-07-17T18:43:00Z",
             },
         ]

@@ -39,7 +39,7 @@ class FakeD1:
         self.first_calls: list[str] = []
         self.run_calls: list[str] = []
         self.first_rows: list[object | None] = []
-        self.run_rows: list[list[object]] = []
+        self.run_rows: list[object] = []
 
     def prepare(self, sql: str) -> FakeD1PreparedStatement:
         self.prepared_sql.append(sql)

@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 from retro_backend.auth import hash_token, parse_bearer_token
 from retro_backend.bindings import DurableObjectNamespace, value_field
-from retro_backend.observability import log_event
+from retro_backend.observability import ALLOWED_EVENTS, ALLOWED_OUTCOMES, log_event
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -68,20 +68,75 @@ def test_log_event_prints_only_supplied_allowlisted_fields(
         "score_submitted",
         request_id="req_01",
         user_id="usr_01",
+        game_id="game_01",
+        chunk_id="chk_01",
         outcome="accepted",
     )
 
     output = capsys.readouterr().out
     assert output == (
         '{"event":"score_submitted","request_id":"req_01",'
-        '"user_id":"usr_01","outcome":"accepted"}\n'
+        '"user_id":"usr_01","game_id":"game_01","chunk_id":"chk_01",'
+        '"outcome":"accepted"}\n'
     )
     assert json.loads(output) == {
         "event": "score_submitted",
         "request_id": "req_01",
         "user_id": "usr_01",
+        "game_id": "game_01",
+        "chunk_id": "chk_01",
         "outcome": "accepted",
     }
+
+
+def test_log_event_exposes_finite_known_choices() -> None:
+    assert frozenset({"score_submitted"}) == ALLOWED_EVENTS
+    assert frozenset({"accepted"}) == ALLOWED_OUTCOMES
+
+
+@pytest.mark.parametrize(
+    ("event", "outcome"),
+    [
+        ("unknown_event", "accepted"),
+        ("score_submitted", "unknown_outcome"),
+        ("Bearer opaque-token", "accepted"),
+        ("score_submitted", "t=1720000000,v1=signature"),
+    ],
+)
+def test_log_event_rejects_unknown_event_and_outcome(
+    event: str, outcome: str
+) -> None:
+    with pytest.raises(ValueError):
+        log_event(event, outcome=outcome)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("request_id", "Bearer opaque-token"),
+        ("user_id", "t=1720000000,v1=signature"),
+        ("game_id", '{"token":"opaque"}'),
+        ("chunk_id", "chk_" + "a" * 121),
+    ],
+)
+def test_log_event_rejects_unstructured_or_oversized_identifiers(
+    field: str, value: str
+) -> None:
+    with pytest.raises(ValueError):
+        cast(Any, log_event)(
+            "score_submitted",
+            outcome="accepted",
+            **{field: value},
+        )
+
+
+def test_log_event_rejects_non_string_identifiers() -> None:
+    with pytest.raises(TypeError):
+        cast(Any, log_event)(
+            "score_submitted",
+            user_id=b"usr_01",
+            outcome="accepted",
+        )
 
 
 def test_log_event_api_has_no_raw_or_arbitrary_field_channel() -> None:
