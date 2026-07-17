@@ -1,12 +1,21 @@
+from typing import Protocol
+
 import pytest
 from fakeredis.aioredis import FakeRedis
+from fastapi import FastAPI
 from httpx import AsyncClient
 from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from retro_backend import main
 from retro_backend.config import Settings
+from retro_backend.database import get_session
 from retro_backend.producer import BrokerMetadata
+
+
+class HealthProducer(Protocol):
+    healthy: bool
 
 
 async def test_health_endpoints_remain_available(client: AsyncClient) -> None:
@@ -30,6 +39,36 @@ async def test_readiness_returns_503_when_redis_fails(
     assert response.json()["detail"] == "redis unavailable"
 
 
+async def test_readiness_returns_503_when_broker_metadata_is_unavailable(
+    client: AsyncClient,
+    producer: HealthProducer,
+) -> None:
+    producer.healthy = False
+
+    response = await client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "event broker unavailable"
+
+
+async def test_readiness_returns_503_when_database_query_fails(
+    client: AsyncClient,
+    app: FastAPI,
+) -> None:
+    class FailingSession:
+        async def execute(self, _statement: object) -> None:
+            raise SQLAlchemyError("database unavailable")
+
+    async def failing_session():
+        yield FailingSession()
+
+    app.dependency_overrides[get_session] = failing_session
+    response = await client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "database unavailable"
+
+
 async def test_owned_producer_stops_when_lifespan_body_raises(
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
@@ -44,6 +83,9 @@ async def test_owned_producer_stops_when_lifespan_body_raises(
 
         async def stop(self) -> None:
             self.stopped = True
+
+        async def healthcheck(self) -> bool:
+            return True
 
         async def send(
             self,

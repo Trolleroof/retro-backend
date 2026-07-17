@@ -12,11 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import get_session
 from .models import User
-from .token_cli import hash_token
+from .token_cli import NEGATIVE_AUTH_TTL_SECONDS, NEGATIVE_CACHE_VALUE, hash_token
 
 POSITIVE_AUTH_TTL_SECONDS = 900
-NEGATIVE_AUTH_TTL_SECONDS = 30
-NEGATIVE_CACHE_VALUE = "!"
+
+
+def _cached_user_id(cached: bytes | str | None) -> str | None:
+    if isinstance(cached, bytes):
+        cached = cached.decode("utf-8")
+    if cached is None or hmac.compare_digest(cached, NEGATIVE_CACHE_VALUE):
+        return None
+    return cached
 
 
 async def resolve_user_id(token: str, session: AsyncSession, redis: Redis) -> str | None:
@@ -24,16 +30,15 @@ async def resolve_user_id(token: str, session: AsyncSession, redis: Redis) -> st
     cache_key = f"retro:auth:{digest}"
     cached = await redis.get(cache_key)
     if cached is not None:
-        if isinstance(cached, bytes):
-            cached = cached.decode("utf-8")
-        return None if hmac.compare_digest(cached, NEGATIVE_CACHE_VALUE) else cached
+        return _cached_user_id(cached)
 
     user_id = await session.scalar(select(User.id).where(User.auth_token_hash == digest))
-    if user_id is None:
-        await redis.set(cache_key, NEGATIVE_CACHE_VALUE, ex=NEGATIVE_AUTH_TTL_SECONDS)
-        return None
-    await redis.set(cache_key, user_id, ex=POSITIVE_AUTH_TTL_SECONDS)
-    return user_id
+    cache_value = NEGATIVE_CACHE_VALUE if user_id is None else user_id
+    ttl = NEGATIVE_AUTH_TTL_SECONDS if user_id is None else POSITIVE_AUTH_TTL_SECONDS
+    stored = await redis.set(cache_key, cache_value, ex=ttl, nx=True)
+    if stored:
+        return user_id
+    return _cached_user_id(await redis.get(cache_key))
 
 
 async def require_user_id(

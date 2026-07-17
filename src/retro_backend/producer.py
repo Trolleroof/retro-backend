@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -20,6 +21,8 @@ class EventProducer(Protocol):
     async def start(self) -> None: ...
 
     async def stop(self) -> None: ...
+
+    async def healthcheck(self) -> bool: ...
 
     async def send(
         self,
@@ -50,6 +53,16 @@ class KafkaEventProducer:
         if self._producer is not None:
             await self._producer.stop()
             self._producer = None
+
+    async def healthcheck(self) -> bool:
+        if self._producer is None:
+            return False
+        try:
+            async with asyncio.timeout(self._settings.readiness_timeout_seconds):
+                partitions = await self._producer.partitions_for(self._settings.kafka_topic)
+        except Exception:
+            return False
+        return bool(partitions)
 
     async def send(
         self,

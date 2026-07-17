@@ -11,7 +11,7 @@ import secrets
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 
 revision: str = "0002_streaming_ingestion"
 down_revision: str | None = "0001_initial_backend"
@@ -32,12 +32,20 @@ def upgrade() -> None:
         sa.column("id", sa.String(length=512)),
         sa.column("auth_token_hash", sa.String(length=64)),
     )
-    bind = op.get_bind()
-    for user_id in bind.execute(sa.select(users.c.id)).scalars():
-        placeholder = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-        bind.execute(
-            users.update().where(users.c.id == user_id).values(auth_token_hash=placeholder)
+    if context.is_offline_mode():
+        op.execute(
+            sa.text(
+                "UPDATE users SET auth_token_hash = "
+                "md5(id || ':retro-migration-a') || md5(id || ':retro-migration-b')"
+            )
         )
+    else:
+        bind = op.get_bind()
+        for user_id in bind.execute(sa.select(users.c.id)).scalars():
+            placeholder = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+            bind.execute(
+                users.update().where(users.c.id == user_id).values(auth_token_hash=placeholder)
+            )
     op.alter_column("users", "auth_token_hash", nullable=False)
     op.create_check_constraint(
         "ck_users_auth_token_hash_length", "users", "length(auth_token_hash) = 64"

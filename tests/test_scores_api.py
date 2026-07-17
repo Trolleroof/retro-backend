@@ -1,5 +1,6 @@
 import datetime as dt
 import hashlib
+from collections.abc import AsyncIterator
 
 import pytest
 from httpx import AsyncClient
@@ -71,11 +72,15 @@ async def test_lower_and_equal_retries_preserve_score_and_achieved_at(
         headers=auth_headers,
     )
 
-    assert lower.json() == equal.json() == {
-        "accepted": True,
-        "personal_best": 1024,
-        "high_score_updated": False,
-    }
+    assert (
+        lower.json()
+        == equal.json()
+        == {
+            "accepted": True,
+            "personal_best": 1024,
+            "high_score_updated": False,
+        }
+    )
     async with session_factory() as session:
         score = await session.get(HighScore, (fixture_payload["user_id"], "2048"))
         assert score is not None
@@ -110,7 +115,9 @@ async def test_high_scores_are_ranked_and_limited(
 ) -> None:
     async with session_factory() as session:
         for user_id in ("usr_early", "usr_late", "usr_low"):
-            session.add(User(id=user_id, auth_token_hash=hashlib.sha256(user_id.encode()).hexdigest()))
+            session.add(
+                User(id=user_id, auth_token_hash=hashlib.sha256(user_id.encode()).hexdigest())
+            )
         await session.flush()
         session.add_all(
             [
@@ -170,12 +177,32 @@ async def test_results_reject_invalid_game_and_negative_score(
     )
     boolean_score = result_payload(score=1, completed_at="2026-07-17T12:00:00Z")
     boolean_score["score"] = True
-    bad_boolean = await client.post(
-        "/v1/game-results", json=boolean_score, headers=auth_headers
-    )
+    bad_boolean = await client.post("/v1/game-results", json=boolean_score, headers=auth_headers)
     bad_limit = await client.get("/v1/high-scores/2048?limit=101", headers=auth_headers)
 
     assert bad_game.status_code == 422
     assert bad_score.status_code == 422
     assert bad_boolean.status_code == 422
     assert bad_limit.status_code == 422
+
+
+async def test_game_result_body_has_small_streaming_limit(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    chunks_sent = 0
+
+    async def oversized_result() -> AsyncIterator[bytes]:
+        nonlocal chunks_sent
+        for _ in range(10):
+            chunks_sent += 1
+            yield b"x" * (8 * 1024)
+
+    response = await client.post(
+        "/v1/game-results",
+        content=oversized_result(),
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 413
+    assert chunks_sent == 3

@@ -15,6 +15,9 @@ from .database import create_database_engine, create_session_factory
 from .models import User
 from .redis_client import create_redis
 
+NEGATIVE_AUTH_TTL_SECONDS = 30
+NEGATIVE_CACHE_VALUE = "!"
+
 
 class TokenAlreadyIssuedError(RuntimeError):
     """Raised when rotation was not authorized for an existing user."""
@@ -38,6 +41,7 @@ async def issue_token(
     if not user_id:
         raise ValueError("user ID must not be empty")
     token = generate_token()
+    previous_digest: str | None = None
     async with session_factory() as session, session.begin():
         user = await session.get(User, user_id)
         if user is not None and not rotate:
@@ -48,8 +52,12 @@ async def issue_token(
         else:
             previous_digest = user.auth_token_hash
             user.auth_token_hash = digest
-            if redis is not None:
-                await redis.delete(f"retro:auth:{previous_digest}")
+    if previous_digest is not None and redis is not None:
+        await redis.set(
+            f"retro:auth:{previous_digest}",
+            NEGATIVE_CACHE_VALUE,
+            ex=NEGATIVE_AUTH_TTL_SECONDS,
+        )
     return token
 
 

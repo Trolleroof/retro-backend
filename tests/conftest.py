@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from fakeredis.aioredis import FakeRedis
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -51,13 +52,13 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
 
 
 @pytest.fixture
-async def client(
+async def app(
     session_factory: async_sessionmaker[AsyncSession],
     fake_redis: FakeRedis,
     producer: "RecordingProducer",
     auth_token: str,
     fixture_payload: dict[str, Any],
-) -> AsyncIterator[AsyncClient]:
+) -> FastAPI:
     from retro_backend.main import create_app
 
     async with session_factory() as session:
@@ -73,12 +74,16 @@ async def client(
         database_url="sqlite+aiosqlite://",
         redis_url=None,
     )
-    app = create_app(
+    return create_app(
         settings=settings,
         session_factory=session_factory,
         redis=fake_redis,
         producer=producer,
     )
+
+
+@pytest.fixture
+async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as value:
         yield value
 
@@ -104,12 +109,18 @@ class RecordingProducer:
         self.failure: Exception | None = None
         self.started = False
         self.stopped = False
+        self.healthy = True
+        self.health_calls = 0
 
     async def start(self) -> None:
         self.started = True
 
     async def stop(self) -> None:
         self.stopped = True
+
+    async def healthcheck(self) -> bool:
+        self.health_calls += 1
+        return self.healthy
 
     async def send(
         self,

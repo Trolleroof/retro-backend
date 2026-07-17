@@ -39,7 +39,7 @@ services:
       - --node-id=0
       - --check=false
       - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:${RETRO_KAFKA_PORT:-19092}
     ports:
       - "${RETRO_KAFKA_PORT:-19092}:19092"
     volumes:

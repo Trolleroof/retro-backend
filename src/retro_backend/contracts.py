@@ -79,3 +79,18 @@ def validate_chunk_envelope(value: Any) -> dict[str, Any]:
     if event_count != len(events):
         raise ValidationError("event_count must equal events length")
     return chunk
+
+
+def validate_authenticated_identity(chunk: dict[str, Any], authenticated_user_id: str) -> None:
+    """Reject v2 identity claims that disagree with the authenticated producer."""
+    if chunk["schema_version"] != 2:
+        return
+    if chunk["user_id"] != authenticated_user_id:
+        raise ValidationError("user_id must match the authenticated user")
+    for index, event in enumerate(chunk["events"]):
+        if (
+            isinstance(event, dict)
+            and "user_id" in event
+            and event["user_id"] != authenticated_user_id
+        ):
+            raise ValidationError(f"events[{index}].user_id must match the authenticated user")

@@ -1,4 +1,6 @@
+import hashlib
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -70,7 +72,10 @@ async def test_ingestion_publishes_exact_bytes_without_database_writes(
             "topic": "retro-game-events",
             "value": fixture_bytes,
             "key": fixture_payload["game_id"].encode(),
-            "headers": [("retro-user-id", fixture_payload["user_id"].encode())],
+            "headers": [
+                ("retro-user-id", fixture_payload["user_id"].encode()),
+                ("retro-chunk-id", fixture_payload["chunk_id"].encode()),
+            ],
         }
     ]
     async with session_factory() as session:
@@ -92,6 +97,70 @@ async def test_duplicate_returns_cached_broker_ack_without_republishing(
     assert second.json()["broker_partition"] == 3
     assert second.json()["broker_offset"] == 42
     assert len(producer.calls) == 1
+
+
+async def test_chunk_id_reuse_with_different_bytes_returns_409(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_bytes: bytes,
+    fixture_payload: dict[str, Any],
+    producer: RecordingProducer,
+) -> None:
+    first = await client.post("/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers)
+    fixture_payload["created_at_ms"] += 1
+    changed = json.dumps(fixture_payload, separators=(",", ":")).encode()
+
+    second = await client.post("/v1/game-event-chunks", content=changed, headers=auth_headers)
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    assert second.json()["detail"] == "chunk ID already contains different bytes"
+    assert len(producer.calls) == 1
+
+
+async def test_duplicate_ack_uses_original_cached_receipt(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_bytes: bytes,
+    fixture_payload: dict[str, Any],
+    fake_redis: FakeRedis,
+    producer: RecordingProducer,
+) -> None:
+    receipt = {
+        "version": 1,
+        "state": "accepted",
+        "payload_sha256": hashlib.sha256(fixture_bytes).hexdigest(),
+        "ack": {
+            "game_id": "game_original",
+            "chunk_id": fixture_payload["chunk_id"],
+            "chunk_sequence": 99,
+            "first_event_sequence": 10,
+            "last_event_sequence": 20,
+            "server_received_at_ms": 123456,
+            "broker_partition": 7,
+            "broker_offset": 88,
+        },
+    }
+    key = f"retro:chunk:{fixture_payload['user_id']}:{fixture_payload['chunk_id']}"
+    await fake_redis.set(key, json.dumps(receipt, sort_keys=True, separators=(",", ":")), ex=3600)
+
+    response = await client.post(
+        "/v1/game-event-chunks", content=fixture_bytes, headers=auth_headers
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "accepted": True,
+        "duplicate": True,
+        "game_id": "game_original",
+        "chunk_id": fixture_payload["chunk_id"],
+        "chunk_sequence": 99,
+        "accepted_event_range": {"first": 10, "last": 20},
+        "server_received_at_ms": 123456,
+        "broker_partition": 7,
+        "broker_offset": 88,
+    }
+    assert producer.calls == []
 
 
 async def test_publishing_chunk_returns_retryable_503(
@@ -145,15 +214,45 @@ async def test_ingestion_accepts_semantically_invalid_events_for_consumer_valida
     assert producer.calls[0]["value"] == raw
 
 
+async def test_v2_chunk_user_must_match_authenticated_user(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_payload: dict[str, Any],
+    producer: RecordingProducer,
+) -> None:
+    fixture_payload["user_id"] = "usr_someone_else"
+    raw = json.dumps(fixture_payload, separators=(",", ":")).encode()
+
+    response = await client.post("/v1/game-event-chunks", content=raw, headers=auth_headers)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "user_id must match the authenticated user"
+    assert producer.calls == []
+
+
+async def test_v2_event_users_must_match_authenticated_user(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    fixture_payload: dict[str, Any],
+    producer: RecordingProducer,
+) -> None:
+    fixture_payload["events"][2]["user_id"] = "usr_someone_else"
+    raw = json.dumps(fixture_payload, separators=(",", ":")).encode()
+
+    response = await client.post("/v1/game-event-chunks", content=raw, headers=auth_headers)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "events[2].user_id must match the authenticated user"
+    assert producer.calls == []
+
+
 async def test_ingestion_returns_clear_body_errors(
     client: AsyncClient,
     auth_headers: dict[str, str],
     fixture_payload: dict[str, Any],
 ) -> None:
     empty = await client.post("/v1/game-event-chunks", content=b"", headers=auth_headers)
-    malformed = await client.post(
-        "/v1/game-event-chunks", content=b"{", headers=auth_headers
-    )
+    malformed = await client.post("/v1/game-event-chunks", content=b"{", headers=auth_headers)
     fixture_payload.pop("chunk_id")
     missing = await client.post(
         "/v1/game-event-chunks",
@@ -178,3 +277,25 @@ async def test_ingestion_rejects_oversized_body(
         headers=auth_headers,
     )
     assert response.status_code == 413
+
+
+async def test_chunked_oversize_stops_reading_at_limit(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    chunks_sent = 0
+
+    async def dishonest_body() -> AsyncIterator[bytes]:
+        nonlocal chunks_sent
+        for _ in range(20):
+            chunks_sent += 1
+            yield b"x" * (128 * 1024)
+
+    response = await client.post(
+        "/v1/game-event-chunks",
+        content=dishonest_body(),
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 413
+    assert chunks_sent == 3

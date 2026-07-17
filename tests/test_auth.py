@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from retro_backend.auth import resolve_user_id
 from retro_backend.models import User
+from retro_backend.token_cli import NEGATIVE_CACHE_VALUE
 
 
 async def test_auth_cache_miss_queries_postgres_and_sets_positive_ttl(
@@ -74,3 +75,32 @@ async def test_authentication_does_not_log_sensitive_values(
     assert token not in output
     assert digest not in output
     assert key not in output
+
+
+async def test_auth_cache_fill_cannot_overwrite_rotation_tombstone(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    token = "retro_rotating"
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    key = f"retro:auth:{digest}"
+    redis = FakeRedis(decode_responses=True)
+    original_set = redis.set
+    tombstone_injected = False
+
+    async def racing_set(
+        name: str, value: str, *, ex: int | None = None, nx: bool = False
+    ) -> object:
+        nonlocal tombstone_injected
+        if not tombstone_injected:
+            tombstone_injected = True
+            await original_set(name, NEGATIVE_CACHE_VALUE, ex=30)
+        return await original_set(name, value, ex=ex, nx=nx)
+
+    monkeypatch.setattr(redis, "set", racing_set)
+    async with session_factory() as session:
+        session.add(User(id="usr_alice", auth_token_hash=digest))
+        await session.commit()
+        assert await resolve_user_id(token, session, redis) is None
+
+    assert await redis.get(key) == NEGATIVE_CACHE_VALUE

@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 
@@ -30,6 +31,9 @@ async def test_kafka_producer_uses_durable_idempotent_configuration(monkeypatch:
         async def send_and_wait(self, *_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return SimpleNamespace(partition=2, offset=17)
 
+        async def partitions_for(self, _topic: str) -> set[int]:
+            return {0}
+
     monkeypatch.setattr("retro_backend.producer.AIOKafkaProducer", FakeAIOKafkaProducer)
     producer = KafkaEventProducer(
         Settings(kafka_bootstrap_servers="redpanda:9092", kafka_topic="test-events")
@@ -42,9 +46,30 @@ async def test_kafka_producer_uses_durable_idempotent_configuration(monkeypatch:
     assert created["compression_type"] == "zstd"
     assert created["instance"].started is True
 
-    metadata = await producer.send(
-        topic="test-events", value=b"{}", key=b"game_1", headers=[]
-    )
+    metadata = await producer.send(topic="test-events", value=b"{}", key=b"game_1", headers=[])
     assert (metadata.partition, metadata.offset) == (2, 17)
+    assert await producer.healthcheck() is True
     await producer.stop()
     assert created["instance"].stopped is True
+
+
+async def test_kafka_healthcheck_times_out_when_metadata_is_unavailable(monkeypatch: Any) -> None:
+    class SlowMetadataProducer:
+        async def start(self) -> None:
+            pass
+
+        async def stop(self) -> None:
+            pass
+
+        async def partitions_for(self, _topic: str) -> set[int]:
+            await asyncio.sleep(0.1)
+            return {0}
+
+    def create_slow_producer(**_kwargs: Any) -> SlowMetadataProducer:
+        return SlowMetadataProducer()
+
+    monkeypatch.setattr("retro_backend.producer.AIOKafkaProducer", create_slow_producer)
+    producer = KafkaEventProducer(Settings(readiness_timeout_seconds=0.01))
+    await producer.start()
+
+    assert await producer.healthcheck() is False
