@@ -30,6 +30,27 @@ async def test_issue_token_stores_only_sha256_hash(
         assert token not in user.auth_token_hash
 
 
+@pytest.mark.parametrize(
+    "user_id",
+    ["", "alice", "usr_", "usr_contains space", "usr_slash/name", "usr_nonascii_\u00e9"],
+)
+async def test_issue_token_rejects_user_ids_outside_v2_grammar(
+    session_factory: async_sessionmaker[AsyncSession], user_id: str
+) -> None:
+    with pytest.raises(ValueError, match="user ID has an invalid format"):
+        await issue_token(session_factory, user_id)
+
+
+async def test_issue_token_accepts_full_v2_user_id_grammar(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    token = await issue_token(session_factory, "usr_Alice.1-test_ok")
+
+    assert token.startswith("retro_")
+    async with session_factory() as session:
+        assert await session.get(User, "usr_Alice.1-test_ok") is not None
+
+
 async def test_issue_token_requires_rotate_for_existing_user(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

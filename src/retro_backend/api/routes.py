@@ -73,6 +73,11 @@ async def live() -> dict[str, str]:
     return {"status": "healthy"}
 
 
+@router.get("/v1/me")
+async def me(user_id: str = Depends(require_user_id)) -> dict[str, str]:
+    return {"user_id": user_id}
+
+
 @router.get("/health/ready")
 async def ready(request: Request, session: AsyncSession = Depends(get_session)) -> dict[str, str]:
     timeout = request.app.state.settings.readiness_timeout_seconds

@@ -13,6 +13,7 @@ from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .config import get_settings
+from .contracts import USER_ID
 from .database import create_database_engine, create_session_factory
 from .models import User
 from .redis_client import create_redis
@@ -57,8 +58,8 @@ async def issue_token(
     rotate: bool = False,
     redis: Redis | None = None,
 ) -> str:
-    if not user_id:
-        raise ValueError("user ID must not be empty")
+    if not USER_ID.fullmatch(user_id):
+        raise ValueError("user ID has an invalid format")
     token = generate_token()
     tombstone_key: str | None = None
     tombstone_value: str | None = None
