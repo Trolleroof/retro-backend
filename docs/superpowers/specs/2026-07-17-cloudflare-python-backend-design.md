@@ -75,6 +75,7 @@ Cloudflare replaces each former infrastructure dependency directly:
 retro-backend/
   src/retro_backend/
     entry.py                 # Worker fetch, queue, and scheduled entrypoints
+    worker_http.py           # Pre-ASGI Worker body boundary
     app.py                   # FastAPI application and exception mapping
     api/
       health.py              # Liveness and readiness routes
@@ -120,7 +121,7 @@ GET  /v1/high-scores/{game_type}
 
 Gameplay and score routes use `Authorization: Bearer <opaque-token>`.
 
-The v2 gameplay request remains compatible with `interaction-trace-chunk-v2.json`. The API performs bounded-body parsing, schema-envelope checks, and authenticated identity checks. Complete event semantics remain asynchronous.
+The v2 gameplay request remains compatible with `interaction-trace-chunk-v2.json`. The Worker fetch boundary bounds the raw stream before the ASGI adapter buffers it. FastAPI then performs authentication, bounded-body defense in depth, schema-envelope checks, and authenticated identity checks. Complete event semantics remain asynchronous.
 
 The Cloudflare acknowledgment removes Kafka-specific offsets:
 
@@ -141,24 +142,26 @@ The Cloudflare acknowledgment removes Kafka-specific offsets:
 
 ## Gameplay Ingestion Flow
 
-1. Resolve the bearer token by SHA-256 hash in D1. Raw tokens never enter logs, storage, or queue messages.
-2. Read at most 256 KiB from the request and reject an empty or oversized body.
-3. Parse only the v2 envelope and verify that chunk and event `user_id` values match the authenticated user.
-4. Compute the raw-body SHA-256 and address a `ChunkGate` Durable Object by authenticated user plus chunk ID.
-5. Ask the object to reserve publication:
+1. At the Worker fetch boundary, reject a valid `Content-Length` above 256 KiB or read the incoming stream only to that cap. This happens before the ASGI adapter can buffer the request.
+2. Rebuild the Worker request from the exact bounded bytes without the original `Content-Length`. The current ASGI adapter makes a second, bounded copy for FastAPI.
+3. Run FastAPI authentication by resolving the bearer token's SHA-256 hash in D1. Raw tokens never enter logs, storage, or queue messages.
+4. Apply the native per-user ingestion rate limit, then run the route-level bounded reader as defense in depth.
+5. Parse only the v2 envelope and verify that chunk and event `user_id` values match the authenticated user.
+6. Compute the raw-body SHA-256 and address a `ChunkGate` Durable Object by authenticated user plus chunk ID.
+7. Ask the object to reserve publication:
    - Same ID and same hash already accepted: return the cached acknowledgment with `duplicate: true`.
    - Same ID and different hash: return `409`.
    - Same hash currently publishing: return retryable `503`.
    - New identity: record a publishing lease and continue.
-6. Write the exact bytes conditionally to a deterministic R2 key:
+8. Write the exact bytes conditionally to a deterministic R2 key:
 
    ```text
    raw/user=<user_id>/game=<game_id>/chunk=<chunk_id>.json
    ```
 
    Store the SHA-256, schema version, and authenticated identifiers as custom metadata. A pre-existing object is success only when its stored hash matches.
-7. Publish a small JSON pointer to `retro-gameplay-events`. The Queue message contains the R2 key, hash, authenticated user ID, game ID, chunk ID, and receipt time. It never contains a bearer token or the full raw body. This avoids the current 128 KB Queue message limit while preserving the 256 KiB HTTP contract.
-8. Cache the acknowledgment in the Durable Object and return `202`.
+9. Publish a small JSON pointer to `retro-gameplay-events`. The Queue message contains the R2 key, hash, authenticated user ID, game ID, chunk ID, and receipt time. It never contains a bearer token or the full raw body. This avoids the current 128 KB Queue message limit while preserving the 256 KiB HTTP contract.
+10. Cache the acknowledgment in the Durable Object and return `202`.
 
 If R2 succeeds and Queue publication fails, the API returns `503` and a retry reuses the matching R2 object before retrying the Queue send. If the Queue accepts immediately before the Worker loses its response, a client retry may enqueue the same pointer again. Consumers therefore remain idempotent.
 
@@ -234,8 +237,8 @@ PostHog analytics and Stripe billing are future work by explicit user direction.
 | Missing or invalid bearer token | `401`, no R2 or Queue work |
 | Malformed or unsupported chunk envelope | `400`, no R2 or Queue work |
 | Chunk ID reused with different bytes | `409`, existing object untouched |
-| Request body above 256 KiB | `413` before full buffering |
-| Authenticated result body above 16 KiB | `413` before full buffering or parsing |
+| Gameplay body above 256 KiB | Direct `413` before ASGI buffering or authentication |
+| Result or unknown-route body above 16 KiB | Direct `413` before ASGI buffering or authentication |
 | Malformed or invalid result JSON | `422`, no score mutation |
 | Durable Object unavailable | `503`, client keeps local outbox item |
 | R2 write unavailable | `503`, no Queue acknowledgment |

@@ -6,7 +6,7 @@
 
 **Goal:** Replace the development FastAPI/PostgreSQL/Redis/Kafka stack with a deployable Cloudflare-native backend whose runtime logic is entirely Python.
 
-**Architecture:** A Python Worker delegates HTTP requests to FastAPI through Cloudflare's ASGI adapter and exposes Queue plus Durable Object entrypoints from the same module. D1 stores users and high scores, R2 stores exact and validated gameplay objects, a per-chunk Durable Object coordinates publication, and one Queue isolates gameplay processing from request latency.
+**Architecture:** A Python Worker bounds body streams at its fetch boundary, rebuilds a bounded request, and then delegates HTTP requests to FastAPI through Cloudflare's ASGI adapter. The same module exposes Queue plus Durable Object entrypoints. D1 stores users and high scores, R2 stores exact and validated gameplay objects, a per-chunk Durable Object coordinates publication, and one Queue isolates gameplay processing from request latency.
 
 **Tech Stack:** Python 3.13, FastAPI, Pydantic 2, HTTPX, Cloudflare Python Workers, pywrangler, D1, R2, Queues, Durable Objects, pytest, Ruff, BasedPyright.
 
@@ -24,6 +24,7 @@ src/retro_backend/
   bindings.py                  binding protocols and JS/dict conversion helpers
   contracts.py                 Pydantic wire contracts and v2 semantic validation
   entry.py                     Worker fetch and queue handlers
+  worker_http.py               pre-ASGI Worker body boundary
   chunk_gate.py                Cloudflare Durable Object and gate client
   observability.py             allowlisted structured JSON logging
   api/
@@ -220,7 +221,7 @@ RETURNING score
 
 When `RETURNING` produces no row, select the existing score and report `updated=False`.
 
-Create `app = FastAPI(title="Retro Backend", version="0.2.0")`, include health and result routers, and return `202` for accepted game results. Authenticate the result route before reading its body, enforce a hard 16 KiB streaming limit, and call `GameResultRequest.model_validate_json()` manually so invalid JSON remains `422`.
+Create `app = FastAPI(title="Retro Backend", version="0.2.0")`, include health and result routers, and return `202` for accepted game results. The Worker fetch boundary enforces the hard 16 KiB streaming limit before ASGI buffering. FastAPI then authenticates before the route calls `GameResultRequest.model_validate_json()`, so invalid JSON remains `422` and rejected input cannot mutate scores.
 
 `migrations/0001_core.sql` creates only `users` and `high_scores`, enables foreign keys, and adds a descending leaderboard index.
 
@@ -398,7 +399,7 @@ except Exception as error:
     raise IngestionUnavailable("event ingestion unavailable") from error
 ```
 
-The FastAPI chunk and result routes share a `read_limited_body()` helper over `request.stream()`. It rejects `Content-Length` above each route's hard limit before reading and stops as soon as accumulated bytes cross the limit. Both routes authenticate before reading. Chunk errors map to `400`, `409`, and `503`; malformed result JSON maps to `422`, and an authenticated result body above 16 KiB maps to `413`.
+The Worker fetch boundary rejects `Content-Length` above each route's hard limit before reading and stops as soon as accumulated bytes cross the limit. It rebuilds a bounded Worker request before the current ASGI adapter makes its own copy. The FastAPI chunk and result routes retain the shared `read_limited_body()` helper as defense in depth after authentication. Chunk errors map to `400`, `409`, and `503`; malformed result JSON maps to `422`, and an oversized body maps directly to `413` at the Worker boundary.
 
 After authentication and before parsing or persistence, the route calls the Cloudflare Rate Limiting binding with `{"key": f"{user_id}:game-event-chunks"}`. A false `success` result returns `429` with `Retry-After: 60`.
 
@@ -572,23 +573,33 @@ Expected: assertions fail because `entry.py` and `wrangler.toml` do not exist an
 
 - [ ] **Step 3: Implement Worker entrypoint and Cloudflare configuration**
 
-`entry.py` is exactly the runtime bridge:
+`entry.py` is the runtime bridge. Its fetch handler must delegate through the bounded helper instead of passing the incoming request directly to ASGI:
 
 ```python
 import asgi
-from workers import WorkerEntrypoint
+from workers import Blob, Request, Response, WorkerEntrypoint
 
 from retro_backend.app import app
 from retro_backend.consumers.dispatch import dispatch_queue
+from retro_backend.worker_http import fetch_with_body_limit
 
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        return await asgi.fetch(app, request, self.env)
+        return await fetch_with_body_limit(
+            request,
+            self.env,
+            app=app,
+            asgi_fetch=asgi.fetch,
+            request_factory=_rebuild_worker_request,
+            too_large_response=_too_large_response,
+        )
 
     async def queue(self, batch):
         await dispatch_queue(batch, self.env)
 ```
+
+`_rebuild_worker_request` uses `Blob` and `Request` to preserve the URL, method, and all headers except the original `Content-Length`. `_too_large_response` returns a direct JSON `413` through `Response.from_json`. Result and unknown body-bearing paths use the configured limit clamped to 16 KiB; gameplay ingestion uses its configured limit clamped to 256 KiB.
 
 The exported `ChunkGate` class remains in `chunk_gate.py` and extends `workers.DurableObject` with `reserve`, `accept`, `release`, and `alarm` RPC methods backed by storage key `receipt`. It persists before returning and calls `deleteAll()` in the alarm.
 

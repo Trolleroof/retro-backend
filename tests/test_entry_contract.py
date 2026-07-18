@@ -18,6 +18,7 @@ NODE_VERSION_PATH = ROOT / ".node-version"
 NODE_PREFLIGHT_PATH = ROOT / "scripts" / "node_preflight.py"
 CI_PATH = ROOT / ".github" / "workflows" / "ci.yml"
 RESULTS_API_PATH = SOURCE_ROOT / "api" / "results.py"
+WORKER_HTTP_PATH = SOURCE_ROOT / "worker_http.py"
 DESIGN_PATH = (
     ROOT
     / "docs"
@@ -108,12 +109,19 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
 
     assert "asgi" in imports
     assert ("workers", "WorkerEntrypoint") in imported_names
+    assert ("workers", "Blob") in imported_names
+    assert ("workers", "Request") in imported_names
+    assert ("workers", "Response") in imported_names
     assert ("retro_backend.app", "app") in imported_names
     assert (
         "retro_backend.consumers.dispatch",
         "dispatch_queue",
     ) in imported_names
     assert ("retro_backend.chunk_gate", "ChunkGate") in imported_names
+    assert (
+        "retro_backend.worker_http",
+        "fetch_with_body_limit",
+    ) in imported_names
 
     default = _class(tree, "Default")
     assert [base.id for base in default.bases if isinstance(base, ast.Name)] == [
@@ -129,8 +137,50 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
     ]
 
     source = _read(ENTRY_PATH)
-    assert "await asgi.fetch(app, request, self.env)" in source
+    assert "return await fetch_with_body_limit(" in source
+    assert "asgi_fetch=asgi.fetch" in source
+    assert "request_factory=_rebuild_worker_request" in source
+    assert "too_large_response=_too_large_response" in source
+    assert "asgi.fetch(app, request" not in source
+    assert "Blob(body).js_object" in source
+    assert "Request(" in source
+    assert "incoming.url" in source
+    assert "method=cast(HTTPMethod, incoming.method)" in source
+    assert "headers=headers" in source
+    assert "redirect=incoming.redirect" in source
+    assert "Response.from_json(" in source
+    assert '{"detail": "request body exceeds maximum size"}' in source
+    assert "status=413" in source
     assert "await dispatch_queue(batch, self.env)" in source
+
+
+def test_worker_http_boundary_is_packaged_as_python_runtime_source() -> None:
+    source = _read(WORKER_HTTP_PATH)
+
+    assert "async def fetch_with_body_limit(" in source
+    assert "content-length" in source
+    assert "getReader" in source
+    assert "await _cancel(reader)" in source
+    assert "byteLength" in source
+    assert "request_factory(request, raw_body, headers)" in source
+    assert "await asgi_fetch(app, bounded_request, environment)" in source
+
+
+def test_docs_place_body_limit_before_asgi_buffering_and_fastapi_auth() -> None:
+    readme = _read(README_PATH)
+    design = _read(DESIGN_PATH)
+    plan = _read(PLAN_PATH)
+
+    for source in (readme, design, plan):
+        normalized = source.casefold()
+        assert "worker fetch boundary" in normalized
+        assert "asgi" in normalized
+        assert "fastapi" in normalized
+    combined = "\n".join((readme, design, plan)).casefold()
+    assert "authenticates before reading" not in combined
+    assert "both routes authenticate before reading" not in combined
+    assert "return await asgi.fetch(app, request, self.env)" not in combined
+    assert "fetch_with_body_limit" in plan
 
 
 def test_chunk_gate_uses_explicit_runtime_base_branch() -> None:

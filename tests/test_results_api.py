@@ -76,7 +76,7 @@ async def test_result_route_requires_bearer_token(app_client: AsyncClient) -> No
     assert response.status_code == 401
 
 
-async def test_result_route_authenticates_before_reading_body(
+async def test_result_route_dependency_runs_before_route_level_body_read(
     app_client: AsyncClient,
 ) -> None:
     response = await app_client.post(

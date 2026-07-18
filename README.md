@@ -20,17 +20,26 @@ state is kept in bindings:
 - `GAMEPLAY_QUEUE` carries small pointers to R2 objects, never full trajectories.
 - `INGEST_RATE_LIMITER` limits authenticated ingestion before storage work.
 
-For `POST /v1/game-event-chunks`, the Worker authenticates against a token hash
-in D1, applies the native rate limit, validates a bounded body, and reserves the
-logical chunk in `CHUNK_GATE`. It writes the exact bytes to R2 before publishing
-a small object pointer to `retro-gameplay-events`. Only after Queue publication
-does the Durable Object persist the accepted acknowledgment. The consumer loads
-the exact object from R2, validates it again, and writes deterministic derived
-objects before acknowledging the Queue message.
+The Worker fetch boundary checks a valid `Content-Length`, then reads streamed
+bodies only up to the route's configured hard cap before the ASGI adapter can
+buffer them. It rebuilds the request from those exact bounded bytes without the
+original `Content-Length`. The current adapter then makes its own bounded copy
+for FastAPI. FastAPI authentication runs after this boundary copy and before
+rate limiting, storage, contract validation, or score mutation.
 
-For `POST /v1/game-results`, the Worker authenticates before reading at most
-16 KiB, validates the JSON contract, and then conditionally updates the D1 high
-score. Rejected bodies never reach the score mutation.
+For `POST /v1/game-event-chunks`, the fetch boundary permits at most 256 KiB.
+After FastAPI authentication, the route applies the native rate limit, validates
+the bounded body, and reserves the logical chunk in `CHUNK_GATE`. It writes the
+exact bytes to R2 before publishing a small object pointer to
+`retro-gameplay-events`. Only after Queue publication does the Durable Object
+persist the accepted acknowledgment. The consumer loads the exact object from
+R2, validates it again, and writes deterministic derived objects before
+acknowledging the Queue message.
+
+For `POST /v1/game-results` and any other body-bearing path, the fetch boundary
+permits at most 16 KiB. The authenticated result route then validates the JSON
+contract and conditionally updates the D1 high score. Rejected bodies never
+reach the score mutation.
 
 These resources do not form one global transaction. A Durable Object serializes
 transitions for its own chunk and has strongly consistent private storage. D1

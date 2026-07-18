@@ -17,10 +17,15 @@ def _decimal_exceeds(value: str, limit: int) -> bool:
     return normalized > limit_text
 
 
+def content_length_exceeds(value: object, max_bytes: int) -> bool:
+    """Compare a valid decimal Content-Length without parsing huge integers."""
+    return isinstance(value, str) and _decimal_exceeds(value, max_bytes)
+
+
 async def read_limited_body(request: Request, *, max_bytes: int) -> bytes:
     """Read at most ``max_bytes``, rejecting known oversize bodies up front."""
     content_length = request.headers.get("content-length")
-    if content_length is not None and _decimal_exceeds(content_length, max_bytes):
+    if content_length_exceeds(content_length, max_bytes):
         raise BodyTooLarge("request body exceeds maximum size")
 
     body = bytearray()
