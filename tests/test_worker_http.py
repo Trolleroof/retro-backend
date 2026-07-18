@@ -277,6 +277,59 @@ async def test_fetch_boundary_passes_no_body_request_through_unchanged() -> None
     assert request_factory.calls == []
 
 
+async def test_fetch_boundary_unwraps_bodyless_extension_method_request() -> None:
+    raw_request = SimpleNamespace(
+        body=None,
+        method="PROPFIND",
+        url="https://retro.example/v1/resource",
+    )
+
+    class RuntimeRequest:
+        def __init__(self, js_object: SimpleNamespace) -> None:
+            self.js_object = js_object
+            self.method_accesses = 0
+
+        @property
+        def body(self) -> object:
+            return self.js_object.body
+
+        @property
+        def method(self) -> HTTPMethod:
+            self.method_accesses += 1
+            return HTTPMethod[self.js_object.method]
+
+    request = RuntimeRequest(raw_request)
+    environment = _environment()
+    calls: list[tuple[object, object, object]] = []
+
+    async def asgi_fetch(
+        app: object,
+        incoming: object,
+        called_environment: object,
+    ) -> SimpleNamespace:
+        assert incoming is raw_request
+        assert raw_request.method == "PROPFIND"
+        calls.append((app, incoming, called_environment))
+        return SimpleNamespace(status=200)
+
+    request_factory = RequestFactorySpy()
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=asgi_fetch,
+        request_factory=request_factory,
+        too_large_response=lambda: SimpleNamespace(status=413),
+    )
+
+    assert getattr(response, "status", None) == 200
+    assert calls == [("fastapi-app", raw_request, environment)]
+    assert request.method_accesses == 0
+    assert request_factory.calls == []
+    with pytest.raises(KeyError, match="PROPFIND"):
+        _ = request.method
+
+
 @pytest.mark.parametrize(
     ("path", "environment", "content_length"),
     [

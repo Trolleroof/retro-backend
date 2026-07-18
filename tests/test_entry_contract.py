@@ -167,6 +167,8 @@ def test_worker_http_boundary_is_packaged_as_python_runtime_source() -> None:
     assert "getReader" in source
     assert "await _cancel(reader)" in source
     assert "byteLength" in source
+    assert 'asgi_request = getattr(request, "js_object", request)' in source
+    assert "await asgi_fetch(app, asgi_request, environment)" in source
     assert "request_factory(request, raw_body, headers)" in source
     assert "await asgi_fetch(app, bounded_request, environment)" in source
 

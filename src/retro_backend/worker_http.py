@@ -185,7 +185,8 @@ async def fetch_with_body_limit(
     """Bound and rebuild a body-bearing request before invoking ASGI."""
     stream = value_field(request, "body")
     if is_binding_null(stream):
-        return await asgi_fetch(app, request, environment)
+        asgi_request = getattr(request, "js_object", request)
+        return await asgi_fetch(app, asgi_request, environment)
 
     max_bytes = _body_limit(request, environment)
     headers = _header_items(value_field(request, "headers"))
