@@ -10,10 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".node-version"
+      - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
-      - run: uv run pytest
-      - run: uv run ruff check .
-      - run: uv run basedpyright
+      - run: make verify
+      - run: make worker-sync
+      - run: make worker-dry-run

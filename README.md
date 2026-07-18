@@ -126,7 +126,7 @@ The local API is then available at `http://127.0.0.1:8787`. Useful routes are:
 - `GET /v1/me`
 - `POST /v1/game-event-chunks`
 - `POST /v1/game-results`
-- `GET /v1/leaderboards/{game_type}`
+- `GET /v1/high-scores/{game_type}`
 
 Requests to authenticated routes use `Authorization: Bearer <opaque-token>`.
 

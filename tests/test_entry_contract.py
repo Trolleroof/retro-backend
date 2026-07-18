@@ -16,6 +16,8 @@ MAKEFILE_PATH = ROOT / "Makefile"
 README_PATH = ROOT / "README.md"
 NODE_VERSION_PATH = ROOT / ".node-version"
 NODE_PREFLIGHT_PATH = ROOT / "scripts" / "node_preflight.py"
+CI_PATH = ROOT / ".github" / "workflows" / "ci.yml"
+RESULTS_API_PATH = SOURCE_ROOT / "api" / "results.py"
 DESIGN_PATH = (
     ROOT
     / "docs"
@@ -76,6 +78,17 @@ def _async_method(class_node: ast.ClassDef, name: str) -> ast.AsyncFunctionDef:
 
 def _wrangler_config() -> dict[str, object]:
     return tomllib.loads(_read(WRANGLER_PATH))
+
+
+def _workflow_run_commands(source: str) -> list[str]:
+    return [
+        match.group("command").strip().strip("\"'")
+        for match in re.finditer(
+            r"^\s*-\s+run:\s*(?P<command>[^#\n]+)",
+            source,
+            flags=re.MULTILINE,
+        )
+    ]
 
 
 def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
@@ -392,6 +405,41 @@ def test_worker_make_targets_run_node_preflight_first() -> None:
             if "pywrangler" in command
         )
         assert preflight_index < pywrangler_index
+
+
+def test_ci_uses_pinned_toolchains_and_canonical_worker_verification() -> None:
+    workflow = _read(CI_PATH)
+    commands = _workflow_run_commands(workflow)
+
+    assert re.search(r"actions/setup-python@v\d+", workflow)
+    assert re.search(r"python-version:\s*[\"']?3\.13[\"']?", workflow)
+    assert re.search(r"actions/setup-node@v\d+", workflow)
+    assert re.search(r"node-version-file:\s*[\"']?\.node-version[\"']?", workflow)
+    assert not re.search(r"^\s+node-version:\s*", workflow, flags=re.MULTILINE)
+
+    expected_commands = {
+        "uv sync --frozen",
+        "make verify",
+        "make worker-sync",
+        "make worker-dry-run",
+    }
+    assert expected_commands <= set(commands)
+    assert commands.index("make worker-sync") < commands.index("make worker-dry-run")
+    assert "make deploy" not in commands
+    assert all("--remote" not in command for command in commands)
+    assert all(
+        "pywrangler deploy" not in command or "--dry-run" in command
+        for command in commands
+    )
+
+
+def test_readme_lists_the_implemented_high_scores_route() -> None:
+    readme = _read(README_PATH)
+    results_api = _read(RESULTS_API_PATH)
+
+    assert '"/v1/high-scores/{game_type}"' in results_api
+    assert "`GET /v1/high-scores/{game_type}`" in readme
+    assert "/v1/leaderboards/{game_type}" not in readme
 
 
 def test_design_and_plan_mark_deferred_integrations_as_future_work() -> None:
