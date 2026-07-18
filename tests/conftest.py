@@ -260,6 +260,32 @@ class FakeRateLimiter:
         return {"success": self.success}
 
 
+class FakeAuthCache:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.get_calls: list[tuple[str, str]] = []
+        self.put_calls: list[tuple[str, str, str]] = []
+        self.get_failure: Exception | None = None
+        self.put_failure: Exception | None = None
+
+    async def get(self, request_url: str, token_digest: str) -> str | None:
+        self.get_calls.append((request_url, token_digest))
+        if self.get_failure is not None:
+            raise self.get_failure
+        return self.values.get(token_digest)
+
+    async def put(
+        self,
+        request_url: str,
+        token_digest: str,
+        user_id: str,
+    ) -> None:
+        self.put_calls.append((request_url, token_digest, user_id))
+        if self.put_failure is not None:
+            raise self.put_failure
+        self.values[token_digest] = user_id
+
+
 class FakeChunkGateStub:
     def __init__(self, operation_order: list[str], rpc_order: list[str]) -> None:
         self.operation_order = operation_order
@@ -382,6 +408,7 @@ def fake_env(fake_d1: FakeD1) -> SimpleNamespace:
     operation_order: list[str] = []
     return SimpleNamespace(
         DB=fake_d1,
+        AUTH_CACHE=FakeAuthCache(),
         RAW_BUCKET=FakeR2Bucket(operation_order),
         GAMEPLAY_QUEUE=FakeQueueBinding(operation_order),
         CHUNK_GATE=FakeChunkGateNamespace(operation_order),

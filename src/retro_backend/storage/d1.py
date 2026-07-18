@@ -67,7 +67,14 @@ class D1Repository:
 
     async def resolve_user(self, token: str) -> str | None:
         digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
-        row = await self.database.prepare(_RESOLVE_USER_SQL).bind(digest).first()
+        return await self.resolve_user_hash(digest)
+
+    async def resolve_user_hash(self, token_digest: str) -> str | None:
+        row = (
+            await self.database.prepare(_RESOLVE_USER_SQL)
+            .bind(token_digest)
+            .first()
+        )
         if row is None:
             return None
         user_id = value_field(row, "id")

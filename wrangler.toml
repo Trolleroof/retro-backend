@@ -8,6 +8,7 @@ compatibility_flags = ["python_workers"]
 enabled = true
 
 [vars]
+AUTH_CACHE_TTL_SECONDS = 60
 MAX_CHUNK_BYTES = 262144
 MAX_RESULT_BYTES = 16384
 CHUNK_DEDUP_TTL_MS = 172800000

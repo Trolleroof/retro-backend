@@ -14,7 +14,9 @@ The Worker may execute in any Cloudflare location and an isolate may be
 restarted at any time. Request state therefore stays local to a handler. Durable
 state is kept in bindings:
 
-- D1 stores users, token hashes, and high scores.
+- D1 is authoritative for users, token hashes, and high scores.
+- Cloudflare's Cache API stores positive token-hash-to-user resolutions briefly
+  at the edge; every auth cache miss falls through to D1.
 - R2 stores exact request bytes and deterministic derived gameplay artifacts.
 - `CHUNK_GATE` is one globally addressed Durable Object per logical user/chunk.
 - `GAMEPLAY_QUEUE` carries small pointers to R2 objects, never full trajectories.
@@ -26,6 +28,19 @@ buffer them. It rebuilds the request from those exact bounded bytes without the
 original `Content-Length`. The current adapter then makes its own bounded copy
 for FastAPI. FastAPI authentication runs after this boundary copy and before
 rate limiting, storage, contract validation, or score mutation.
+
+Authentication hashes each opaque bearer token before checking
+`caches.default`. A valid hit avoids a D1 auth query. A miss, malformed cache
+entry, or Cache API failure queries D1 and caches only a successful resolution
+for 60 seconds. Invalid tokens are never cached, and raw tokens never enter
+cache keys or values. Leaderboard responses are not cached. R2 remains limited
+to raw and derived gameplay files; it never stores authentication data.
+
+This uses the programmatic Cache API from inside the Worker. Worker-level
+caching remains disabled so every request executes the authentication gateway;
+do not add a top-level `[cache] enabled = true` setting. Production should use a
+Cloudflare custom domain for functional edge-cache operations. Where Cache API
+operations are unavailable, authentication safely falls through to D1.
 
 For `POST /v1/game-event-chunks`, the fetch boundary permits at most 256 KiB.
 After FastAPI authentication, the route applies the native rate limit, validates
@@ -161,6 +176,7 @@ not store the plaintext token in D1, source control, logs, or analytics.
 
 Non-secret Worker variables live in `wrangler.toml`:
 
+- `AUTH_CACHE_TTL_SECONDS=60`
 - `MAX_CHUNK_BYTES=262144`
 - `MAX_RESULT_BYTES=16384`
 - `CHUNK_DEDUP_TTL_MS=172800000`

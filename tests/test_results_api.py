@@ -1,3 +1,4 @@
+import hashlib
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
@@ -58,6 +59,7 @@ async def test_health_ready_rejects_missing_database_binding(
 async def test_current_user_returns_authenticated_user_id(
     app_client: AsyncClient,
     fake_d1: Any,
+    fake_env: SimpleNamespace,
 ) -> None:
     fake_d1.first_rows.append({"id": "usr_example"})
 
@@ -68,6 +70,94 @@ async def test_current_user_returns_authenticated_user_id(
 
     assert response.status_code == 200
     assert response.json() == {"user_id": "usr_example"}
+    digest = hashlib.sha256(b"opaque").hexdigest()
+    assert fake_env.AUTH_CACHE.get_calls == [
+        ("http://test/v1/me", digest),
+    ]
+    assert fake_env.AUTH_CACHE.put_calls == [
+        ("http://test/v1/me", digest, "usr_example"),
+    ]
+
+
+async def test_current_user_cache_hit_skips_d1_lookup(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: SimpleNamespace,
+) -> None:
+    digest = hashlib.sha256(b"opaque").hexdigest()
+    fake_env.AUTH_CACHE.values[digest] = "usr_cached"
+
+    response = await app_client.get(
+        "/v1/me",
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "usr_cached"}
+    assert fake_d1.prepared_sql == []
+    assert fake_env.AUTH_CACHE.put_calls == []
+
+
+async def test_repeated_valid_token_uses_one_d1_auth_lookup(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: SimpleNamespace,
+) -> None:
+    fake_d1.first_rows.append({"id": "usr_example"})
+
+    first = await app_client.get(
+        "/v1/me",
+        headers={"Authorization": "Bearer opaque"},
+    )
+    second = await app_client.get(
+        "/v1/me",
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json() == {"user_id": "usr_example"}
+    assert len(fake_d1.first_calls) == 1
+    assert len(fake_env.AUTH_CACHE.get_calls) == 2
+    assert len(fake_env.AUTH_CACHE.put_calls) == 1
+
+
+async def test_unknown_token_is_not_negatively_cached(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: SimpleNamespace,
+) -> None:
+    first = await app_client.get(
+        "/v1/me",
+        headers={"Authorization": "Bearer unknown"},
+    )
+    second = await app_client.get(
+        "/v1/me",
+        headers={"Authorization": "Bearer unknown"},
+    )
+
+    assert first.status_code == second.status_code == 401
+    assert len(fake_d1.first_calls) == 2
+    assert len(fake_env.AUTH_CACHE.get_calls) == 2
+    assert fake_env.AUTH_CACHE.put_calls == []
+
+
+async def test_auth_cache_failures_fall_through_to_d1(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: SimpleNamespace,
+) -> None:
+    fake_env.AUTH_CACHE.get_failure = RuntimeError("cache unavailable")
+    fake_env.AUTH_CACHE.put_failure = RuntimeError("cache unavailable")
+    fake_d1.first_rows.append({"id": "usr_example"})
+
+    response = await app_client.get(
+        "/v1/me",
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "usr_example"}
+    assert len(fake_d1.first_calls) == 1
 
 
 async def test_result_route_requires_bearer_token(app_client: AsyncClient) -> None:
@@ -199,9 +289,7 @@ async def test_result_route_normalizes_completion_offsets_for_text_ordering(
         [
             {"id": "usr_example"},
             {"score": "1"},
-            {"id": "usr_example"},
             {"score": "1"},
-            {"id": "usr_example"},
             {"score": "1"},
         ]
     )
@@ -274,3 +362,39 @@ async def test_leaderboard_preserves_database_order_and_binds_limit(
         ],
     }
     assert fake_d1.bind_calls[-1] == ("2048", 2)
+
+
+async def test_leaderboard_response_is_not_cached(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: SimpleNamespace,
+) -> None:
+    fake_d1.first_rows.append({"id": "usr_example"})
+    fake_d1.run_rows.extend(
+        [
+            [
+                {
+                    "user_id": "usr_first",
+                    "score": "100",
+                    "achieved_at": "2026-07-17T18:42:00Z",
+                }
+            ],
+            [
+                {
+                    "user_id": "usr_second",
+                    "score": "200",
+                    "achieved_at": "2026-07-17T18:43:00Z",
+                }
+            ],
+        ]
+    )
+    headers = {"Authorization": "Bearer opaque"}
+
+    first = await app_client.get("/v1/high-scores/2048", headers=headers)
+    second = await app_client.get("/v1/high-scores/2048", headers=headers)
+
+    assert first.json()["high_scores"][0]["user_id"] == "usr_first"
+    assert second.json()["high_scores"][0]["user_id"] == "usr_second"
+    assert len(fake_d1.first_calls) == 1
+    assert len(fake_d1.run_calls) == 2
+    assert len(fake_env.AUTH_CACHE.put_calls) == 1

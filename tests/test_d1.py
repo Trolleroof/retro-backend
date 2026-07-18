@@ -49,6 +49,16 @@ async def test_auth_repository_resolves_token_hash(fake_d1: Any) -> None:
     assert "auth_token_hash = ?1" in fake_d1.prepared_sql[-1]
 
 
+async def test_auth_repository_accepts_precomputed_token_hash(fake_d1: Any) -> None:
+    digest = hash_token("opaque")
+    fake_d1.first_rows.append({"id": "usr_example"})
+
+    user_id = await D1Repository(fake_d1).resolve_user_hash(digest)
+
+    assert user_id == "usr_example"
+    assert fake_d1.bind_calls == [(digest,)]
+
+
 async def test_auth_repository_returns_none_for_unknown_token(fake_d1: Any) -> None:
     assert await D1Repository(fake_d1).resolve_user("unknown") is None
 

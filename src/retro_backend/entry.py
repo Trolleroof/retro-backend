@@ -1,5 +1,6 @@
 """Cloudflare Python Worker entrypoints for HTTP and Queue events."""
 
+import sys
 from http import HTTPMethod
 from typing import Protocol, cast
 
@@ -7,9 +8,17 @@ import asgi
 from workers import Blob, Request, Response, WorkerEntrypoint
 
 from retro_backend.app import app
+from retro_backend.auth_cache import (
+    build_auth_cache_environment,
+)
 from retro_backend.chunk_gate import ChunkGate
 from retro_backend.consumers.dispatch import dispatch_queue
 from retro_backend.worker_http import fetch_with_body_limit
+
+if sys.platform == "emscripten":
+    from js import caches  # pyright: ignore[reportMissingImports]
+else:
+    caches = None
 
 __all__ = ["ChunkGate", "Default"]
 
@@ -46,11 +55,35 @@ def _too_large_response() -> Response:
     )
 
 
+def _cache_request(cache_url: str) -> object:
+    return Request(cache_url, method=HTTPMethod.GET).js_object
+
+
+def _cache_response(body: str, ttl_seconds: int) -> object:
+    return Response(
+        body,
+        headers={
+            "Cache-Control": f"max-age={ttl_seconds}",
+            "Content-Type": "application/json",
+        },
+    ).js_object
+
+
+def _environment_with_auth_cache(environment: object) -> object:
+    return build_auth_cache_environment(
+        environment,
+        caches,
+        request_factory=_cache_request,
+        response_factory=_cache_response,
+    )
+
+
 class Default(WorkerEntrypoint):
     async def fetch(self, request: object) -> object:
+        environment = _environment_with_auth_cache(self.env)
         return await fetch_with_body_limit(
             request,
-            self.env,
+            environment,
             app=app,
             asgi_fetch=asgi.fetch,
             request_factory=_rebuild_worker_request,

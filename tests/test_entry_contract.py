@@ -18,6 +18,7 @@ NODE_VERSION_PATH = ROOT / ".node-version"
 NODE_PREFLIGHT_PATH = ROOT / "scripts" / "node_preflight.py"
 CI_PATH = ROOT / ".github" / "workflows" / "ci.yml"
 RESULTS_API_PATH = SOURCE_ROOT / "api" / "results.py"
+AUTH_CACHE_PATH = SOURCE_ROOT / "auth_cache.py"
 WORKER_HTTP_PATH = SOURCE_ROOT / "worker_http.py"
 DESIGN_PATH = (
     ROOT
@@ -106,6 +107,12 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
         if isinstance(node, ast.ImportFrom)
         for alias in node.names
     }
+    all_imported_names = {
+        (node.module, alias.name)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
 
     assert "asgi" in imports
     assert ("workers", "WorkerEntrypoint") in imported_names
@@ -121,6 +128,11 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
     assert (
         "retro_backend.worker_http",
         "fetch_with_body_limit",
+    ) in imported_names
+    assert ("js", "caches") in all_imported_names
+    assert (
+        "retro_backend.auth_cache",
+        "build_auth_cache_environment",
     ) in imported_names
 
     default = _class(tree, "Default")
@@ -156,6 +168,9 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
     assert "Response.from_json(" in source
     assert '{"detail": "request body exceeds maximum size"}' in source
     assert "status=413" in source
+    assert "build_auth_cache_environment(" in source
+    assert "Cache-Control" in source
+    assert "max-age=" in source
     assert "await dispatch_queue(batch, self.env)" in source
 
 
@@ -323,6 +338,7 @@ def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
     readme = _read(README_PATH)
 
     expected_vars = {
+        "AUTH_CACHE_TTL_SECONDS": 60,
         "MAX_CHUNK_BYTES": 262_144,
         "MAX_RESULT_BYTES": 16_384,
         "CHUNK_DEDUP_TTL_MS": 172_800_000,
@@ -330,6 +346,7 @@ def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
         "ENVIRONMENT": "development",
     }
     assert config["vars"] == expected_vars
+    assert "`AUTH_CACHE_TTL_SECONDS=60`" in readme
     assert "`MAX_RESULT_BYTES=16384`" in readme
     assert "16 KiB" in readme
     assert not any(
@@ -337,6 +354,29 @@ def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
         for key in expected_vars
         for marker in ("secret", "token", "password", "key")
     )
+
+
+def test_auth_cache_uses_d1_misses_without_caching_leaderboards_or_using_r2() -> None:
+    readme = _read(README_PATH)
+    design = _read(DESIGN_PATH)
+    config = _wrangler_config()
+    auth_cache = _read(AUTH_CACHE_PATH)
+    results_api = _read(RESULTS_API_PATH)
+
+    documentation = " ".join("\n".join((readme, design)).casefold().split())
+    assert "auth cache miss" in documentation
+    assert "d1" in documentation
+    assert "leaderboard responses are not cached" in documentation
+    assert "r2" in documentation
+    assert "raw and derived gameplay" in documentation
+    assert "worker-level caching remains disabled" in documentation
+    assert "custom domain" in documentation
+
+    assert "cache" not in config
+    assert "RAW_BUCKET" not in auth_cache
+    assert "R2" not in auth_cache
+    assert "EdgeAuthCache" not in results_api
+    assert "AUTH_CACHE" not in results_api
 
 
 def test_deferred_analytics_and_billing_are_not_configured() -> None:

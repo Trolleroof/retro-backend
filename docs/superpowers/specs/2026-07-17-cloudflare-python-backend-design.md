@@ -44,7 +44,8 @@ GamePigeon local outbox
         |
         v
 Python Worker + FastAPI
-  | auth/hash lookup ----------> D1
+  | positive auth hit ---------> Cloudflare edge cache
+  | auth cache miss -----------> D1
   | chunk coordination --------> ChunkGate Durable Object
   | exact request bytes -------> R2 raw object
   | small durable pointer -----> retro-gameplay-events Queue
@@ -63,7 +64,7 @@ Cloudflare replaces each former infrastructure dependency directly:
 | --- | --- | --- |
 | FastAPI container and Uvicorn | Python Worker with FastAPI ASGI adapter | HTTP routing and validation |
 | PostgreSQL | D1 | Small relational gameplay product state |
-| Redis | Durable Objects | Strongly consistent per-chunk coordination and deduplication |
+| Redis | Cache API plus Durable Objects | Short-lived auth acceleration plus strongly consistent per-chunk coordination and deduplication |
 | Redpanda/Kafka | Queues | Durable asynchronous delivery with retries and a DLQ |
 | S3/MinIO | R2 | Raw and derived gameplay artifacts |
 | Cron container | Cron Trigger or Python Workflow | Cleanup and maintenance |
@@ -144,7 +145,7 @@ The Cloudflare acknowledgment removes Kafka-specific offsets:
 
 1. At the Worker fetch boundary, reject a valid `Content-Length` above 256 KiB or read the incoming stream only to that cap. This happens before the ASGI adapter can buffer the request.
 2. Rebuild the Worker request from the exact bounded bytes without the original `Content-Length`. The current ASGI adapter makes a second, bounded copy for FastAPI.
-3. Run FastAPI authentication by resolving the bearer token's SHA-256 hash in D1. Raw tokens never enter logs, storage, or queue messages.
+3. Run FastAPI authentication by checking a 60-second positive edge-cache entry keyed by the bearer token's SHA-256 hash. Every auth cache miss or cache failure resolves that digest in D1 and fills the cache only after success. Raw tokens never enter cache keys, logs, storage, or queue messages. Leaderboard responses are not cached, and R2 stores only raw and derived gameplay files.
 4. Apply the native per-user ingestion rate limit, then run the route-level bounded reader as defense in depth.
 5. Parse only the v2 envelope and verify that chunk and event `user_id` values match the authenticated user.
 6. Compute the raw-body SHA-256 and address a `ChunkGate` Durable Object by authenticated user plus chunk ID.
