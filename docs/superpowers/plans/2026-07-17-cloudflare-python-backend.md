@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Scope update (2026-07-17):** Stripe, PostHog, and the analytics and billing queues are deferred by user direction. Task 4 and related sections are retained as future work and are not part of the active implementation.
+
 **Goal:** Replace the development FastAPI/PostgreSQL/Redis/Kafka stack with a deployable Cloudflare-native backend whose runtime logic is entirely Python.
 
 **Architecture:** A Python Worker delegates HTTP requests to FastAPI through Cloudflare's ASGI adapter and exposes Queue plus Durable Object entrypoints from the same module. D1 stores small relational product state, R2 stores exact and validated gameplay objects, a per-chunk Durable Object coordinates publication, and Queues isolate gameplay processing, PostHog, and Stripe projections from request latency.
@@ -505,7 +507,9 @@ git add src/retro_backend/consumers src/retro_backend/contracts.py src/retro_bac
 git commit -m "feat: validate queued gameplay chunks"
 ```
 
-## Task 4: PostHog Analytics And Stripe Billing
+## Task 4: PostHog Analytics And Stripe Billing (Deferred)
+
+This task is future work and is not part of the active implementation under the 2026-07-17 scope update.
 
 **Files:**
 - Create: `src/retro_backend/integrations/__init__.py`

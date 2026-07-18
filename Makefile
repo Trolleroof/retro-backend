@@ -1,28 +1,30 @@
 .PHONY: test lint typecheck verify dev deploy migrate-local migrate-remote
 
 D1_DATABASE ?= retro-backend
+DEV_IP ?= 127.0.0.1
 PORT ?= 8787
+UV_RUN := uv run --frozen
 
 test:
-	uv run pytest -q
+	$(UV_RUN) pytest -q
 
 lint:
-	uv run ruff check src tests scripts
+	$(UV_RUN) ruff check src tests scripts
 
 typecheck:
-	uv run basedpyright src tests
+	$(UV_RUN) basedpyright src tests
 
 verify: test lint typecheck
 	git diff --check
 
 dev:
-	uv run pywrangler dev --local --port $(PORT)
+	$(UV_RUN) pywrangler dev --local --ip $(DEV_IP) --port $(PORT)
 
 deploy:
-	uv run pywrangler deploy
+	$(UV_RUN) pywrangler deploy
 
 migrate-local:
-	uv run pywrangler d1 migrations apply $(D1_DATABASE) --local
+	$(UV_RUN) pywrangler d1 migrations apply $(D1_DATABASE) --local
 
 migrate-remote:
-	uv run pywrangler d1 migrations apply $(D1_DATABASE) --remote
+	$(UV_RUN) pywrangler d1 migrations apply $(D1_DATABASE) --remote

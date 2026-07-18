@@ -39,13 +39,36 @@ once, and the native rate limiter is enforced per Cloudflare location.
 ## Prerequisites
 
 - Python 3.13
-- `uv`
+- `uv` to bootstrap the locked development environment
+- Node.js 20 for pywrangler's local Pyodide and workerd tooling
 - A Cloudflare account authenticated for pywrangler
 
 ```bash
-uv sync
-uv run pywrangler login
+uv sync --frozen
+uv run --frozen uv --version
+uv run --frozen pywrangler login
 ```
+
+The version check must print `uv 0.10.9`. The project intentionally installs
+that exact development-only version because pywrangler 1.15 uses `uv`
+internally and later releases reject the Pyodide 0.28.3 `pydantic-core` wheel
+selected for Python 3.13. Running pywrangler through `uv run --frozen` puts the
+project-local executable first on `PATH`, even when the outer bootstrap `uv` is
+newer.
+
+`uv.lock` reproduces the CPython development environment. The committed
+`pylock.toml` is pywrangler's generated Worker dependency lock and pins the
+packages installed into Pyodide. Do not hand-edit either lock. A maintainer can
+intentionally refresh both after compatibility testing with:
+
+```bash
+uv lock
+uv sync --frozen
+uv run --frozen pywrangler sync --force --upgrade
+```
+
+Fresh `dev` and `deploy` commands automatically synchronize the committed
+Worker lock; a separate sync step is not required for a clean checkout.
 
 `.env.example` contains only the optional, non-secret account selector. Do not
 put API tokens, bearer tokens, or service credentials in `wrangler.toml` or a
@@ -57,10 +80,10 @@ The following commands create remote account resources and should be run only
 when intentionally provisioning an environment:
 
 ```bash
-uv run pywrangler d1 create retro-backend
-uv run pywrangler r2 bucket create retro-gameplay-raw
-uv run pywrangler queues create retro-gameplay-events
-uv run pywrangler queues create retro-gameplay-events-dlq
+uv run --frozen pywrangler d1 create retro-backend
+uv run --frozen pywrangler r2 bucket create retro-gameplay-raw
+uv run --frozen pywrangler queues create retro-gameplay-events
+uv run --frozen pywrangler queues create retro-gameplay-events-dlq
 ```
 
 Replace the all-zero `database_id` in `wrangler.toml` with the UUID returned by
@@ -71,8 +94,8 @@ already used in the account.
 Apply the D1 migration locally or remotely:
 
 ```bash
-uv run pywrangler d1 migrations apply retro-backend --local
-uv run pywrangler d1 migrations apply retro-backend --remote
+uv run --frozen pywrangler d1 migrations apply retro-backend --local
+uv run --frozen pywrangler d1 migrations apply retro-backend --remote
 ```
 
 The remote command mutates the configured Cloudflare account. Review the target
@@ -81,9 +104,9 @@ account and migration before running it.
 ## Local Development
 
 ```bash
-uv sync
+uv sync --frozen
 make migrate-local
-uv run pywrangler dev --local --port 8787
+uv run --frozen pywrangler dev --local --ip 127.0.0.1 --port 8787
 ```
 
 The local API is then available at `http://127.0.0.1:8787`. Useful routes are:
@@ -102,7 +125,7 @@ Requests to authenticated routes use `Authorization: Bearer <opaque-token>`.
 Generate a one-time opaque token and hash-only insert template with:
 
 ```bash
-uv run python scripts/issue_token.py > /tmp/retro-user.sql
+uv run --frozen python scripts/issue_token.py > /tmp/retro-user.sql
 ```
 
 The token is printed once to stderr, while stdout contains SQL with a `?1`
@@ -122,16 +145,16 @@ Non-secret Worker variables live in `wrangler.toml`:
 
 Bindings grant the Worker access to D1, R2, Queue, Durable Object, and rate-limit
 resources without embedding account credentials. Any future runtime secret must
-be added through `uv run pywrangler secret put NAME`, never as a literal in the
-configuration or source.
+be added through `uv run --frozen pywrangler secret put NAME`, never as a
+literal in the configuration or source.
 
 ## Verification And Deployment
 
 ```bash
 make verify
-uv run pywrangler types
-uv run pywrangler deploy --dry-run
-uv run pywrangler deploy
+uv run --frozen pywrangler types
+uv run --frozen pywrangler deploy --dry-run
+uv run --frozen pywrangler deploy
 ```
 
 The final command performs a live deployment; the preceding dry run does not.

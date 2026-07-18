@@ -8,6 +8,25 @@ SOURCE_ROOT = ROOT / "src" / "retro_backend"
 ENTRY_PATH = SOURCE_ROOT / "entry.py"
 CHUNK_GATE_PATH = SOURCE_ROOT / "chunk_gate.py"
 WRANGLER_PATH = ROOT / "wrangler.toml"
+PYPROJECT_PATH = ROOT / "pyproject.toml"
+PYLOCK_PATH = ROOT / "pylock.toml"
+GITIGNORE_PATH = ROOT / ".gitignore"
+MAKEFILE_PATH = ROOT / "Makefile"
+README_PATH = ROOT / "README.md"
+DESIGN_PATH = (
+    ROOT
+    / "docs"
+    / "superpowers"
+    / "specs"
+    / "2026-07-17-cloudflare-python-backend-design.md"
+)
+PLAN_PATH = (
+    ROOT
+    / "docs"
+    / "superpowers"
+    / "plans"
+    / "2026-07-17-cloudflare-python-backend.md"
+)
 
 LEGACY_PATHS = (
     ".dockerignore",
@@ -260,7 +279,16 @@ def test_deferred_analytics_and_billing_are_not_configured() -> None:
 
 
 def test_backend_has_no_typescript_or_javascript_source() -> None:
-    excluded_directories = {".git", ".venv", ".pytest_cache", ".ruff_cache"}
+    excluded_directories = {
+        ".git",
+        ".venv",
+        ".venv-workers",
+        ".wrangler",
+        ".pytest_cache",
+        ".ruff_cache",
+        "js-stubs",
+        "python_modules",
+    }
     generated_source = [
         path.relative_to(ROOT).as_posix()
         for path in ROOT.rglob("*")
@@ -270,6 +298,74 @@ def test_backend_has_no_typescript_or_javascript_source() -> None:
     ]
 
     assert generated_source == []
+
+
+def test_worker_lock_is_committed_while_generated_modules_are_ignored() -> None:
+    ignored = {
+        line.strip()
+        for line in _read(GITIGNORE_PATH).splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+    assert {
+        ".venv-workers/",
+        ".wrangler/",
+        "python_modules/",
+        "src/js-stubs/",
+    } <= ignored
+    assert "pylock.toml" not in ignored
+    assert PYLOCK_PATH.is_file()
+
+
+def test_worker_toolchain_and_pyodide_dependencies_are_reproducibly_pinned() -> None:
+    project = tomllib.loads(_read(PYPROJECT_PATH))
+    runtime_dependencies = project["project"]["dependencies"]
+    development_dependencies = project["dependency-groups"]["dev"]
+
+    assert "pydantic==2.10.6" in runtime_dependencies
+    assert "uv==0.10.9" in development_dependencies
+    assert "workers-py==1.15.0" in development_dependencies
+    assert "workers-runtime-sdk==1.6.3" in development_dependencies
+
+    worker_lock = tomllib.loads(_read(PYLOCK_PATH))
+    locked_packages = {
+        package["name"]: package for package in worker_lock["packages"]
+    }
+    assert locked_packages["pydantic"]["version"] == "2.10.6"
+    assert locked_packages["pydantic-core"]["version"] == "2.27.2"
+    assert locked_packages["workers-runtime-sdk"]["version"] == "1.6.3"
+    assert any(
+        "pydantic_core-2.27.2-cp313-cp313-pyodide_2025_0_wasm32.whl"
+        in wheel["url"]
+        for wheel in locked_packages["pydantic-core"]["wheels"]
+    )
+
+
+def test_documented_worker_commands_use_the_frozen_project_toolchain() -> None:
+    readme = _read(README_PATH)
+    makefile = _read(MAKEFILE_PATH)
+
+    assert "uv run --frozen uv --version" in readme
+    assert "uv run --frozen pywrangler deploy --dry-run" in readme
+    assert "UV_RUN := uv run --frozen" in makefile
+    assert "$(UV_RUN) pywrangler dev" in makefile
+    assert "$(UV_RUN) pywrangler deploy" in makefile
+
+
+def test_design_and_plan_mark_deferred_integrations_as_future_work() -> None:
+    design = _read(DESIGN_PATH)
+    plan = _read(PLAN_PATH)
+    design_preamble = "\n".join(design.splitlines()[:15])
+    plan_preamble = "\n".join(plan.splitlines()[:15])
+
+    for preamble in (design_preamble, plan_preamble):
+        assert "Scope update (2026-07-17)" in preamble
+        assert "deferred by user direction" in preamble
+        assert "future work" in preamble
+
+    assert "## Task 4: PostHog Analytics And Stripe Billing (Deferred)" in plan
+    task_4 = plan.split("## Task 4:", maxsplit=1)[1].split("## Task 5:", maxsplit=1)[0]
+    assert "not part of the active implementation" in task_4
 
 
 def test_legacy_infrastructure_is_absent() -> None:

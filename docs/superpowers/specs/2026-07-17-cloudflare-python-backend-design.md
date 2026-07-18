@@ -2,6 +2,8 @@
 
 **Status:** Proposed for implementation
 
+> **Scope update (2026-07-17):** Stripe, PostHog, and the analytics and billing queues are deferred by user direction. Sections below describing them are retained as future work and are not part of the active implementation.
+
 **Goal:** Replace the development-only FastAPI/PostgreSQL/Redis/Redpanda/S3 stack with a Cloudflare-native backend whose runtime code is entirely Python.
 
 ## Scope
