@@ -106,6 +106,102 @@ async def test_dispatch_processes_sequentially_with_per_message_ack_and_retry(
     )
 
 
+@pytest.mark.parametrize(
+    "environment",
+    [SimpleNamespace(), SimpleNamespace(RAW_BUCKET=None)],
+    ids=["missing-raw-bucket", "null-raw-bucket"],
+)
+async def test_dispatch_retries_every_message_when_consumer_initialization_is_transient(
+    environment: object,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    operation_order: list[str] = []
+    messages = [
+        queue_message_factory(
+            {"message": index},
+            message_id=f"message-{index}",
+            operation_order=operation_order,
+        )
+        for index in range(3)
+    ]
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", messages),
+        environment,
+    )
+
+    assert [(message.acked, message.retried) for message in messages] == [
+        (False, True),
+        (False, True),
+        (False, True),
+    ]
+    assert operation_order == [
+        "retry:message-0",
+        "retry:message-1",
+        "retry:message-2",
+    ]
+
+
+async def test_dispatch_persists_nonfinite_rejection_and_continues_later_message(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    nonfinite_payload = _variant(
+        json.loads(json.dumps(fixture_payload)), "nonfinite"
+    )
+    marker = "__nonfinite_json_number__"
+    nonfinite_payload["events"][1]["payload"]["offending_number"] = marker
+    nonfinite_payload["events"][1]["payload"]["private_value"] = "trajectory-secret"
+    nonfinite_raw = _canonical(nonfinite_payload).replace(
+        json.dumps(marker).encode("utf-8"),
+        b"1e9999",
+    )
+    nonfinite_pointer = _pointer(nonfinite_payload, nonfinite_raw)
+    later_payload = _variant(json.loads(json.dumps(fixture_payload)), "after-nonfinite")
+    later_raw = _canonical(later_payload)
+    later_pointer = _pointer(later_payload, later_raw)
+    fake_env.RAW_BUCKET.seed_raw(
+        nonfinite_pointer["r2_key"],
+        nonfinite_raw,
+        nonfinite_pointer["payload_sha256"],
+    )
+    fake_env.RAW_BUCKET.seed_raw(
+        later_pointer["r2_key"], later_raw, later_pointer["payload_sha256"]
+    )
+    operation_order: list[str] = []
+    nonfinite_message = queue_message_factory(
+        nonfinite_pointer,
+        message_id="nonfinite",
+        operation_order=operation_order,
+    )
+    later_message = queue_message_factory(
+        later_pointer,
+        message_id="later",
+        operation_order=operation_order,
+    )
+
+    await dispatch_queue(
+        queue_batch_factory(
+            "retro-gameplay-events", [nonfinite_message, later_message]
+        ),
+        fake_env,
+    )
+
+    assert (nonfinite_message.acked, nonfinite_message.retried) == (True, False)
+    assert (later_message.acked, later_message.retried) == (True, False)
+    assert operation_order == ["ack:nonfinite", "ack:later"]
+    rejection_put = next(
+        call for call in fake_env.RAW_BUCKET.put_calls if call.key.startswith("rejected/")
+    )
+    rejection_text = rejection_put.body.decode("utf-8")
+    assert json.loads(rejection_text)["reason_code"] == "invalid_chunk_json"
+    assert "trajectory-secret" not in rejection_text
+    assert "offending_number" not in rejection_text
+
+
 async def test_dispatch_normalizes_proxy_body_and_queue_timestamp(
     fake_env: Any,
     queue_message_factory: Any,

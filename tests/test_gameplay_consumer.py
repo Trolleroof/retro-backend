@@ -13,6 +13,7 @@ from retro_backend.contracts import GameplayProcessResult
 CREATED_DATE = "2026-07-16"
 POINTER_RECEIVED_AT_MS = int(datetime(2026, 7, 17, 12, tzinfo=UTC).timestamp() * 1000)
 MESSAGE_TIMESTAMP_MS = int(datetime(2026, 7, 18, 9, tzinfo=UTC).timestamp() * 1000)
+_NONFINITE_MARKER = "__nonfinite_json_number__"
 
 
 class _BytesBuffer(Protocol):
@@ -415,6 +416,13 @@ def _event_value(field: str, value: object) -> Callable[[dict[str, Any]], None]:
     return mutate
 
 
+def _top_level_value(field: str, value: object) -> Callable[[dict[str, Any]], None]:
+    def mutate(payload: dict[str, Any]) -> None:
+        payload[field] = value
+
+    return mutate
+
+
 def _remove_event_field(field: str) -> Callable[[dict[str, Any]], None]:
     def mutate(payload: dict[str, Any]) -> None:
         del payload["events"][1][field]
@@ -469,7 +477,17 @@ def _start_game_version(payload: dict[str, Any]) -> None:
         pytest.param(_event_value("visibility", "public"), id="visibility"),
         pytest.param(_event_value("visibility", []), id="visibility-strict-type"),
         pytest.param(_event_value("schema_version", 1), id="schema-version"),
+        pytest.param(
+            _top_level_value("schema_version", 2.0),
+            id="top-level-schema-version-float",
+        ),
+        pytest.param(
+            _event_value("schema_version", 2.0), id="event-schema-version-float"
+        ),
         pytest.param(_event_value("event_version", 2), id="event-version"),
+        pytest.param(
+            _event_value("event_version", 1.0), id="event-version-float"
+        ),
         pytest.param(_event_value("client_time_ms", -1), id="client-time-negative"),
         pytest.param(_event_value("client_time_ms", True), id="client-time-bool"),
         pytest.param(
@@ -500,6 +518,58 @@ async def test_invalid_v2_event_semantics_are_permanently_rejected(
     assert result.status == "rejected"
     assert result.reason_code == "invalid_chunk_contract"
     assert result.artifact_key == _rejected_key(fixture_payload)
+
+
+@pytest.mark.parametrize(
+    ("location", "json_number"),
+    [
+        pytest.param("top-level", b"1e9999", id="top-level-exponent-overflow"),
+        pytest.param("client", b"-1e9999", id="client-negative-exponent-overflow"),
+        pytest.param("event-payload", b"NaN", id="event-payload-nan"),
+        pytest.param("event-payload", b"Infinity", id="event-payload-infinity"),
+        pytest.param(
+            "event-payload", b"-Infinity", id="event-payload-negative-infinity"
+        ),
+    ],
+)
+async def test_nonfinite_json_numbers_are_safely_rejected_anywhere(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    location: str,
+    json_number: bytes,
+) -> None:
+    if location == "top-level":
+        fixture_payload["extension"] = {
+            "offending_number": _NONFINITE_MARKER,
+            "private_value": "trajectory-secret",
+        }
+    elif location == "client":
+        fixture_payload["client"]["application_version"] = _NONFINITE_MARKER
+        fixture_payload["extension"] = {"private_value": "trajectory-secret"}
+    else:
+        fixture_payload["events"][1]["payload"][
+            "offending_number"
+        ] = _NONFINITE_MARKER
+        fixture_payload["events"][1]["payload"][
+            "private_value"
+        ] = "trajectory-secret"
+    marker = _canonical(_NONFINITE_MARKER)
+    encoded = _canonical(fixture_payload)
+    assert encoded.count(marker) == 1
+    raw_body = encoded.replace(marker, json_number)
+    pointer = _pointer(fixture_payload, raw_body)
+    fake_env.RAW_BUCKET.seed_raw(
+        pointer["r2_key"], raw_body, pointer["payload_sha256"]
+    )
+
+    result = await GameplayConsumer(fake_env).process(pointer)
+
+    assert result.status == "rejected"
+    assert result.reason_code == "invalid_chunk_json"
+    rejection_text = fake_env.RAW_BUCKET.put_calls[-1].body.decode("utf-8")
+    assert "trajectory-secret" not in rejection_text
+    assert "offending_number" not in rejection_text
+    assert json_number.decode("ascii") not in rejection_text
 
 
 async def test_top_level_chunk_extensions_are_preserved_in_validated_artifact(

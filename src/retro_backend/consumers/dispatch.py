@@ -41,8 +41,14 @@ async def dispatch_queue(batch: object, environment: object) -> None:
     if queue_name != GAMEPLAY_QUEUE_NAME:
         raise RuntimeError(f"unsupported Queue: {queue_name}")
 
-    consumer = GameplayConsumer(environment)
     messages = value_field(queue_batch, "messages")
+    try:
+        consumer = GameplayConsumer(environment)
+    except TransientGameplayError:
+        for message in iter_binding_values(messages):
+            cast(QueueMessage, message).retry()
+        return
+
     for message in iter_binding_values(messages):
         queue_message = cast(QueueMessage, message)
         body = value_field(queue_message, "body")

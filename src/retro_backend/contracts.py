@@ -172,6 +172,14 @@ class GameResultRequest(BaseModel):
     completed_at: AwareDatetime
 
 
+def _is_exact_version(value: object, expected: int) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, int)
+        and value == expected
+    )
+
+
 class ChunkEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -188,6 +196,15 @@ class ChunkEnvelope(BaseModel):
     created_at_ms: int = Field(ge=0, strict=True)
     client: dict[str, object]
     events: list[dict[str, object]]
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_schema_version_type(cls, value: object) -> object:
+        if isinstance(value, Mapping) and not _is_exact_version(
+            value.get("schema_version"), 2
+        ):
+            raise ValueError("schema_version must be the integer 2")
+        return value
 
     @model_validator(mode="after")
     def validate_event_envelope(self) -> "ChunkEnvelope":
@@ -312,9 +329,7 @@ def _validate_v2_event(event: Mapping[str, object], index: int) -> None:
         raise ValueError(f"events[{index}] is missing required v2 fields")
     if fields - _ALLOWED_EVENT_FIELDS:
         raise ValueError(f"events[{index}] contains unsupported v2 fields")
-    if event.get("schema_version") != 2 or isinstance(
-        event.get("schema_version"), bool
-    ):
+    if not _is_exact_version(event.get("schema_version"), 2):
         raise ValueError(f"events[{index}].schema_version must equal 2")
     for field, pattern in (
         ("user_id", r"usr_[A-Za-z0-9._-]+"),
@@ -330,9 +345,7 @@ def _validate_v2_event(event: Mapping[str, object], index: int) -> None:
     event_type = event.get("event_type")
     if not isinstance(event_type, str) or event_type not in _SUPPORTED_EVENT_TYPES:
         raise ValueError(f"events[{index}].event_type is unsupported")
-    if event.get("event_version") != 1 or isinstance(
-        event.get("event_version"), bool
-    ):
+    if not _is_exact_version(event.get("event_version"), 1):
         raise ValueError(f"events[{index}].event_version must equal 1")
     visibility = event.get("visibility")
     if not isinstance(visibility, str) or visibility not in _EVENT_VISIBILITIES:
@@ -357,11 +370,25 @@ def _reject_non_json_constant(value: str) -> None:
     raise ValueError(f"unsupported JSON constant: {value}")
 
 
+def _reject_nonfinite_json_numbers(value: object) -> None:
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, float) and not math.isfinite(item):
+            raise ValueError("unsupported non-finite JSON number")
+        if isinstance(item, Mapping):
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+
+
 def _load_chunk_payload(raw_body: bytes) -> object:
-    return json.loads(
+    payload = json.loads(
         raw_body.decode("utf-8"),
         parse_constant=_reject_non_json_constant,
     )
+    _reject_nonfinite_json_numbers(payload)
+    return payload
 
 
 def parse_chunk_envelope(raw_body: bytes, user_id: str) -> ChunkEnvelope:
