@@ -120,19 +120,21 @@ def _primitive_digest(value: object) -> bytes | None:
 
 def _container_ordinal(
     value: object,
-    seen: list[object],
+    seen: dict[int, tuple[object, int]],
 ) -> tuple[int, bool]:
-    for ordinal, previous in enumerate(seen):
-        if previous is value:
-            return ordinal, False
+    identity = id(value)
+    previous = seen.get(identity)
+    if previous is not None:
+        return previous[1], False
     ordinal = len(seen)
-    seen.append(value)
+    seen[identity] = (value, ordinal)
     return ordinal, True
 
 
 def _bounded_pointer_representation(value: object) -> bytes:
     digest = hashlib.sha256()
-    seen: list[object] = []
+    # Strong values prevent identity-key reuse for the traversal lifetime.
+    seen: dict[int, tuple[object, int]] = {}
     pending: list[tuple[int, object, int]] = [(0, value, 0)]
     visited_nodes = 0
 

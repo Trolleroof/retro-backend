@@ -8,6 +8,7 @@ from typing import Any, override
 import pytest
 
 import retro_backend.consumers.dispatch as dispatch_module
+import retro_backend.consumers.gameplay as gameplay_module
 from retro_backend.consumers.dispatch import dispatch_queue
 
 
@@ -354,6 +355,35 @@ class _ExplodingItemsMapping(dict[str, object]):
     @override
     def items(self) -> Any:
         raise RuntimeError("node limit was not enforced")
+
+
+class _CountingOrdinalLookup(dict[int, tuple[object, int]]):
+    def __init__(self) -> None:
+        super().__init__()
+        self.get_calls = 0
+
+    @override
+    def get(self, key: int, default: Any = None, /) -> Any:
+        self.get_calls += 1
+        return super().get(key, default)
+
+
+def test_container_ordinal_lookup_work_is_linear_and_retains_references() -> None:
+    container_ordinal = gameplay_module._container_ordinal  # pyright: ignore[reportPrivateUsage]
+    seen = _CountingOrdinalLookup()
+    containers = [[] for _ in range(512)]
+
+    for expected_ordinal, container in enumerate(containers):
+        assert container_ordinal(container, seen) == (expected_ordinal, True)
+    for expected_ordinal, container in enumerate(containers):
+        assert container_ordinal(container, seen) == (expected_ordinal, False)
+
+    assert seen.get_calls == 2 * len(containers)
+    assert set(seen) == {id(container) for container in containers}
+    assert all(
+        retained is containers[ordinal] and retained_ordinal == ordinal
+        for ordinal, (retained, retained_ordinal) in enumerate(seen.values())
+    )
 
 
 def _over_node_pointer_body() -> dict[str, object]:

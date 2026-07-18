@@ -172,6 +172,47 @@ def test_v2_schema_and_model_reject_fractional_created_at_ms(
         ChunkEnvelope.model_validate(fixture_payload)
 
 
+def test_v2_schema_documents_intentional_runtime_integer_strictness() -> None:
+    comment = V2_SCHEMA.get("$comment")
+
+    assert isinstance(comment, str)
+    assert "integral JSON numbers such as 2.0" in comment
+    assert "decoded Python int values" in comment
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(("schema_version",), id="top-schema-version"),
+        pytest.param(("chunk_sequence",), id="top-chunk-sequence"),
+        pytest.param(("first_event_sequence",), id="top-first-event-sequence"),
+        pytest.param(("last_event_sequence",), id="top-last-event-sequence"),
+        pytest.param(("event_count",), id="top-event-count"),
+        pytest.param(("created_at_ms",), id="top-created-at-ms"),
+        pytest.param(("events", 0, "schema_version"), id="event-schema-version"),
+        pytest.param(("events", 0, "event_version"), id="event-version"),
+        pytest.param(("events", 0, "event_sequence"), id="event-sequence"),
+        pytest.param(("events", 0, "monotonic_time_us"), id="event-monotonic-time"),
+        pytest.param(("events", 0, "simulation_tick"), id="event-simulation-tick"),
+    ],
+)
+def test_runtime_intentionally_rejects_integral_floats_accepted_by_schema(
+    fixture_payload: dict[str, Any],
+    path: tuple[str | int, ...],
+) -> None:
+    target: Any = fixture_payload
+    for segment in path[:-1]:
+        target = target[segment]
+    field = path[-1]
+    value = target[field]
+    assert isinstance(value, int) and not isinstance(value, bool)
+    target[field] = float(value)
+
+    assert V2_VALIDATOR.is_valid(fixture_payload) is True
+    with pytest.raises(ValidationError):
+        ChunkEnvelope.model_validate(fixture_payload)
+
+
 def _set_identifier_suffix_length(
     payload: dict[str, Any],
     field: str,

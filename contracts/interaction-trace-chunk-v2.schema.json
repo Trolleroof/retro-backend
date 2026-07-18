@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tui-gamepigeon.dev/contracts/interaction-trace-chunk-v2.schema.json",
   "title": "Game-agnostic interaction trace chunk v2",
+  "$comment": "Draft 2020-12 treats integral JSON numbers such as 2.0 as integers. The Python runtime deliberately requires actual decoded Python int values (excluding bool and float), including for all version fields.",
   "type": "object",
   "additionalProperties": true,
   "required": [
