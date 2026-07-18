@@ -1,27 +1,28 @@
-.PHONY: dev down migrate api worker test lint typecheck verify
+.PHONY: test lint typecheck verify dev deploy migrate-local migrate-remote
 
-dev:
-	docker compose up --build
-
-down:
-	docker compose down
-
-migrate:
-	uv run alembic upgrade head
-
-api:
-	uv run uvicorn retro_backend.main:app --reload
-
-worker:
-	uv run python -m retro_backend.worker
+D1_DATABASE ?= retro-backend
+PORT ?= 8787
 
 test:
-	uv run pytest
+	uv run pytest -q
 
 lint:
-	uv run ruff check .
+	uv run ruff check src tests scripts
 
 typecheck:
-	uv run basedpyright
+	uv run basedpyright src tests
 
 verify: test lint typecheck
+	git diff --check
+
+dev:
+	uv run pywrangler dev --local --port $(PORT)
+
+deploy:
+	uv run pywrangler deploy
+
+migrate-local:
+	uv run pywrangler d1 migrations apply $(D1_DATABASE) --local
+
+migrate-remote:
+	uv run pywrangler d1 migrations apply $(D1_DATABASE) --remote

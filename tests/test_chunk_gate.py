@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from retro_backend.chunk_gate import (
+    ChunkGate,
     ChunkGateClient,
     ChunkGateState,
     ChunkGateTransitionError,
@@ -15,6 +16,47 @@ DIGEST_A = "a" * 64
 DIGEST_B = "b" * 64
 LEASE_A = "1" * 64
 LEASE_B = "2" * 64
+
+
+class FakeDurableObjectStorage:
+    def __init__(self) -> None:
+        self.values: dict[str, object] = {}
+        self.alarm_at_ms: int | None = None
+        self.operations: list[tuple[object, ...]] = []
+
+    async def get(self, key: str) -> object | None:
+        self.operations.append(("get", key))
+        return self.values.get(key)
+
+    async def put(self, key: str, value: object) -> None:
+        self.operations.append(("put", key, value))
+        self.values[key] = value
+
+    async def setAlarm(self, scheduled_time_ms: int) -> None:
+        self.operations.append(("setAlarm", scheduled_time_ms))
+        self.alarm_at_ms = scheduled_time_ms
+
+    async def deleteAlarm(self) -> None:
+        self.operations.append(("deleteAlarm",))
+        self.alarm_at_ms = None
+
+    async def deleteAll(self) -> None:
+        self.operations.append(("deleteAll",))
+        self.values.clear()
+
+    def receipt_json(self) -> str:
+        receipt = self.values["receipt"]
+        assert isinstance(receipt, str)
+        return receipt
+
+
+class FakeDurableObjectContext:
+    def __init__(self, storage: FakeDurableObjectStorage) -> None:
+        self.storage = storage
+
+
+def _runtime_gate(storage: FakeDurableObjectStorage) -> ChunkGate:
+    return ChunkGate(FakeDurableObjectContext(storage), SimpleNamespace())
 
 
 def _acknowledgment() -> IngestAcknowledgment:
@@ -233,6 +275,75 @@ def test_chunk_gate_state_round_trips_through_serializable_data() -> None:
     restored = ChunkGateState.model_validate(state.model_dump(mode="json"))
 
     assert restored == state
+
+
+async def test_runtime_chunk_gate_persists_reservation_then_acceptance_json() -> None:
+    storage = FakeDurableObjectStorage()
+    gate = _runtime_gate(storage)
+    acknowledgment = _acknowledgment()
+
+    reservation = await gate.reserve(DIGEST_A, LEASE_A, 100, 30)
+
+    assert reservation == {
+        "status": "reserved",
+        "lease_token": LEASE_A,
+        "ack": None,
+    }
+    assert ChunkGateState.model_validate_json(storage.receipt_json()) == ChunkGateState(
+        payload_sha256=DIGEST_A,
+        state="publishing",
+        lease_token=LEASE_A,
+        lease_expires_at_ms=130,
+    )
+    assert storage.alarm_at_ms == 130
+
+    accepted = await gate.accept(
+        DIGEST_A,
+        LEASE_A,
+        acknowledgment.model_dump(mode="json"),
+        120,
+        1_000,
+    )
+
+    assert accepted is True
+    persisted = ChunkGateState.model_validate_json(storage.receipt_json())
+    assert persisted.state == "accepted"
+    assert persisted.acknowledgment == acknowledgment
+    assert persisted.expires_at_ms == 1_120
+    assert storage.alarm_at_ms == 1_120
+
+
+async def test_runtime_chunk_gate_stale_release_preserves_newer_receipt() -> None:
+    storage = FakeDurableObjectStorage()
+    gate = _runtime_gate(storage)
+    await gate.reserve(DIGEST_A, LEASE_A, 100, 30)
+    await gate.reserve(DIGEST_A, LEASE_B, 130, 50)
+    operations_before_release = list(storage.operations)
+    receipt_before_release = storage.receipt_json()
+
+    released = await gate.release(DIGEST_A, LEASE_A)
+
+    assert released is False
+    assert storage.receipt_json() == receipt_before_release
+    assert storage.alarm_at_ms == 180
+    assert storage.operations == [*operations_before_release, ("get", "receipt")]
+
+
+async def test_runtime_chunk_gate_release_and_alarm_clear_storage_safely() -> None:
+    storage = FakeDurableObjectStorage()
+    gate = _runtime_gate(storage)
+    await gate.reserve(DIGEST_A, LEASE_A, 100, 30)
+
+    assert await gate.release(DIGEST_A, LEASE_A) is True
+    assert storage.values == {}
+    assert storage.alarm_at_ms is None
+    assert storage.operations[-2:] == [("deleteAlarm",), ("deleteAll",)]
+
+    await gate.alarm()
+
+    assert storage.values == {}
+    assert storage.alarm_at_ms is None
+    assert storage.operations[-2:] == [("deleteAlarm",), ("deleteAll",)]
 
 
 async def test_chunk_gate_client_hashes_identity_and_orders_explicit_rpc_calls(

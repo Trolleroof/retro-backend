@@ -96,6 +96,23 @@ class DurableObjectNamespace(Protocol):
     def get(self, object_id: object) -> ChunkGateStub: ...
 
 
+class DurableObjectStorage(Protocol):
+    async def get(self, key: str) -> object | None: ...
+
+    async def put(self, key: str, value: object) -> object: ...
+
+    async def setAlarm(self, scheduled_time_ms: int) -> object: ...
+
+    async def deleteAlarm(self) -> object: ...
+
+    async def deleteAll(self) -> object: ...
+
+
+class DurableObjectContext(Protocol):
+    @property
+    def storage(self) -> DurableObjectStorage: ...
+
+
 def is_binding_null(value: object) -> bool:
     """Recognize Python ``None`` and Pyodide's JavaScript null sentinel."""
     if value is None:

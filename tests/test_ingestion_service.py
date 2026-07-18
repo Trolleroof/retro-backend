@@ -459,10 +459,8 @@ async def test_missing_required_binding_is_safe_unavailable(
         )
 
 
-def test_replaced_ingestion_surfaces_are_checked_by_basedpyright() -> None:
+def test_all_runtime_surfaces_are_checked_by_basedpyright() -> None:
     root = Path(__file__).resolve().parents[1]
     config = tomllib.loads((root / "pyproject.toml").read_text())
-    excluded = config["tool"]["basedpyright"]["exclude"]
 
-    assert "src/retro_backend/services/ingestion.py" not in excluded
-    assert "tests/test_ingestion_api.py" not in excluded
+    assert "exclude" not in config["tool"]["basedpyright"]

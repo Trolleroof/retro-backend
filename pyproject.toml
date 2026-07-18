@@ -38,17 +38,6 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Header"]
 [tool.basedpyright]
 pythonVersion = "3.13"
 include = ["src", "tests"]
-# These legacy surfaces are replaced by later tasks in the approved rewrite plan.
-exclude = [
-    "src/retro_backend/api/routes.py",
-    "src/retro_backend/config.py",
-    "src/retro_backend/database.py",
-    "src/retro_backend/main.py",
-    "src/retro_backend/models.py",
-    "src/retro_backend/redis_client.py",
-    "src/retro_backend/worker.py",
-    "tests/test_worker.py",
-]
 reportMissingTypeStubs = false
 reportAny = false
 reportExplicitAny = false

@@ -3,15 +3,34 @@
 import hashlib
 import re
 import secrets
+import sys
 from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .bindings import ChunkGateStub, DurableObjectNamespace
+from .bindings import (
+    ChunkGateStub,
+    DurableObjectContext,
+    DurableObjectNamespace,
+    is_binding_null,
+)
 from .contracts import ChunkReservation, IngestAcknowledgment
+
+if sys.platform == "emscripten":
+    # Pyright does not narrow this platform-exclusive declaration.
+    from workers import DurableObject  # pyright: ignore[reportAssignmentType]
+else:
+
+    class DurableObject:
+        """Minimal CPython-only base for exercising runtime methods in tests."""
+
+        def __init__(self, ctx: DurableObjectContext, env: object) -> None:
+            self.ctx = ctx
+            self.env = env
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _LEASE_TOKEN_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_RECEIPT_KEY = "receipt"
 
 
 class ChunkGateTransitionError(RuntimeError):
@@ -299,3 +318,75 @@ class ChunkGateClient:
         _validate_digest(payload_sha256)
         await self._stub(lease_token).release(payload_sha256, lease_token)
         del self._stubs_by_lease_token[lease_token]
+
+
+class ChunkGate(DurableObject):
+    """Runtime Durable Object coordinating publication for one logical chunk."""
+
+    async def _load_state(self) -> ChunkGateState:
+        receipt = await self.ctx.storage.get(_RECEIPT_KEY)
+        if is_binding_null(receipt):
+            return ChunkGateState()
+        if not isinstance(receipt, (str, bytes, bytearray)):
+            raise TypeError("chunk gate receipt must be JSON text")
+        return ChunkGateState.model_validate_json(receipt)
+
+    async def _persist(self, state: ChunkGateState, alarm_at_ms: int) -> None:
+        await self.ctx.storage.put(_RECEIPT_KEY, state.model_dump_json())
+        await self.ctx.storage.setAlarm(alarm_at_ms)
+
+    async def _clear(self) -> None:
+        await self.ctx.storage.deleteAlarm()
+        await self.ctx.storage.deleteAll()
+
+    async def reserve(
+        self,
+        payload_sha256: str,
+        lease_token: str,
+        now_ms: int,
+        lease_ms: int,
+    ) -> dict[str, object]:
+        state = await self._load_state()
+        reservation = state.reserve(
+            payload_sha256,
+            lease_token,
+            now_ms=now_ms,
+            lease_ms=lease_ms,
+        )
+        if reservation.status == "reserved":
+            if state.lease_expires_at_ms is None:
+                raise RuntimeError("reserved chunk is missing lease expiry")
+            await self._persist(state, state.lease_expires_at_ms)
+        return reservation.model_dump(mode="json")
+
+    async def accept(
+        self,
+        payload_sha256: str,
+        lease_token: str,
+        acknowledgment: object,
+        now_ms: int,
+        dedupe_ttl_ms: int,
+    ) -> bool:
+        state = await self._load_state()
+        receipt = IngestAcknowledgment.model_validate(acknowledgment)
+        accepted = state.accept(
+            payload_sha256,
+            lease_token,
+            receipt,
+            now_ms=now_ms,
+            dedupe_ttl_ms=dedupe_ttl_ms,
+        )
+        if state.expires_at_ms is None:
+            raise RuntimeError("accepted chunk is missing dedupe expiry")
+        await self._persist(state, state.expires_at_ms)
+        return accepted
+
+    async def release(self, payload_sha256: str, lease_token: str) -> bool:
+        state = await self._load_state()
+        if not state.release(payload_sha256, lease_token):
+            return False
+        await self._clear()
+        return True
+
+    async def alarm(self) -> None:
+        await self._clear()

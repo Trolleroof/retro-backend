@@ -1,65 +1,146 @@
-# retro-backend
+# Retro Backend
 
-Operational backend for Retro Arcade gameplay data. The arcade client records durable, game-agnostic interaction chunks; this service authenticates and validates those chunks, stores exact request bytes plus normalized events in PostgreSQL, and projects them through a separate worker process. RL training is intentionally outside this repository.
+Retro is an all-Python Cloudflare Worker for authenticated gameplay ingestion,
+score APIs, and asynchronous gameplay artifact processing. FastAPI handles HTTP
+through Cloudflare's ASGI adapter; D1, R2, Queues, a Durable Object, and the
+native rate limiter are exposed through Worker bindings.
 
-## Architecture
+This repository contains deployment configuration and commands, but it has not
+been deployed to a Cloudflare account by this implementation.
 
-- **FastAPI API**: health, authenticated chunk ingestion, game metadata, and ordered event queries.
-- **PostgreSQL**: authoritative users, game sessions, exact immutable chunks, normalized events, and durable processing jobs.
-- **Worker**: claims jobs with `FOR UPDATE SKIP LOCKED`, projects session ranges/completion, and can later host enrichment/export work.
-- **Redis**: readiness, accepted-chunk notifications, and future coordination. PostgreSQL remains authoritative if Redis is unavailable.
-- **Alembic**: owns production schema migrations.
+## Architecture And Request Flow
 
-This follows Groudon's Python foundation (`uv`, FastAPI, async SQLAlchemy, PostgreSQL, Alembic, Redis, pytest, Ruff, BasedPyright) and its separate ingestion/consumer process shape. Retro starts with a PostgreSQL job queue rather than Redpanda; the worker interface can move to a stream without changing the client contract.
+The Worker may execute in any Cloudflare location and an isolate may be
+restarted at any time. Request state therefore stays local to a handler. Durable
+state is kept in bindings:
 
-## Local development
+- D1 stores users, token hashes, high scores, and small relational state.
+- R2 stores exact request bytes and deterministic derived gameplay artifacts.
+- `CHUNK_GATE` is one globally addressed Durable Object per logical user/chunk.
+- `GAMEPLAY_QUEUE` carries small pointers to R2 objects, never full trajectories.
+- `INGEST_RATE_LIMITER` limits authenticated ingestion before storage work.
+
+For `POST /v1/game-event-chunks`, the Worker authenticates against a token hash
+in D1, applies the native rate limit, validates a bounded body, and reserves the
+logical chunk in `CHUNK_GATE`. It writes the exact bytes to R2 before publishing
+a small object pointer to `retro-gameplay-events`. Only after Queue publication
+does the Durable Object persist the accepted acknowledgment. The consumer loads
+the exact object from R2, validates it again, and writes deterministic derived
+objects before acknowledging the Queue message.
+
+These resources do not form one global transaction. A Durable Object serializes
+transitions for its own chunk and has strongly consistent private storage. D1
+provides transactional database operations, while each R2 write and Queue send
+has its own success boundary. Deterministic keys, publication leases, cached
+acknowledgments, Queue retries, and the DLQ make those boundaries recoverable;
+they do not claim cross-service strong consistency. Queue delivery is at least
+once, and the native rate limiter is enforced per Cloudflare location.
+
+## Prerequisites
+
+- Python 3.13
+- `uv`
+- A Cloudflare account authenticated for pywrangler
 
 ```bash
-cp .env.example .env
 uv sync
-docker compose up -d postgres redis
-uv run alembic upgrade head
-uv run uvicorn retro_backend.main:app --reload
+uv run pywrangler login
 ```
 
-Run the worker in a second terminal:
+`.env.example` contains only the optional, non-secret account selector. Do not
+put API tokens, bearer tokens, or service credentials in `wrangler.toml` or a
+committed environment file.
+
+## Provisioning
+
+The following commands create remote account resources and should be run only
+when intentionally provisioning an environment:
 
 ```bash
-uv run python -m retro_backend.worker
+uv run pywrangler d1 create retro-backend
+uv run pywrangler r2 bucket create retro-gameplay-raw
+uv run pywrangler queues create retro-gameplay-events
+uv run pywrangler queues create retro-gameplay-events-dlq
 ```
 
-Or start the complete stack:
+Replace the all-zero `database_id` in `wrangler.toml` with the UUID returned by
+the D1 create command. `INGEST_RATE_LIMITER` uses namespace `1001`; rate-limit
+namespace IDs are account-wide, so select another positive integer if `1001` is
+already used in the account.
+
+Apply the D1 migration locally or remotely:
 
 ```bash
-docker compose up --build
+uv run pywrangler d1 migrations apply retro-backend --local
+uv run pywrangler d1 migrations apply retro-backend --remote
 ```
 
-The published ports default to PostgreSQL `5432`, Redis `6379`, and API `8000`.
-Override `RETRO_POSTGRES_PORT`, `RETRO_REDIS_PORT`, or `RETRO_API_PORT` when those
-ports are already occupied; container-to-container URLs do not change.
+The remote command mutates the configured Cloudflare account. Review the target
+account and migration before running it.
 
-## Client configuration
+## Local Development
 
 ```bash
-export GAMEPIGEON_INGEST_URL=http://127.0.0.1:8000/v1/game-event-chunks
-export GAMEPIGEON_INGEST_API_KEY=development-only-change-me
+uv sync
+make migrate-local
+uv run pywrangler dev --local --port 8787
 ```
 
-Requests use `Authorization: Bearer <key>`. Production must replace the development key.
-
-## API
+The local API is then available at `http://127.0.0.1:8787`. Useful routes are:
 
 - `GET /health/live`
 - `GET /health/ready`
+- `GET /v1/me`
 - `POST /v1/game-event-chunks`
-- `GET /v1/games/{game_id}`
-- `GET /v1/games/{game_id}/events?visibility=policy`
-- `GET /metrics`
+- `POST /v1/game-results`
+- `GET /v1/leaderboards/{game_type}`
 
-Identical `(game_id, chunk_id)` retries are accepted idempotently. Reusing a chunk ID or chunk sequence with different bytes returns `409`. The database transaction stores the exact payload, normalized events, session counters, and processing job before returning `202`.
+Requests to authenticated routes use `Authorization: Bearer <opaque-token>`.
 
-## Verification
+## User Tokens
+
+Generate a one-time opaque token and hash-only insert template with:
+
+```bash
+uv run python scripts/issue_token.py > /tmp/retro-user.sql
+```
+
+The token is printed once to stderr, while stdout contains SQL with a `?1`
+placeholder for the user ID and only the SHA-256 token digest. Bind a trusted
+`usr_...` ID to `?1` through a prepared D1 statement, then run it in the target
+database. Deliver the token to the user over an appropriate secret channel. Do
+not store the plaintext token in D1, source control, logs, or analytics.
+
+## Configuration
+
+Non-secret Worker variables live in `wrangler.toml`:
+
+- `MAX_CHUNK_BYTES=262144`
+- `CHUNK_DEDUP_TTL_MS=172800000`
+- `CHUNK_PUBLISHING_LEASE_MS=30000`
+- `ENVIRONMENT=development`
+
+Bindings grant the Worker access to D1, R2, Queue, Durable Object, and rate-limit
+resources without embedding account credentials. Any future runtime secret must
+be added through `uv run pywrangler secret put NAME`, never as a literal in the
+configuration or source.
+
+## Verification And Deployment
 
 ```bash
 make verify
+uv run pywrangler types
+uv run pywrangler deploy --dry-run
+uv run pywrangler deploy
 ```
+
+The final command performs a live deployment; the preceding dry run does not.
+
+## Deferred Integrations
+
+PostHog analytics and Stripe billing are explicitly deferred. There are no
+PostHog or Stripe routes, modules, secrets, bindings, producers, or consumers in
+the active Worker. A later analytics slice can add a dedicated Queue and
+consumer at the gameplay consumer boundary. A later billing slice can add a
+raw-body webhook, dedicated Queue, consumer, and required secrets without
+changing the gameplay Queue contract.
