@@ -27,7 +27,8 @@ def _rebuild_worker_request(
     body: bytes,
     headers: list[tuple[str, str]],
 ) -> _WorkerJsRequest:
-    incoming = cast(_WorkerJsRequest, request)
+    raw_request = getattr(request, "js_object", request)
+    incoming = cast(_WorkerJsRequest, raw_request)
     bounded_request = Request(
         incoming.url,
         method=cast(HTTPMethod, incoming.method),

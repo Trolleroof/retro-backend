@@ -356,7 +356,7 @@ async def test_chunk_route_accepts_body_larger_than_unknown_route_cap() -> None:
     assert len(spy.calls) == 1
 
 
-async def test_default_fetch_uses_bounded_rebuilt_worker_request(
+async def test_default_fetch_unwraps_before_reading_extension_method(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class RuntimeBlob:
@@ -391,16 +391,27 @@ async def test_default_fetch_uses_bounded_rebuilt_worker_request(
     class RuntimeRequest:
         def __init__(
             self,
-            url: str,
+            input_request: RuntimeJsRequest | str,
             *,
-            method: object,
-            headers: list[tuple[str, str]],
-            body: object,
-            redirect: str,
+            method: object | None = None,
+            headers: list[tuple[str, str]] | None = None,
+            body: object | None = None,
+            redirect: str | None = None,
         ) -> None:
+            self.method_accesses = 0
+            if isinstance(input_request, RuntimeJsRequest):
+                if any(option is not None for option in (method, headers, body, redirect)):
+                    raise ValueError("raw JS requests do not accept constructor options")
+                self.js_object = input_request
+                runtime_request_wrappers.append(self)
+                return
+
+            assert method is not None
+            assert headers is not None
+            assert redirect is not None
             js_method = method.value if isinstance(method, HTTPMethod) else str(method)
             self.js_object = RuntimeJsRequest(
-                url,
+                input_request,
                 method=js_method,
                 headers=headers,
                 body=body,
@@ -410,7 +421,24 @@ async def test_default_fetch_uses_bounded_rebuilt_worker_request(
 
         @property
         def method(self) -> HTTPMethod:
+            self.method_accesses += 1
             return HTTPMethod[self.js_object.method]
+
+        @property
+        def url(self) -> str:
+            return self.js_object.url
+
+        @property
+        def headers(self) -> RuntimeJsHeaders:
+            return self.js_object.headers
+
+        @property
+        def body(self) -> object:
+            return self.js_object.body
+
+        @property
+        def redirect(self) -> str:
+            return self.js_object.redirect
 
     class RuntimeResponse:
         @staticmethod
@@ -451,13 +479,20 @@ async def test_default_fetch_uses_bounded_rebuilt_worker_request(
         entry = importlib.import_module("retro_backend.entry")
         payload = b'{"score":1}'
         stream = FakeStream([FakeJsChunk(payload)])
-        request = _request(
+        request_values = _request(
             "/v1/game-results",
             stream,
             content_length=str(len(payload)),
         )
-        request.method = "PROPFIND"
-        request.redirect = "manual"
+        request = RuntimeRequest(
+            RuntimeJsRequest(
+                request_values.url,
+                method="PROPFIND",
+                headers=list(request_values.headers.items()),
+                body=stream,
+                redirect="manual",
+            )
+        )
         environment = _environment()
 
         response = await entry.Default(environment).fetch(request)
@@ -466,12 +501,14 @@ async def test_default_fetch_uses_bounded_rebuilt_worker_request(
         assert len(asgi_calls) == 1
         app, rebuilt, called_environment = asgi_calls[0]
         assert isinstance(rebuilt, RuntimeJsRequest)
-        assert len(runtime_request_wrappers) == 1
-        wrapper = runtime_request_wrappers[0]
-        assert isinstance(wrapper, RuntimeRequest)
-        assert wrapper.js_object is rebuilt
+        assert len(runtime_request_wrappers) == 2
+        incoming_wrapper, bounded_wrapper = runtime_request_wrappers
+        assert incoming_wrapper is request
+        assert isinstance(bounded_wrapper, RuntimeRequest)
+        assert bounded_wrapper.js_object is rebuilt
+        assert request.method_accesses == 0
         with pytest.raises(KeyError, match="PROPFIND"):
-            _ = wrapper.method
+            _ = request.method
         assert app is entry.app
         assert called_environment is environment
         assert rebuilt.url == request.url

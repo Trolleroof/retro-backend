@@ -146,6 +146,9 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
     assert "Request(" in source
     assert ".js_object" in source
     assert "return bounded_request.js_object" in source
+    assert 'getattr(request, "js_object", request)' in source
+    assert "incoming = cast(_WorkerJsRequest, raw_request)" in source
+    assert "incoming = cast(_WorkerJsRequest, request)" not in source
     assert "incoming.url" in source
     assert "method=cast(HTTPMethod, incoming.method)" in source
     assert "headers=headers" in source
