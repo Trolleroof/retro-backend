@@ -40,11 +40,12 @@ once, and the native rate limiter is enforced per Cloudflare location.
 
 - Python 3.13
 - `uv` to bootstrap the locked development environment
-- Node.js 22 or newer for pywrangler's local packaging and workerd tooling
+- Node.js 22.x, pinned to `22.23.1` in `.node-version`, for pywrangler tooling
 - A Cloudflare account authenticated for pywrangler
 
 ```bash
 uv sync --frozen
+make node-preflight
 uv run --frozen uv --version
 uv run --frozen pywrangler login
 ```
@@ -56,9 +57,11 @@ selected for Python 3.13. Running pywrangler through `uv run --frozen` puts the
 project-local executable first on `PATH`, even when the outer bootstrap `uv` is
 newer.
 
-The current Wrangler requires Node.js 22 or newer. With an older Node release,
-`npx` can select an older Wrangler and workerd build that does not support this
-Worker's `2026-07-17` compatibility date.
+Node.js major 22 is required, and `22.23.1` is the tested repository pin.
+Node.js 23 and newer are unsupported by this current pywrangler toolchain:
+pywrangler's Pyodide interpreter probe uses a V8 flag that Node 26 rejects.
+`make node-preflight` checks the `node` selected by `PATH` before every
+pywrangler-facing Make target and reports how to select the pinned release.
 
 `uv.lock` reproduces the CPython development environment. The committed
 `pylock.toml` is pywrangler's generated Worker dependency lock and pins the
@@ -68,11 +71,13 @@ intentionally refresh both after compatibility testing with:
 ```bash
 uv lock
 uv sync --frozen
+make node-preflight
 uv run --frozen pywrangler sync --force --upgrade
 ```
 
 Fresh `dev` and `deploy` commands automatically synchronize the committed
 Worker lock; a separate sync step is not required for a clean checkout.
+Use `make worker-sync` to materialize and verify it explicitly.
 
 `.env.example` contains only the optional, non-secret account selector. Do not
 put API tokens, bearer tokens, or service credentials in `wrangler.toml` or a
@@ -84,6 +89,7 @@ The following commands create remote account resources and should be run only
 when intentionally provisioning an environment:
 
 ```bash
+make node-preflight
 uv run --frozen pywrangler d1 create retro-backend
 uv run --frozen pywrangler r2 bucket create retro-gameplay-raw
 uv run --frozen pywrangler queues create retro-gameplay-events
@@ -98,8 +104,8 @@ already used in the account.
 Apply the D1 migration locally or remotely:
 
 ```bash
-uv run --frozen pywrangler d1 migrations apply retro-backend --local
-uv run --frozen pywrangler d1 migrations apply retro-backend --remote
+make migrate-local
+make migrate-remote
 ```
 
 The remote command mutates the configured Cloudflare account. Review the target
@@ -110,7 +116,7 @@ account and migration before running it.
 ```bash
 uv sync --frozen
 make migrate-local
-uv run --frozen pywrangler dev --local --ip 127.0.0.1 --port 8787
+make dev
 ```
 
 The local API is then available at `http://127.0.0.1:8787`. Useful routes are:
@@ -156,9 +162,9 @@ literal in the configuration or source.
 
 ```bash
 make verify
-uv run --frozen pywrangler types
-uv run --frozen pywrangler deploy --dry-run
-uv run --frozen pywrangler deploy
+make worker-types
+make worker-dry-run
+make deploy
 ```
 
 The final command performs a live deployment; the preceding dry run does not.

@@ -1,5 +1,6 @@
 import ast
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -13,6 +14,8 @@ PYLOCK_PATH = ROOT / "pylock.toml"
 GITIGNORE_PATH = ROOT / ".gitignore"
 MAKEFILE_PATH = ROOT / "Makefile"
 README_PATH = ROOT / "README.md"
+NODE_VERSION_PATH = ROOT / ".node-version"
+NODE_PREFLIGHT_PATH = ROOT / "scripts" / "node_preflight.py"
 DESIGN_PATH = (
     ROOT
     / "docs"
@@ -345,13 +348,50 @@ def test_documented_worker_commands_use_the_frozen_project_toolchain() -> None:
     readme = _read(README_PATH)
     makefile = _read(MAKEFILE_PATH)
 
-    assert "Node.js 22 or newer" in readme
-    assert "current Wrangler requires Node.js 22 or newer" in readme
+    assert _read(NODE_VERSION_PATH).strip() == "22.23.1"
+    assert NODE_PREFLIGHT_PATH.is_file()
+    assert "Node.js 22.x" in readme
+    assert "22.23.1" in readme
+    assert "Node.js 23 and newer are unsupported" in readme
+    assert "Node.js 22 or newer" not in readme
+    assert "make node-preflight" in readme
+    assert "make worker-sync" in readme
+    assert "make worker-types" in readme
+    assert "make worker-dry-run" in readme
+    assert "make migrate-local" in readme
+    assert "make migrate-remote" in readme
     assert "uv run --frozen uv --version" in readme
-    assert "uv run --frozen pywrangler deploy --dry-run" in readme
     assert "UV_RUN := uv run --frozen" in makefile
-    assert "$(UV_RUN) pywrangler dev" in makefile
-    assert "$(UV_RUN) pywrangler deploy" in makefile
+
+
+def test_worker_make_targets_run_node_preflight_first() -> None:
+    for target in (
+        "worker-sync",
+        "worker-types",
+        "worker-dry-run",
+        "dev",
+        "deploy",
+        "migrate-local",
+        "migrate-remote",
+    ):
+        result = subprocess.run(
+            ["make", "--dry-run", target],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        commands = result.stdout.splitlines()
+        preflight_index = commands.index(
+            "uv run --frozen python scripts/node_preflight.py"
+        )
+        pywrangler_index = next(
+            index
+            for index, command in enumerate(commands)
+            if "pywrangler" in command
+        )
+        assert preflight_index < pywrangler_index
 
 
 def test_design_and_plan_mark_deferred_integrations_as_future_work() -> None:
