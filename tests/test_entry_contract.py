@@ -345,6 +345,8 @@ def test_documented_worker_commands_use_the_frozen_project_toolchain() -> None:
     readme = _read(README_PATH)
     makefile = _read(MAKEFILE_PATH)
 
+    assert "Node.js 22 or newer" in readme
+    assert "current Wrangler requires Node.js 22 or newer" in readme
     assert "uv run --frozen uv --version" in readme
     assert "uv run --frozen pywrangler deploy --dry-run" in readme
     assert "UV_RUN := uv run --frozen" in makefile

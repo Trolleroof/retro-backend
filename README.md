@@ -40,7 +40,7 @@ once, and the native rate limiter is enforced per Cloudflare location.
 
 - Python 3.13
 - `uv` to bootstrap the locked development environment
-- Node.js 20 for pywrangler's local Pyodide and workerd tooling
+- Node.js 22 or newer for pywrangler's local packaging and workerd tooling
 - A Cloudflare account authenticated for pywrangler
 
 ```bash
@@ -55,6 +55,10 @@ internally and later releases reject the Pyodide 0.28.3 `pydantic-core` wheel
 selected for Python 3.13. Running pywrangler through `uv run --frozen` puts the
 project-local executable first on `PATH`, even when the outer bootstrap `uv` is
 newer.
+
+The current Wrangler requires Node.js 22 or newer. With an older Node release,
+`npx` can select an older Wrangler and workerd build that does not support this
+Worker's `2026-07-17` compatibility date.
 
 `uv.lock` reproduces the CPython development environment. The committed
 `pylock.toml` is pywrangler's generated Worker dependency lock and pins the
