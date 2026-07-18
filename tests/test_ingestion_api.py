@@ -9,11 +9,8 @@ from fastapi import Request
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
 
-import retro_backend.api.chunks as chunks_module
-from retro_backend.api.chunks import (
-    BodyTooLarge,
-    _read_limited_body,  # pyright: ignore[reportPrivateUsage]
-)
+import retro_backend.api.request_body as request_body_module
+from retro_backend.api.request_body import BodyTooLarge, read_limited_body
 
 ROOT = Path(__file__).resolve().parents[1]
 INGEST_RESPONSE_SCHEMA = json.loads(
@@ -520,7 +517,7 @@ async def test_limited_reader_stops_immediately_after_crossing_limit() -> None:
     request = CountingStreamingRequest([b"123", b"456", b"must-not-be-read"])
 
     with pytest.raises(BodyTooLarge):
-        await _read_limited_body(
+        await read_limited_body(
             cast(Request, cast(object, request)),
             max_bytes=5,
         )
@@ -534,14 +531,14 @@ async def test_limited_reader_does_not_copy_chunk_larger_than_remaining_capacity
     observed = ObservedBuffer()
     request = CountingStreamingRequest([b"123", b"x" * 1_000_000])
     monkeypatch.setattr(
-        chunks_module,
+        request_body_module,
         "bytearray",
         lambda: observed,
         raising=False,
     )
 
     with pytest.raises(BodyTooLarge):
-        await _read_limited_body(
+        await read_limited_body(
             cast(Request, cast(object, request)),
             max_bytes=5,
         )
@@ -553,7 +550,7 @@ async def test_limited_reader_rejects_large_content_length_before_streaming() ->
     request = CountingStreamingRequest([b"must-not-be-read"], content_length="6")
 
     with pytest.raises(BodyTooLarge):
-        await _read_limited_body(
+        await read_limited_body(
             cast(Request, cast(object, request)),
             max_bytes=5,
         )
@@ -568,7 +565,7 @@ async def test_limited_reader_rejects_extreme_content_length_without_parsing_it(
     )
 
     with pytest.raises(BodyTooLarge):
-        await _read_limited_body(
+        await read_limited_body(
             cast(Request, cast(object, request)),
             max_bytes=5,
         )

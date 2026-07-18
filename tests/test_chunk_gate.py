@@ -23,6 +23,7 @@ class FakeDurableObjectStorage:
         self.values: dict[str, object] = {}
         self.alarm_at_ms: int | None = None
         self.operations: list[tuple[object, ...]] = []
+        self.delete_all_failures_remaining = 0
 
     async def get(self, key: str) -> object | None:
         self.operations.append(("get", key))
@@ -42,6 +43,9 @@ class FakeDurableObjectStorage:
 
     async def deleteAll(self) -> None:
         self.operations.append(("deleteAll",))
+        if self.delete_all_failures_remaining:
+            self.delete_all_failures_remaining -= 1
+            raise RuntimeError("storage delete failed")
         self.values.clear()
 
     def receipt_json(self) -> str:
@@ -337,13 +341,34 @@ async def test_runtime_chunk_gate_release_and_alarm_clear_storage_safely() -> No
     assert await gate.release(DIGEST_A, LEASE_A) is True
     assert storage.values == {}
     assert storage.alarm_at_ms is None
-    assert storage.operations[-2:] == [("deleteAlarm",), ("deleteAll",)]
+    assert storage.operations[-2:] == [("deleteAll",), ("deleteAlarm",)]
 
     await gate.alarm()
 
     assert storage.values == {}
     assert storage.alarm_at_ms is None
-    assert storage.operations[-2:] == [("deleteAlarm",), ("deleteAll",)]
+    assert storage.operations[-2:] == [("deleteAll",), ("deleteAlarm",)]
+
+
+async def test_runtime_chunk_gate_storage_failure_preserves_alarm_for_retry() -> None:
+    storage = FakeDurableObjectStorage()
+    gate = _runtime_gate(storage)
+    await gate.reserve(DIGEST_A, LEASE_A, 100, 30)
+    storage.delete_all_failures_remaining = 1
+
+    with pytest.raises(RuntimeError, match="storage delete failed"):
+        await gate.alarm()
+
+    assert "receipt" in storage.values
+    assert storage.alarm_at_ms == 130
+    assert storage.operations[-1] == ("deleteAll",)
+    assert ("deleteAlarm",) not in storage.operations
+
+    await gate.alarm()
+
+    assert storage.values == {}
+    assert storage.alarm_at_ms is None
+    assert storage.operations[-2:] == [("deleteAll",), ("deleteAlarm",)]
 
 
 async def test_chunk_gate_client_hashes_identity_and_orders_explicit_rpc_calls(

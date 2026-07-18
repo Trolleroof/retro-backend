@@ -33,11 +33,13 @@ USER_ID_PATTERN = rf"^usr_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
 GAME_ID_PATTERN = rf"^game_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
 CHUNK_ID_PATTERN = rf"^chk_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
 EVENT_ID_PATTERN = rf"^evt_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
+RESULT_ID_PATTERN = rf"^res_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
 
 _USER_ID_MAX_LENGTH = len("usr_") + ID_SUFFIX_MAX_LENGTH
 _GAME_ID_MAX_LENGTH = len("game_") + ID_SUFFIX_MAX_LENGTH
 _CHUNK_ID_MAX_LENGTH = len("chk_") + ID_SUFFIX_MAX_LENGTH
 _EVENT_ID_MAX_LENGTH = len("evt_") + ID_SUFFIX_MAX_LENGTH
+_RESULT_ID_MAX_LENGTH = len("res_") + ID_SUFFIX_MAX_LENGTH
 
 
 class ContractError(ValueError):
@@ -176,7 +178,10 @@ def _acknowledgment_from_binding(value: object) -> IngestAcknowledgment:
 class GameResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    result_id: str = Field(pattern=r"^res_[A-Za-z0-9._-]+$")
+    result_id: str = Field(
+        pattern=RESULT_ID_PATTERN,
+        max_length=_RESULT_ID_MAX_LENGTH,
+    )
     game_id: str = Field(pattern=GAME_ID_PATTERN, max_length=_GAME_ID_MAX_LENGTH)
     game_type: GameType
     score: int = Field(ge=0, le=2**63 - 1, strict=True)

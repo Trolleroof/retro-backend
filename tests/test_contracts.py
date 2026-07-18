@@ -130,6 +130,22 @@ def test_game_result_bounds_key_forming_game_id_suffix() -> None:
         GameResultRequest.model_validate(payload)
 
 
+def test_game_result_bounds_result_id_suffix() -> None:
+    payload = {
+        "result_id": f"res_{'a' * 120}",
+        "game_id": "game_01",
+        "game_type": "2048",
+        "score": 32768,
+        "completed_at": "2026-07-17T18:42:00Z",
+    }
+
+    GameResultRequest.model_validate(payload)
+    payload["result_id"] = f"res_{'a' * 121}"
+
+    with pytest.raises(ValidationError):
+        GameResultRequest.model_validate(payload)
+
+
 def test_v2_envelope_accepts_current_interaction_trace_fixture(
     fixture_payload: dict[str, Any],
 ) -> None:

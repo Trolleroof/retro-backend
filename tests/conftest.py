@@ -387,6 +387,7 @@ def fake_env(fake_d1: FakeD1) -> SimpleNamespace:
         CHUNK_GATE=FakeChunkGateNamespace(operation_order),
         INGEST_RATE_LIMITER=FakeRateLimiter(),
         MAX_CHUNK_BYTES="262144",
+        MAX_RESULT_BYTES="16384",
         CHUNK_DEDUP_TTL_MS="172800000",
         CHUNK_PUBLISHING_LEASE_MS="30000",
         operation_order=operation_order,

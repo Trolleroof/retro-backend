@@ -336,8 +336,8 @@ class ChunkGate(DurableObject):
         await self.ctx.storage.setAlarm(alarm_at_ms)
 
     async def _clear(self) -> None:
-        await self.ctx.storage.deleteAlarm()
         await self.ctx.storage.deleteAll()
+        await self.ctx.storage.deleteAlarm()
 
     async def reserve(
         self,

@@ -213,12 +213,11 @@ def test_core_migration_builds_approved_d1_schema_and_leaderboard_index() -> Non
             "SELECT name FROM sqlite_master WHERE type = 'table'"
         )
     }
-    assert tables == {
-        "users",
-        "high_scores",
-        "stripe_customers",
-        "processed_stripe_events",
-    }
+    assert tables == {"users", "high_scores"}
+    assert not any(
+        marker in migration.casefold()
+        for marker in ("stripe", "posthog", "billing", "analytics")
+    )
     assert connection.execute("PRAGMA foreign_keys").fetchone() == (1,)
     index_sql = connection.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'index' "

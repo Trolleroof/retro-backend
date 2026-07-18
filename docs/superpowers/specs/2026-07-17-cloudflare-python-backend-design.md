@@ -2,7 +2,7 @@
 
 **Status:** Proposed for implementation
 
-> **Scope update (2026-07-17):** Stripe, PostHog, and the analytics and billing queues are deferred by user direction. Sections below describing them are retained as future work and are not part of the active implementation.
+> **Scope update (2026-07-17):** Stripe, PostHog, and analytics or billing queues are deferred by user direction. They have no active routes, resources, secrets, tables, or persistence in this implementation; a short future work note is retained below.
 
 **Goal:** Replace the development-only FastAPI/PostgreSQL/Redis/Redpanda/S3 stack with a Cloudflare-native backend whose runtime code is entirely Python.
 
@@ -13,11 +13,11 @@ This rewrite keeps only the useful external contracts and fixtures from the curr
 The first implementation slice delivers:
 
 - Python Worker HTTP API using FastAPI through Cloudflare's ASGI adapter.
-- D1 users, bearer-token hashes, high scores, Stripe customer state, and webhook idempotency.
+- D1 users, bearer-token hashes, and high scores.
 - A Python Durable Object for per-user chunk publication coordination and cached acknowledgments.
 - R2 storage for exact immutable gameplay chunk bytes.
-- Cloudflare Queues for asynchronous gameplay processing, PostHog delivery, and Stripe webhook processing.
-- Python queue consumers for validation, deterministic derived artifacts, and third-party delivery.
+- One Cloudflare Queue for asynchronous gameplay processing.
+- A Python queue consumer for validation and deterministic derived artifacts.
 - Local tests that exercise the domain logic without requiring a Cloudflare account.
 
 Later data-lake work may add Cloudflare Pipelines and R2 Data Catalog for managed Parquet or Iceberg output. That work is intentionally separate because Pipelines and Data Catalog are beta products and are not required for a durable ingestion API.
@@ -47,18 +47,14 @@ Python Worker + FastAPI
   | auth/hash lookup ----------> D1
   | chunk coordination --------> ChunkGate Durable Object
   | exact request bytes -------> R2 raw object
-  | small durable pointer -----> gameplay-chunks Queue
+  | small durable pointer -----> retro-gameplay-events Queue
   | result upsert -------------> D1 high_scores
-  | Stripe webhook -----------> billing-events Queue
-  ` product event -----------> analytics-events Queue
                                      |
-                   +-----------------+-----------------+
-                   |                                   |
-                   v                                   v
-          Python queue consumers              Python PostHog sender
-                   |
-                   v
-          validated R2 artifacts
+                                     v
+                            Python gameplay consumer
+                                     |
+                                     v
+                            validated R2 artifacts
 ```
 
 Cloudflare replaces each former infrastructure dependency directly:
@@ -66,7 +62,7 @@ Cloudflare replaces each former infrastructure dependency directly:
 | Former component | Cloudflare-native component | Responsibility |
 | --- | --- | --- |
 | FastAPI container and Uvicorn | Python Worker with FastAPI ASGI adapter | HTTP routing and validation |
-| PostgreSQL | D1 | Small relational product and billing state |
+| PostgreSQL | D1 | Small relational gameplay product state |
 | Redis | Durable Objects | Strongly consistent per-chunk coordination and deduplication |
 | Redpanda/Kafka | Queues | Durable asynchronous delivery with retries and a DLQ |
 | S3/MinIO | R2 | Raw and derived gameplay artifacts |
@@ -82,9 +78,9 @@ retro-backend/
     app.py                   # FastAPI application and exception mapping
     api/
       health.py              # Liveness and readiness routes
+      request_body.py        # Shared bounded request-body reader
       chunks.py              # Authenticated gameplay ingestion
       results.py             # Result submission and leaderboards
-      stripe.py              # Stripe webhook endpoint
     auth.py                  # Bearer parsing, hashing, and D1 lookup
     contracts.py             # Pydantic request and response contracts
     chunk_gate.py            # ChunkGate Durable Object
@@ -94,11 +90,6 @@ retro-backend/
       queues.py              # Queue message envelopes
     consumers/
       gameplay.py            # Raw chunk validation and derived R2 artifacts
-      analytics.py           # PostHog Capture API delivery
-      billing.py             # Stripe event projection into D1
-    integrations/
-      posthog.py             # Sanitized PostHog HTTP client
-      stripe.py              # Stripe REST and signature verification helpers
   migrations/
     0001_core.sql
   contracts/
@@ -125,10 +116,9 @@ GET  /v1/me
 POST /v1/game-event-chunks
 POST /v1/game-results
 GET  /v1/high-scores/{game_type}
-POST /v1/webhooks/stripe
 ```
 
-Gameplay and score routes use `Authorization: Bearer <opaque-token>`. Stripe uses its signed webhook header and the exact raw request body.
+Gameplay and score routes use `Authorization: Bearer <opaque-token>`.
 
 The v2 gameplay request remains compatible with `interaction-trace-chunk-v2.json`. The API performs bounded-body parsing, schema-envelope checks, and authenticated identity checks. Complete event semantics remain asynchronous.
 
@@ -147,12 +137,12 @@ The Cloudflare acknowledgment removes Kafka-specific offsets:
 }
 ```
 
-`202 Accepted` means the exact bytes are durable in R2 and the processing pointer was accepted by Queues. It does not mean downstream validation or analytics delivery has completed.
+`202 Accepted` means the exact bytes are durable in R2 and the processing pointer was accepted by Queues. It does not mean downstream validation has completed.
 
 ## Gameplay Ingestion Flow
 
-1. Read at most 256 KiB from the request and reject an empty or oversized body.
-2. Resolve the bearer token by SHA-256 hash in D1. Raw tokens never enter logs, storage, queue messages, or analytics.
+1. Resolve the bearer token by SHA-256 hash in D1. Raw tokens never enter logs, storage, or queue messages.
+2. Read at most 256 KiB from the request and reject an empty or oversized body.
 3. Parse only the v2 envelope and verify that chunk and event `user_id` values match the authenticated user.
 4. Compute the raw-body SHA-256 and address a `ChunkGate` Durable Object by authenticated user plus chunk ID.
 5. Ask the object to reserve publication:
@@ -167,7 +157,7 @@ The Cloudflare acknowledgment removes Kafka-specific offsets:
    ```
 
    Store the SHA-256, schema version, and authenticated identifiers as custom metadata. A pre-existing object is success only when its stored hash matches.
-7. Publish a small JSON pointer to `gameplay-chunks`. The Queue message contains the R2 key, hash, authenticated user ID, game ID, chunk ID, and receipt time. It never contains a bearer token or the full raw body. This avoids the current 128 KB Queue message limit while preserving the 256 KiB HTTP contract.
+7. Publish a small JSON pointer to `retro-gameplay-events`. The Queue message contains the R2 key, hash, authenticated user ID, game ID, chunk ID, and receipt time. It never contains a bearer token or the full raw body. This avoids the current 128 KB Queue message limit while preserving the 256 KiB HTTP contract.
 8. Cache the acknowledgment in the Durable Object and return `202`.
 
 If R2 succeeds and Queue publication fails, the API returns `503` and a retry reuses the matching R2 object before retrying the Queue send. If the Queue accepts immediately before the Worker loses its response, a client retry may enqueue the same pointer again. Consumers therefore remain idempotent.
@@ -203,7 +193,7 @@ Queues provide at-least-once delivery. The gameplay consumer:
 
 4. On malformed data, writes a deterministic rejection record and acknowledges the message so poison data does not retry forever.
 5. On transient R2 or service failures, raises so Queues retries the message.
-6. After the configured retry count, Queues moves the message to `gameplay-chunks-dlq`.
+6. After the configured retry count, Queues moves the message to `retro-gameplay-events-dlq`.
 
 Derived writes use deterministic keys and content hashes, so replay after a crash produces the same object rather than duplicate data.
 
@@ -229,44 +219,13 @@ CREATE TABLE high_scores (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE stripe_customers (
-    user_id TEXT PRIMARY KEY,
-    stripe_customer_id TEXT NOT NULL UNIQUE,
-    subscription_id TEXT,
-    subscription_status TEXT,
-    current_period_end TEXT,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE processed_stripe_events (
-    event_id TEXT PRIMARY KEY,
-    event_type TEXT NOT NULL,
-    processed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
 ```
 
 Gameplay chunks and events never enter D1. High-score submission uses a conditional maximum upsert. Lower or equal retries preserve the original score and achievement timestamp.
 
-## PostHog
+## Deferred Integrations
 
-Product analytics are isolated from gameplay storage. HTTP handlers emit sanitized CloudEvents to `analytics-events` only after the primary operation succeeds. A Python consumer maps them to PostHog Capture API calls.
-
-Allowed events include sign-in, game start or completion, upload success or retry, score submission, and billing lifecycle changes. Raw trajectory payloads, tokens, Stripe payloads, email addresses, and privileged gameplay events are forbidden.
-
-Each PostHog event uses a deterministic insertion ID derived from the CloudEvent ID so Queue retries do not create duplicate analytics events. PostHog failure never changes a successful gameplay or billing response; Queues retries independently and ultimately uses an analytics DLQ.
-
-## Stripe
-
-Stripe integration remains ordinary outbound HTTPS from the Python Worker.
-
-- Checkout or portal routes call Stripe's REST API with a Worker secret.
-- `/v1/webhooks/stripe` reads the exact raw body and verifies `Stripe-Signature` before parsing JSON.
-- A verified event is enqueued to `billing-events`, and the endpoint returns `2xx` promptly.
-- The Python billing consumer uses one atomic D1 batch to insert `processed_stripe_events` and apply the idempotent projection to `stripe_customers`.
-- Billing state changes can emit sanitized analytics events after the D1 transaction succeeds.
-
-The first core implementation includes the webhook boundary, signature verifier interface, and queue envelope. Checkout creation can follow once product and price IDs exist.
+PostHog analytics and Stripe billing are future work by explicit user direction. The active gameplay Worker defines no routes, queues, bindings, secrets, tables, persistence, or implementation recipe for either integration. A future design must establish those contracts independently before implementation.
 
 ## Failure Semantics
 
@@ -276,22 +235,20 @@ The first core implementation includes the webhook boundary, signature verifier 
 | Malformed or unsupported chunk envelope | `400`, no R2 or Queue work |
 | Chunk ID reused with different bytes | `409`, existing object untouched |
 | Request body above 256 KiB | `413` before full buffering |
+| Authenticated result body above 16 KiB | `413` before full buffering or parsing |
+| Malformed or invalid result JSON | `422`, no score mutation |
 | Durable Object unavailable | `503`, client keeps local outbox item |
 | R2 write unavailable | `503`, no Queue acknowledgment |
 | Queue send unavailable | `503`; matching raw R2 object is reused on retry |
 | Response lost after Queue acceptance | Client retry may enqueue a duplicate; consumer keys remain deterministic |
 | Consumer semantic validation fails | Rejection artifact plus acknowledgment |
 | Consumer transient failure | Queue retry, then DLQ after configured limit |
-| PostHog unavailable | Analytics Queue retry; primary request remains successful |
-| Invalid Stripe signature | `400`, event is not queued |
-| Replayed Stripe event | D1 idempotency row makes processing a no-op |
 
 The GamePigeon client remains the final retry boundary. It deletes a local chunk only after receiving a matching `202` acknowledgment and retains it for timeouts, disconnects, `408`, `429`, or `5xx` responses.
 
 ## Security
 
 - Store only SHA-256 bearer-token hashes in D1.
-- Use Worker secrets for `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `POSTHOG_API_KEY`.
 - Use Cloudflare bindings for D1, R2, Queues, and Durable Objects so no service credentials appear in code.
 - Validate exact authenticated identity before constructing storage keys.
 - Keep bucket access private; downloads require an authenticated Worker route if added later.
@@ -309,14 +266,12 @@ Pure tests cover:
 - deterministic R2 and Durable Object names.
 - acknowledgment and Queue envelope contracts.
 - high-score maximum-upsert decisions.
-- Stripe signature verification against fixed fixtures.
-- PostHog event sanitization and deterministic insertion IDs.
 
 Integration tests use local fakes around binding protocols to cover:
 
 - first publish, duplicate publish, conflict, in-flight retry, R2 failure, and Queue failure.
 - gameplay consumer success, deterministic replay, rejection, retry, and DLQ behavior.
-- D1 auth, score, leaderboard, Stripe projection, and webhook idempotency.
+- D1 auth, score, and leaderboard behavior.
 - FastAPI route status codes and JSON Schema compatibility.
 
 The deployable Worker is then smoke-tested with `pywrangler dev` against local D1, R2, Queue, and Durable Object bindings. A Cloudflare-account integration test is optional and never required for the default unit suite.
@@ -328,9 +283,7 @@ The deployable Worker is then smoke-tested with `pywrangler dev` against local D
 3. Add D1 migration, bearer auth, result submission, and leaderboards.
 4. Add `ChunkGate`, deterministic R2 storage, Queue pointer publication, and acknowledgment caching.
 5. Add gameplay Queue validation and deterministic derived R2 writes.
-6. Add PostHog analytics Queue and consumer.
-7. Add Stripe webhook verification, billing Queue, and D1 projection.
-8. Add observability, DLQ configuration, deployment documentation, and local smoke tests.
+6. Add observability, DLQ configuration, deployment documentation, and local smoke tests.
 
 Each step must leave a runnable, tested Worker. The initial milestone is complete when the API can accept a fixture chunk, persist its exact bytes to local R2, enqueue a pointer, consume it into a deterministic validated object, and accept an idempotent high score without PostgreSQL, Redis, Kafka, S3 credentials, Docker, or TypeScript.
 
@@ -340,5 +293,4 @@ Each step must leave a runnable, tested Worker. The initial milestone is complet
 - Preserving Kafka partition or offset fields.
 - Running CPython servers, containers, Redis, PostgreSQL, or Redpanda alongside Cloudflare.
 - Generating Parquet with PyArrow inside Workers.
-- Sending raw gameplay traces or Stripe webhook bodies to PostHog.
-- Building a complete customer sign-up UI or choosing Stripe products and prices in the core ingestion milestone.
+- Implementing the deferred billing or analytics integrations.

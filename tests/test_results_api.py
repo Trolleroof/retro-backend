@@ -1,7 +1,18 @@
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
 
 from httpx import AsyncClient
+
+MAX_RESULT_BYTES = 16_384
+
+
+class UnreadBody:
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        return self
+
+    async def __anext__(self) -> bytes:
+        raise AssertionError("unauthenticated request body was read")
 
 
 def _result_payload(*, game_type: str = "2048", score: int = 32768) -> dict[str, object]:
@@ -65,6 +76,17 @@ async def test_result_route_requires_bearer_token(app_client: AsyncClient) -> No
     assert response.status_code == 401
 
 
+async def test_result_route_authenticates_before_reading_body(
+    app_client: AsyncClient,
+) -> None:
+    response = await app_client.post(
+        "/v1/game-results",
+        content=UnreadBody(),
+    )
+
+    assert response.status_code == 401
+
+
 async def test_result_route_rejects_unknown_bearer_token(
     app_client: AsyncClient,
 ) -> None:
@@ -90,6 +112,63 @@ async def test_result_route_rejects_invalid_game_type(
     )
 
     assert response.status_code == 422
+    assert not any("high_scores" in sql.casefold() for sql in fake_d1.prepared_sql)
+
+
+async def test_result_route_rejects_invalid_json_without_score_mutation(
+    app_client: AsyncClient,
+    fake_d1: Any,
+) -> None:
+    fake_d1.first_rows.append({"id": "usr_example"})
+
+    response = await app_client.post(
+        "/v1/game-results",
+        headers={"Authorization": "Bearer opaque"},
+        content=b"{not-json",
+    )
+
+    assert response.status_code == 422
+    assert not any("high_scores" in sql.casefold() for sql in fake_d1.prepared_sql)
+
+
+async def test_result_route_rejects_oversized_content_length_at_hard_cap(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: SimpleNamespace,
+) -> None:
+    fake_env.MAX_RESULT_BYTES = "1000000"
+    fake_d1.first_rows.append({"id": "usr_example"})
+
+    response = await app_client.post(
+        "/v1/game-results",
+        headers={"Authorization": "Bearer opaque"},
+        content=b"x" * (MAX_RESULT_BYTES + 1),
+    )
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "request body exceeds maximum size"}
+    assert not any("high_scores" in sql.casefold() for sql in fake_d1.prepared_sql)
+
+
+async def test_result_route_rejects_streamed_overflow_without_score_mutation(
+    app_client: AsyncClient,
+    fake_d1: Any,
+) -> None:
+    fake_d1.first_rows.append({"id": "usr_example"})
+
+    async def oversized_body() -> AsyncIterator[bytes]:
+        yield b"x" * MAX_RESULT_BYTES
+        yield b"x"
+
+    response = await app_client.post(
+        "/v1/game-results",
+        headers={"Authorization": "Bearer opaque"},
+        content=oversized_body(),
+    )
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "request body exceeds maximum size"}
+    assert not any("high_scores" in sql.casefold() for sql in fake_d1.prepared_sql)
 
 
 async def test_result_route_requires_auth_and_returns_personal_best(

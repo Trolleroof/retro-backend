@@ -5,11 +5,15 @@ from datetime import UTC, datetime
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import ValidationError
 
 from ..auth import request_environment, require_user_id
-from ..bindings import D1Database, value_field
+from ..bindings import D1Database, positive_int_field, value_field
 from ..contracts import GameResultRequest, GameType
 from ..storage.d1 import D1Repository
+from .request_body import BodyTooLarge, read_limited_body
+
+DEFAULT_MAX_RESULT_BYTES = 16_384
 
 router = APIRouter()
 
@@ -32,9 +36,37 @@ def _repository(request: Request) -> D1Repository:
 @router.post("/v1/game-results", status_code=status.HTTP_202_ACCEPTED)
 async def submit_result(
     request: Request,
-    result: GameResultRequest,
     user_id: Annotated[str, Depends(require_user_id)],
 ) -> dict[str, bool | int]:
+    environment = request_environment(request)
+    max_bytes = min(
+        positive_int_field(
+            environment,
+            "MAX_RESULT_BYTES",
+            DEFAULT_MAX_RESULT_BYTES,
+        ),
+        DEFAULT_MAX_RESULT_BYTES,
+    )
+    try:
+        raw_body = await read_limited_body(request, max_bytes=max_bytes)
+    except BodyTooLarge as error:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=str(error),
+        ) from error
+
+    try:
+        result = GameResultRequest.model_validate_json(raw_body)
+    except ValidationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=error.errors(
+                include_url=False,
+                include_context=False,
+                include_input=False,
+            ),
+        ) from error
+
     upsert = await _repository(request).upsert_high_score(
         user_id=user_id,
         game_type=result.game_type,

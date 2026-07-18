@@ -14,7 +14,7 @@ The Worker may execute in any Cloudflare location and an isolate may be
 restarted at any time. Request state therefore stays local to a handler. Durable
 state is kept in bindings:
 
-- D1 stores users, token hashes, high scores, and small relational state.
+- D1 stores users, token hashes, and high scores.
 - R2 stores exact request bytes and deterministic derived gameplay artifacts.
 - `CHUNK_GATE` is one globally addressed Durable Object per logical user/chunk.
 - `GAMEPLAY_QUEUE` carries small pointers to R2 objects, never full trajectories.
@@ -27,6 +27,10 @@ a small object pointer to `retro-gameplay-events`. Only after Queue publication
 does the Durable Object persist the accepted acknowledgment. The consumer loads
 the exact object from R2, validates it again, and writes deterministic derived
 objects before acknowledging the Queue message.
+
+For `POST /v1/game-results`, the Worker authenticates before reading at most
+16 KiB, validates the JSON contract, and then conditionally updates the D1 high
+score. Rejected bodies never reach the score mutation.
 
 These resources do not form one global transaction. A Durable Object serializes
 transitions for its own chunk and has strongly consistent private storage. D1
@@ -149,6 +153,7 @@ not store the plaintext token in D1, source control, logs, or analytics.
 Non-secret Worker variables live in `wrangler.toml`:
 
 - `MAX_CHUNK_BYTES=262144`
+- `MAX_RESULT_BYTES=16384`
 - `CHUNK_DEDUP_TTL_MS=172800000`
 - `CHUNK_PUBLISHING_LEASE_MS=30000`
 - `ENVIRONMENT=development`
@@ -173,7 +178,6 @@ The final command performs a live deployment; the preceding dry run does not.
 
 PostHog analytics and Stripe billing are explicitly deferred. There are no
 PostHog or Stripe routes, modules, secrets, bindings, producers, or consumers in
-the active Worker. A later analytics slice can add a dedicated Queue and
-consumer at the gameplay consumer boundary. A later billing slice can add a
-raw-body webhook, dedicated Queue, consumer, and required secrets without
-changing the gameplay Queue contract.
+the active Worker, and there are no active tables or persistence for either
+integration. Future slices can define their own storage and delivery boundaries
+without changing the gameplay Queue contract.

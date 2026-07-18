@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Scope update (2026-07-17):** Stripe, PostHog, and the analytics and billing queues are deferred by user direction. Task 4 and related sections are retained as future work and are not part of the active implementation.
+> **Scope update (2026-07-17):** Stripe, PostHog, and analytics or billing queues are deferred by user direction. They have no active routes, resources, secrets, tables, or persistence; Task 4 is only a future work marker.
 
 **Goal:** Replace the development FastAPI/PostgreSQL/Redis/Kafka stack with a deployable Cloudflare-native backend whose runtime logic is entirely Python.
 
-**Architecture:** A Python Worker delegates HTTP requests to FastAPI through Cloudflare's ASGI adapter and exposes Queue plus Durable Object entrypoints from the same module. D1 stores small relational product state, R2 stores exact and validated gameplay objects, a per-chunk Durable Object coordinates publication, and Queues isolate gameplay processing, PostHog, and Stripe projections from request latency.
+**Architecture:** A Python Worker delegates HTTP requests to FastAPI through Cloudflare's ASGI adapter and exposes Queue plus Durable Object entrypoints from the same module. D1 stores users and high scores, R2 stores exact and validated gameplay objects, a per-chunk Durable Object coordinates publication, and one Queue isolates gameplay processing from request latency.
 
 **Tech Stack:** Python 3.13, FastAPI, Pydantic 2, HTTPX, Cloudflare Python Workers, pywrangler, D1, R2, Queues, Durable Objects, pytest, Ruff, BasedPyright.
 
@@ -29,12 +29,12 @@ src/retro_backend/
   api/
     __init__.py
     health.py                  health and current-user routes
+    request_body.py            shared bounded request-body reader
     chunks.py                  chunk ingestion route
     results.py                 score submission and leaderboard routes
-    stripe.py                  raw-body Stripe webhook route
   storage/
     __init__.py
-    d1.py                      D1 auth, score, and billing repositories
+    d1.py                      D1 auth, score, and leaderboard repository
     r2.py                      deterministic keys and conditional object I/O
     queues.py                  Queue envelopes and publishing helpers
   services/
@@ -44,12 +44,6 @@ src/retro_backend/
     __init__.py
     dispatch.py                queue-name routing and per-message ack/retry
     gameplay.py                semantic validation and derived R2 objects
-    analytics.py               PostHog Capture API delivery
-    billing.py                 Stripe event projection into D1
-  integrations/
-    __init__.py
-    posthog.py                 HTTPX PostHog client and safe event mapping
-    stripe.py                  manual Stripe signature verification
 migrations/0001_core.sql       D1 product-state schema
 scripts/issue_token.py         local opaque token and SQL generator
 tests/                         pure Python unit and HTTP integration tests
@@ -142,7 +136,7 @@ async def test_result_route_requires_auth_and_returns_personal_best(app_client, 
 
 Also test missing bearer token (`401`), unknown token (`401`), invalid game type (`422`), lower/equal score preservation, leaderboard order and limit, `GET /health/live`, `GET /health/ready`, and `GET /v1/me`.
 
-Test `log_event()` separately and assert that it emits one JSON object containing only the event name and explicitly supplied allowlisted identifiers. Its API must not accept request bodies, bearer tokens, Stripe signatures, or arbitrary mappings.
+Test `log_event()` separately and assert that it emits one JSON object containing only the event name and explicitly supplied allowlisted identifiers. Its API must not accept request bodies, bearer tokens, or arbitrary mappings.
 
 - [ ] **Step 2: Run tests and verify the new APIs fail for missing modules**
 
@@ -195,8 +189,14 @@ class ChunkEnvelope(BaseModel):
 
 class GameResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    result_id: str = Field(pattern=r"^res_[A-Za-z0-9._-]+$")
-    game_id: str = Field(pattern=r"^game_[A-Za-z0-9._-]+$")
+    result_id: str = Field(
+        pattern=r"^res_[A-Za-z0-9._-]{1,120}$",
+        max_length=124,
+    )
+    game_id: str = Field(
+        pattern=r"^game_[A-Za-z0-9._-]{1,120}$",
+        max_length=125,
+    )
     game_type: GameType
     score: int = Field(ge=0, le=2**63 - 1, strict=True)
     completed_at: AwareDatetime
@@ -220,9 +220,9 @@ RETURNING score
 
 When `RETURNING` produces no row, select the existing score and report `updated=False`.
 
-Create `app = FastAPI(title="Retro Backend", version="0.2.0")`, include health and result routers, and return `202` for accepted game results.
+Create `app = FastAPI(title="Retro Backend", version="0.2.0")`, include health and result routers, and return `202` for accepted game results. Authenticate the result route before reading its body, enforce a hard 16 KiB streaming limit, and call `GameResultRequest.model_validate_json()` manually so invalid JSON remains `422`.
 
-`migrations/0001_core.sql` creates `users`, `high_scores`, `stripe_customers`, and `processed_stripe_events` exactly as approved, enables foreign keys, and adds a descending leaderboard index.
+`migrations/0001_core.sql` creates only `users` and `high_scores`, enables foreign keys, and adds a descending leaderboard index.
 
 `scripts/issue_token.py` uses `secrets.token_urlsafe(32)`, prints the one-time token to stderr, and prints a parameter-safe SQL statement containing only its hash to stdout. It has no Cloudflare credential dependency.
 
@@ -398,7 +398,7 @@ except Exception as error:
     raise IngestionUnavailable("event ingestion unavailable") from error
 ```
 
-The FastAPI route uses a `_read_limited_body()` helper over `request.stream()`. It rejects `Content-Length` above the limit before reading, stops as soon as the accumulated bytes cross the limit, and maps contract, conflict, and availability errors to `400`, `409`, and `503`.
+The FastAPI chunk and result routes share a `read_limited_body()` helper over `request.stream()`. It rejects `Content-Length` above each route's hard limit before reading and stops as soon as accumulated bytes cross the limit. Both routes authenticate before reading. Chunk errors map to `400`, `409`, and `503`; malformed result JSON maps to `422`, and an authenticated result body above 16 KiB maps to `413`.
 
 After authentication and before parsing or persistence, the route calls the Cloudflare Rate Limiting binding with `{"key": f"{user_id}:game-event-chunks"}`. A false `success` result returns `429` with `Retry-After: 60`.
 
@@ -509,125 +509,7 @@ git commit -m "feat: validate queued gameplay chunks"
 
 ## Task 4: PostHog Analytics And Stripe Billing (Deferred)
 
-This task is future work and is not part of the active implementation under the 2026-07-17 scope update.
-
-**Files:**
-- Create: `src/retro_backend/integrations/__init__.py`
-- Create: `src/retro_backend/integrations/posthog.py`
-- Create: `src/retro_backend/integrations/stripe.py`
-- Create: `src/retro_backend/consumers/analytics.py`
-- Create: `src/retro_backend/consumers/billing.py`
-- Create: `src/retro_backend/api/stripe.py`
-- Modify: `src/retro_backend/consumers/dispatch.py`
-- Modify: `src/retro_backend/storage/d1.py`
-- Modify: `src/retro_backend/app.py`
-- Create: `tests/test_posthog.py`
-- Create: `tests/test_stripe.py`
-- Create: `tests/test_billing_consumer.py`
-- Create: `tests/test_stripe_api.py`
-
-- [ ] **Step 1: Write failing analytics, signature, webhook, and billing tests**
-
-```python
-def test_posthog_mapping_is_sanitized_and_deterministic():
-    event = AnalyticsEvent(
-        id="evt_01",
-        type="gamepigeon.chunk.accepted",
-        source="retro-api",
-        time="2026-07-17T18:00:00Z",
-        subject="usr_example/chk_01",
-        data={"user_id": "usr_example", "game_type": "2048"},
-    )
-    payload = to_posthog_payload(event, "ph_project")
-    assert payload["api_key"] == "ph_project"
-    assert payload["distinct_id"] == "usr_example"
-    assert payload["properties"]["$insert_id"] == "evt_01"
-    assert "token" not in json.dumps(payload).lower()
-
-
-def test_stripe_signature_verification_accepts_valid_raw_body():
-    body = b'{"id":"evt_stripe_01","type":"customer.subscription.updated"}'
-    signature = make_test_signature(body, secret="whsec_test", timestamp=1784241600)
-    assert verify_stripe_signature(body, signature, "whsec_test", 1784241600).id == "evt_stripe_01"
-
-
-def test_stripe_signature_rejects_stale_timestamp():
-    with pytest.raises(StripeSignatureError, match="timestamp"):
-        verify_stripe_signature(body, signature, "whsec_test", 1784242001)
-
-
-async def test_verified_webhook_is_queued_and_returns_quickly(app_client, fake_env):
-    response = await app_client.post(
-        "/v1/webhooks/stripe",
-        content=body,
-        headers={"Stripe-Signature": signature},
-    )
-    assert response.status_code == 202
-    assert fake_env.BILLING_QUEUE.send_calls[0]["event_id"] == "evt_stripe_01"
-
-
-async def test_replayed_billing_event_is_noop(fake_d1):
-    fake_d1.first_rows.append({"event_id": "evt_stripe_01"})
-    result = await BillingConsumer(fake_env).process(event)
-    assert result.duplicate is True
-    assert fake_d1.batch_calls == []
-```
-
-Also test unsupported PostHog event rejection, PostHog non-2xx retry, missing analytics key as permanent no-op in development, invalid Stripe header (`400`), invalid JSON after valid signature (`400`), Queue failure (`503` so Stripe retries), subscription created/updated/deleted projections, and one D1 batch containing idempotency insert plus customer upsert.
-
-- [ ] **Step 2: Run tests and verify integrations fail**
-
-```bash
-uv run pytest tests/test_posthog.py tests/test_stripe.py tests/test_billing_consumer.py tests/test_stripe_api.py -q
-```
-
-Expected: imports or behavior fail for the new integration modules.
-
-- [ ] **Step 3: Implement PostHog and Stripe without SDK runtime dependencies**
-
-`AnalyticsEvent` permits only an explicit event type allowlist and an explicit property allowlist per type. `to_posthog_payload()` sends to `{POSTHOG_HOST}/i/v0/e/` using HTTPX and includes project `api_key`, event name, `distinct_id`, ISO timestamp, and deterministic `$insert_id`.
-
-Stripe verification is manual HMAC-SHA256 over exact bytes:
-
-```python
-signed = f"{timestamp}.".encode() + raw_body
-expected = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
-if not any(hmac.compare_digest(expected, signature) for signature in v1_values):
-    raise StripeSignatureError("signature mismatch")
-if abs(now_seconds - timestamp) > tolerance_seconds:
-    raise StripeSignatureError("timestamp outside tolerance")
-```
-
-The webhook verifies before JSON parsing, publishes only the event ID, event type, creation time, and required subscription/customer fields, and returns `202` only after Queue acceptance.
-
-The billing consumer handles `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`. It uses a D1 preflight lookup for fast replay detection, then one `DB.batch()` containing:
-
-```sql
-INSERT INTO processed_stripe_events (event_id, event_type) VALUES (?1, ?2)
-ON CONFLICT(event_id) DO NOTHING
-```
-
-and an upsert or delete-status projection for `stripe_customers`. The event payload must carry `metadata.user_id`; events without a valid `usr_` identity are permanent rejections and are acknowledged.
-
-Extend queue dispatch for `retro-analytics-events` and `retro-billing-events`.
-
-- [ ] **Step 4: Verify integrations and complete suite**
-
-```bash
-uv run pytest tests/test_posthog.py tests/test_stripe.py tests/test_billing_consumer.py tests/test_stripe_api.py -q
-uv run pytest -q
-uv run ruff check src tests scripts
-uv run basedpyright src tests
-```
-
-Expected: all tests and static checks pass with no network calls in tests.
-
-- [ ] **Step 5: Commit integrations**
-
-```bash
-git add src/retro_backend tests
-git commit -m "feat: add PostHog and Stripe consumers"
-```
+This task is future work and is not part of the active implementation under the 2026-07-17 scope update. No implementation recipe, schema, route, resource, or secret is approved until a future design is reviewed.
 
 ## Task 5: Worker Entrypoint, Wrangler Resources, Cleanup, And Smoke Verification
 
@@ -674,11 +556,11 @@ def test_wrangler_binds_every_runtime_resource():
     assert config["compatibility_date"] == "2026-07-17"
     assert config["observability"]["enabled"] is True
     assert {item["binding"] for item in config["queues"]["producers"]} == {
-        "GAMEPLAY_QUEUE", "ANALYTICS_QUEUE", "BILLING_QUEUE"
+        "GAMEPLAY_QUEUE"
     }
 ```
 
-Also assert D1 binding `DB`, R2 binding `RAW_BUCKET`, Durable Object binding `CHUNK_GATE`, rate-limit binding `INGEST_RATE_LIMITER`, SQLite class export, all three Queue consumers and DLQs, non-secret vars only, no `.ts` or `.js` source files, and absence of PostgreSQL/Redis/Kafka/Docker dependencies and legacy files.
+Also assert D1 binding `DB`, R2 binding `RAW_BUCKET`, Durable Object binding `CHUNK_GATE`, rate-limit binding `INGEST_RATE_LIMITER`, SQLite class export, exactly one gameplay Queue consumer and its DLQ, non-secret vars only, no `.ts` or `.js` source files, and absence of PostgreSQL/Redis/Kafka/Docker dependencies and legacy files.
 
 - [ ] **Step 2: Run tests and verify entry/config are absent**
 
@@ -722,7 +604,7 @@ name = "CHUNK_GATE"
 class_name = "ChunkGate"
 ```
 
-Queue consumers use batch size 10, timeout 5 seconds, five retries, and dedicated DLQs. Config vars include body limits, deduplication TTL, publishing lease, PostHog host, and environment name. Secrets are documented but absent from the file.
+The gameplay Queue consumer uses batch size 10, timeout 5 seconds, five retries, and a dedicated DLQ. Config vars include the 256 KiB chunk limit, 16 KiB result limit, deduplication TTL, publishing lease, and environment name. No integration secrets or resources are configured.
 
 Configure `INGEST_RATE_LIMITER` as a native `[[ratelimits]]` binding with namespace `"1001"`, 120 requests per 60-second period. The README notes that the namespace must remain unique within the Cloudflare account.
 
@@ -780,8 +662,8 @@ git commit -m "feat: deploy Retro on Cloudflare Python Workers"
 - [ ] Confirm every approved HTTP route exists and is covered by tests.
 - [ ] Confirm exact raw bytes reach R2 before Queue acceptance.
 - [ ] Confirm every asynchronous path uses per-message ack/retry and deterministic keys.
-- [ ] Confirm no secret, raw token, raw Stripe body, or gameplay trajectory reaches logs or PostHog.
-- [ ] Confirm D1 contains only product and billing state.
+- [ ] Confirm no secret, raw token, or gameplay trajectory reaches logs.
+- [ ] Confirm D1 contains only users and high scores.
 - [ ] Confirm no runtime source file uses TypeScript or JavaScript.
 - [ ] Run an independent spec-compliance review and an independent code-quality review.
 - [ ] Run `make verify` from a clean working tree and report the exact result.

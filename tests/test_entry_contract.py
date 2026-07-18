@@ -263,14 +263,18 @@ def test_wrangler_binds_native_ingest_rate_limiter() -> None:
 
 def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
     config = _wrangler_config()
+    readme = _read(README_PATH)
 
     expected_vars = {
         "MAX_CHUNK_BYTES": 262_144,
+        "MAX_RESULT_BYTES": 16_384,
         "CHUNK_DEDUP_TTL_MS": 172_800_000,
         "CHUNK_PUBLISHING_LEASE_MS": 30_000,
         "ENVIRONMENT": "development",
     }
     assert config["vars"] == expected_vars
+    assert "`MAX_RESULT_BYTES=16384`" in readme
+    assert "16 KiB" in readme
     assert not any(
         marker in key.casefold()
         for key in expected_vars
@@ -456,6 +460,32 @@ def test_design_and_plan_mark_deferred_integrations_as_future_work() -> None:
     assert "## Task 4: PostHog Analytics And Stripe Billing (Deferred)" in plan
     task_4 = plan.split("## Task 4:", maxsplit=1)[1].split("## Task 5:", maxsplit=1)[0]
     assert "not part of the active implementation" in task_4
+    assert "**Files:**" not in task_4
+    assert "- [ ]" not in task_4
+
+
+def test_deferred_integrations_have_no_schema_or_advertised_resources() -> None:
+    migration = _read(ROOT / "migrations" / "0001_core.sql")
+    readme = _read(README_PATH)
+    active_docs = "\n".join((_read(DESIGN_PATH), _read(PLAN_PATH)))
+
+    for marker in ("stripe", "posthog", "billing", "analytics"):
+        assert marker not in migration.casefold()
+    for marker in (
+        "/v1/webhooks/stripe",
+        "retro-analytics-events",
+        "retro-billing-events",
+        "ANALYTICS_QUEUE",
+        "BILLING_QUEUE",
+        "stripe_customers",
+        "processed_stripe_events",
+        "POSTHOG_API_KEY",
+        "STRIPE_SECRET_KEY",
+        "src/retro_backend/api/stripe.py",
+        "src/retro_backend/integrations/posthog.py",
+    ):
+        assert marker not in active_docs
+    assert "no active tables or persistence" in readme.casefold()
 
 
 def test_legacy_infrastructure_is_absent() -> None:
