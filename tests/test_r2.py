@@ -240,3 +240,43 @@ async def test_put_raw_preserves_transient_put_error_when_no_race_winner_exists(
         )
 
     assert raised.value is error
+
+
+def test_raw_key_builder_accepts_maximum_id_suffixes_and_rejects_overlong() -> None:
+    key = R2Store.raw_key(
+        user_id=f"usr_{'u' * 120}",
+        game_id=f"game_{'g' * 120}",
+        chunk_id=f"chk_{'c' * 120}",
+    )
+
+    assert len(key.encode("utf-8")) <= 1024
+    with pytest.raises(ValueError, match="user_id"):
+        R2Store.raw_key(
+            user_id=f"usr_{'u' * 121}",
+            game_id="game_01",
+            chunk_id="chk_01",
+        )
+
+
+async def test_derived_key_allows_1024_bytes_and_rejects_1025_before_binding(
+    fake_env: Any,
+) -> None:
+    store = R2Store(fake_env.RAW_BUCKET)
+    maximum_key = "k" * 1024
+
+    result = await store.put_derived(maximum_key, b"{}")
+
+    assert result == maximum_key
+    head_calls = list(fake_env.RAW_BUCKET.head_calls)
+    put_calls = list(fake_env.RAW_BUCKET.put_calls)
+    with pytest.raises(ValueError, match="1024 bytes"):
+        await store.put_derived("k" * 1025, b"{}")
+    assert fake_env.RAW_BUCKET.head_calls == head_calls
+    assert fake_env.RAW_BUCKET.put_calls == put_calls
+
+
+async def test_raw_read_rejects_oversized_key_before_binding(fake_env: Any) -> None:
+    with pytest.raises(ValueError, match="1024 bytes"):
+        await R2Store(fake_env.RAW_BUCKET).get_raw("r" * 1025)
+
+    assert fake_env.RAW_BUCKET.get_calls == []

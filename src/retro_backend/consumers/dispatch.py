@@ -5,8 +5,7 @@ from datetime import UTC, datetime
 from typing import cast
 
 from ..bindings import QueueBatch, QueueMessage, iter_binding_values, value_field
-from ..contracts import TransientGameplayError
-from .gameplay import GameplayConsumer
+from .gameplay import GameplayConsumer as GameplayConsumer
 
 GAMEPLAY_QUEUE_NAME = "retro-gameplay-events"
 
@@ -44,25 +43,25 @@ async def dispatch_queue(batch: object, environment: object) -> None:
     messages = value_field(queue_batch, "messages")
     try:
         consumer = GameplayConsumer(environment)
-    except TransientGameplayError:
+    except Exception:
         for message in iter_binding_values(messages):
             cast(QueueMessage, message).retry()
         return
 
     for message in iter_binding_values(messages):
         queue_message = cast(QueueMessage, message)
-        body = value_field(queue_message, "body")
-        message_id = value_field(queue_message, "id")
-        message_timestamp_ms = _normalize_message_timestamp_ms(
-            value_field(queue_message, "timestamp")
-        )
         try:
+            body = value_field(queue_message, "body")
+            message_id = value_field(queue_message, "id")
+            message_timestamp_ms = _normalize_message_timestamp_ms(
+                value_field(queue_message, "timestamp")
+            )
             await consumer.process(
                 body,
                 message_id=message_id,
                 message_timestamp_ms=message_timestamp_ms,
             )
-        except TransientGameplayError:
+        except Exception:
             queue_message.retry()
         else:
             queue_message.ack()

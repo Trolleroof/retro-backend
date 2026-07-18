@@ -225,6 +225,63 @@ async def test_schema_v1_returns_400(
     assert fake_env.operation_order == []
 
 
+@pytest.mark.parametrize(
+    ("field", "prefix"),
+    [
+        ("user_id", "usr_"),
+        ("game_id", "game_"),
+        ("chunk_id", "chk_"),
+        ("event_id", "evt_"),
+    ],
+)
+async def test_overlong_identifier_returns_400_before_storage(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    field: str,
+    prefix: str,
+) -> None:
+    _authorize(fake_d1, fixture_payload)
+    value = f"{prefix}{'a' * 121}"
+    if field == "event_id":
+        fixture_payload["events"][1][field] = value
+    else:
+        fixture_payload[field] = value
+        for event in fixture_payload["events"]:
+            event[field] = value
+
+    response = await app_client.post(
+        "/v1/game-event-chunks",
+        content=json.dumps(fixture_payload).encode(),
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "invalid chunk envelope"}
+    assert fake_env.operation_order == []
+
+
+async def test_fractional_created_at_ms_returns_400_before_storage(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+) -> None:
+    _authorize(fake_d1, fixture_payload)
+    fixture_payload["created_at_ms"] += 0.5
+
+    response = await app_client.post(
+        "/v1/game-event-chunks",
+        content=json.dumps(fixture_payload).encode(),
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "invalid chunk envelope"}
+    assert fake_env.operation_order == []
+
+
 async def test_authenticated_identity_mismatch_returns_400(
     app_client: AsyncClient,
     fake_d1: Any,

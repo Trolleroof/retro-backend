@@ -4,8 +4,9 @@ import hashlib
 import json
 import math
 import re
+import struct
 import time
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Protocol, cast
 
@@ -13,6 +14,9 @@ from pydantic import ValidationError
 
 from ..bindings import R2Bucket, is_binding_null, value_field
 from ..contracts import (
+    CHUNK_ID_PATTERN,
+    GAME_ID_PATTERN,
+    USER_ID_PATTERN,
     GameplayPointer,
     GameplayProcessResult,
     PermanentGameplayError,
@@ -20,7 +24,12 @@ from ..contracts import (
     parse_gameplay_chunk,
     safe_chunk_created_at_ms,
 )
-from ..storage.r2 import DerivedObjectConflict, R2Store, worker_buffer_to_bytes
+from ..storage.r2 import (
+    DerivedObjectConflict,
+    R2Store,
+    require_r2_key,
+    worker_buffer_to_bytes,
+)
 
 _POINTER_FIELDS = (
     "version",
@@ -32,16 +41,22 @@ _POINTER_FIELDS = (
     "received_at_ms",
 )
 _IDENTIFIER_PATTERNS = {
-    "user_id": re.compile(r"^usr_[A-Za-z0-9._-]+$"),
-    "game_id": re.compile(r"^game_[A-Za-z0-9._-]+$"),
-    "chunk_id": re.compile(r"^chk_[A-Za-z0-9._-]+$"),
+    "user_id": re.compile(USER_ID_PATTERN),
+    "game_id": re.compile(GAME_ID_PATTERN),
+    "chunk_id": re.compile(CHUNK_ID_PATTERN),
 }
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_POINTER_DIGEST_MAX_DEPTH = 2_048
+_POINTER_DIGEST_MAX_NODES = 16_384
 _MISSING = object()
 
 
 class _ObjectKeysProxy(Protocol):
     def object_keys(self) -> Iterable[object]: ...
+
+
+class _HashWriter(Protocol):
+    def update(self, data: bytes, /) -> None: ...
 
 
 def _current_time_ms() -> int:
@@ -57,40 +72,164 @@ def _canonical_json(value: object) -> bytes:
     ).encode("utf-8")
 
 
-def _safe_digest_value(value: object, active: set[int] | None = None) -> object:
-    if value is None or isinstance(value, (bool, int, str)):
-        return value
+def _digest_field(hasher: _HashWriter, tag: bytes, payload: bytes = b"") -> None:
+    hasher.update(len(tag).to_bytes(2, "big"))
+    hasher.update(tag)
+    hasher.update(len(payload).to_bytes(8, "big"))
+    hasher.update(payload)
+
+
+def _leaf_digest(tag: bytes, payload: bytes = b"") -> bytes:
+    digest = hashlib.sha256()
+    _digest_field(digest, tag, payload)
+    return digest.digest()
+
+
+def _primitive_digest(value: object) -> bytes | None:
+    if value is None:
+        return _leaf_digest(b"null")
+    if isinstance(value, bool):
+        return _leaf_digest(b"bool", b"1" if value else b"0")
+    if isinstance(value, int):
+        magnitude = abs(value)
+        encoded = magnitude.to_bytes(max(1, (magnitude.bit_length() + 7) // 8), "big")
+        return _leaf_digest(b"int-" if value < 0 else b"int+", encoded)
     if isinstance(value, float):
-        return value if math.isfinite(value) else {"type": "nonfinite-number"}
+        if not math.isfinite(value):
+            return _leaf_digest(b"nonfinite-number")
+        return _leaf_digest(b"float", struct.pack(">d", value))
+    if isinstance(value, str):
+        encoded = value.encode("utf-8")
+        return _leaf_digest(
+            b"string",
+            len(encoded).to_bytes(8, "big") + hashlib.sha256(encoded).digest(),
+        )
     if isinstance(value, bytes):
-        return {"bytes_sha256": hashlib.sha256(value).hexdigest()}
+        return _leaf_digest(
+            b"bytes",
+            len(value).to_bytes(8, "big") + hashlib.sha256(value).digest(),
+        )
     if isinstance(value, (bytearray, memoryview)):
-        body = bytes(value)
-        return {"bytes_sha256": hashlib.sha256(body).hexdigest()}
-    if isinstance(value, (Mapping, list, tuple)):
-        active = active if active is not None else set()
-        identity = id(value)
-        if identity in active:
-            return {"type": "cycle"}
-        active.add(identity)
-        try:
-            if isinstance(value, Mapping):
-                return {
-                    key: _safe_digest_value(item, active)
-                    for key, item in value.items()
-                    if isinstance(key, str)
-                }
-            return [_safe_digest_value(item, active) for item in value]
-        finally:
-            active.remove(identity)
-    return {"type": type(value).__name__}
+        encoded = bytes(value)
+        return _leaf_digest(
+            b"bytes",
+            len(encoded).to_bytes(8, "big") + hashlib.sha256(encoded).digest(),
+        )
+    return None
+
+
+def _container_ordinal(
+    value: object,
+    seen: list[object],
+) -> tuple[int, bool]:
+    for ordinal, previous in enumerate(seen):
+        if previous is value:
+            return ordinal, False
+    ordinal = len(seen)
+    seen.append(value)
+    return ordinal, True
+
+
+def _bounded_pointer_representation(value: object) -> bytes:
+    digest = hashlib.sha256()
+    seen: list[object] = []
+    pending: list[tuple[int, object, int]] = [(0, value, 0)]
+    visited_nodes = 0
+
+    while pending:
+        kind, item, depth = pending.pop()
+        if kind == 1:
+            _digest_field(digest, b"token", cast(bytes, item))
+            continue
+        if visited_nodes >= _POINTER_DIGEST_MAX_NODES:
+            _digest_field(digest, b"node-limit", _POINTER_DIGEST_MAX_NODES.to_bytes(8, "big"))
+            break
+        visited_nodes += 1
+
+        primitive = _primitive_digest(item)
+        if primitive is not None:
+            _digest_field(digest, b"leaf", primitive)
+            continue
+        if depth > _POINTER_DIGEST_MAX_DEPTH:
+            _digest_field(digest, b"depth-limit", depth.to_bytes(8, "big"))
+            continue
+
+        if isinstance(item, Mapping):
+            ordinal, is_new = _container_ordinal(item, seen)
+            if not is_new:
+                _digest_field(digest, b"reference", ordinal.to_bytes(8, "big"))
+                continue
+            remaining = _POINTER_DIGEST_MAX_NODES - visited_nodes
+            entries: list[tuple[bytes, int, object]] = []
+            try:
+                declared_length = len(item)
+                iterator = iter(item.items())
+                for source_ordinal in range(remaining):
+                    try:
+                        key, child = next(iterator)
+                    except StopIteration:
+                        break
+                    key_digest = _primitive_digest(key) or _leaf_digest(b"unsupported-key")
+                    entries.append((key_digest, source_ordinal, child))
+            except Exception:
+                _digest_field(digest, b"mapping-read-error", ordinal.to_bytes(8, "big"))
+                continue
+            entries.sort(key=lambda entry: (entry[0], entry[1]))
+            _digest_field(
+                digest,
+                b"mapping",
+                ordinal.to_bytes(8, "big")
+                + declared_length.to_bytes(8, "big")
+                + len(entries).to_bytes(8, "big"),
+            )
+            pending.append((1, _leaf_digest(b"mapping-end", ordinal.to_bytes(8, "big")), depth))
+            for key_digest, _source_ordinal, child in reversed(entries):
+                pending.append((0, child, depth + 1))
+                pending.append((1, key_digest, depth + 1))
+            continue
+
+        if isinstance(item, Sequence):
+            ordinal, is_new = _container_ordinal(item, seen)
+            if not is_new:
+                _digest_field(digest, b"reference", ordinal.to_bytes(8, "big"))
+                continue
+            remaining = _POINTER_DIGEST_MAX_NODES - visited_nodes
+            children: list[object] = []
+            try:
+                declared_length = len(item)
+                child_count = min(declared_length, remaining)
+                for index in range(child_count):
+                    children.append(item[index])
+            except Exception:
+                _digest_field(digest, b"sequence-read-error", ordinal.to_bytes(8, "big"))
+                continue
+            _digest_field(
+                digest,
+                b"sequence",
+                ordinal.to_bytes(8, "big")
+                + declared_length.to_bytes(8, "big")
+                + len(children).to_bytes(8, "big"),
+            )
+            pending.append((1, _leaf_digest(b"sequence-end", ordinal.to_bytes(8, "big")), depth))
+            for child in reversed(children):
+                pending.append((0, child, depth + 1))
+            continue
+
+        _digest_field(digest, b"unsupported-value")
+
+    return _canonical_json(
+        {
+            "bounded_pointer_format": 1,
+            "bounded_pointer_sha256": digest.hexdigest(),
+        }
+    )
 
 
 def _canonical_pointer_representation(value: object) -> bytes:
     try:
         return _canonical_json(value)
     except (TypeError, ValueError, OverflowError, RecursionError):
-        return _canonical_json(_safe_digest_value(value))
+        return _bounded_pointer_representation(value)
 
 
 def _reject_pointer_constant(_value: str) -> None:
@@ -256,7 +395,7 @@ class GameplayConsumer:
         stable_message_timestamp_ms = _stable_timestamp_ms(message_timestamp_ms)
         try:
             pointer = GameplayPointer.model_validate(pointer_data)
-        except ValidationError:
+        except (ValidationError, RecursionError):
             return await self._persist_invalid_pointer_rejection(
                 pointer_data,
                 pointer_body_digest,
@@ -360,10 +499,14 @@ class GameplayConsumer:
         partition_date = _utc_date(created_at_ms)
         if partition_date is None:
             return None
-        return (
+        key = (
             f"validated/date={partition_date}/user={pointer.user_id}"
             f"/game={pointer.game_id}/chunk={pointer.chunk_id}.json"
         )
+        try:
+            return require_r2_key(key)
+        except ValueError:
+            return None
 
     @staticmethod
     def _rejected_key(
@@ -376,10 +519,11 @@ class GameplayConsumer:
         )
         if partition_date is None:
             partition_date = _utc_date(pointer.received_at_ms) or "1970-01-01"
-        return (
+        key = (
             f"rejected/date={partition_date}/user={pointer.user_id}"
             f"/game={pointer.game_id}/chunk={pointer.chunk_id}.json"
         )
+        return require_r2_key(key)
 
     async def _persist_pointer_rejection(
         self,
@@ -426,9 +570,8 @@ class GameplayConsumer:
             pointer_body_digest,
         )
         partition_date = _utc_date(rejection_at_ms) or "1970-01-01"
-        artifact_key = (
-            f"rejected/date={partition_date}"
-            f"/quarantine={quarantine_sha256}.json"
+        artifact_key = require_r2_key(
+            f"rejected/date={partition_date}/quarantine={quarantine_sha256}.json"
         )
         artifact: dict[str, object] = {
             "artifact_version": 1,

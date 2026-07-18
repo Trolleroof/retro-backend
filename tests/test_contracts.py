@@ -1,9 +1,24 @@
+import json
+from pathlib import Path
 from typing import Any, get_args
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from retro_backend.contracts import ChunkEnvelope, ContractError, GameResultRequest, GameType
+from retro_backend.contracts import (
+    ChunkEnvelope,
+    ContractError,
+    GameResultRequest,
+    GameType,
+    IngestAcknowledgment,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+V2_SCHEMA = json.loads(
+    (ROOT / "contracts/interaction-trace-chunk-v2.schema.json").read_text()
+)
+V2_VALIDATOR = Draft202012Validator(V2_SCHEMA)
 
 
 def test_game_type_contract_lists_supported_games() -> None:
@@ -99,21 +114,129 @@ def test_game_result_requires_timezone_aware_completion_time() -> None:
         )
 
 
+def test_game_result_bounds_key_forming_game_id_suffix() -> None:
+    payload = {
+        "result_id": "res_01",
+        "game_id": f"game_{'a' * 120}",
+        "game_type": "2048",
+        "score": 32768,
+        "completed_at": "2026-07-17T18:42:00Z",
+    }
+
+    GameResultRequest.model_validate(payload)
+    payload["game_id"] = f"game_{'a' * 121}"
+
+    with pytest.raises(ValidationError):
+        GameResultRequest.model_validate(payload)
+
+
 def test_v2_envelope_accepts_current_interaction_trace_fixture(
     fixture_payload: dict[str, Any],
 ) -> None:
+    Draft202012Validator.check_schema(V2_SCHEMA)
+    V2_VALIDATOR.validate(fixture_payload)
     envelope = ChunkEnvelope.model_validate(fixture_payload)
 
     assert envelope.schema_version == 2
     assert envelope.event_count == len(fixture_payload["events"])
 
 
+def test_v2_continuation_fixture_validates_without_episode_start(
+    continuation_fixture_payload: dict[str, Any],
+) -> None:
+    V2_VALIDATOR.validate(continuation_fixture_payload)
+
+    envelope = ChunkEnvelope.model_validate(continuation_fixture_payload)
+
+    assert envelope.chunk_sequence == 2
+    assert envelope.first_event_sequence == 6
+    assert envelope.events[0]["event_type"] == "observation"
+
+
 def test_v2_envelope_preserves_extension_fields(fixture_payload: dict[str, Any]) -> None:
     fixture_payload["extension"] = {"source": "future-client"}
 
+    V2_VALIDATOR.validate(fixture_payload)
     envelope = ChunkEnvelope.model_validate(fixture_payload)
 
     assert envelope.model_extra == {"extension": {"source": "future-client"}}
+
+
+def test_v2_schema_and_model_reject_fractional_created_at_ms(
+    fixture_payload: dict[str, Any],
+) -> None:
+    fixture_payload["created_at_ms"] += 0.5
+
+    assert V2_VALIDATOR.is_valid(fixture_payload) is False
+    with pytest.raises(ValidationError):
+        ChunkEnvelope.model_validate(fixture_payload)
+
+
+def _set_identifier_suffix_length(
+    payload: dict[str, Any],
+    field: str,
+    prefix: str,
+    suffix_length: int,
+) -> None:
+    value = f"{prefix}{'a' * suffix_length}"
+    if field == "event_id":
+        payload["events"][1][field] = value
+        return
+    payload[field] = value
+    for event in payload["events"]:
+        event[field] = value
+
+
+@pytest.mark.parametrize(
+    ("field", "prefix"),
+    [
+        ("user_id", "usr_"),
+        ("game_id", "game_"),
+        ("chunk_id", "chk_"),
+        ("event_id", "evt_"),
+    ],
+)
+def test_v2_schema_and_model_share_identifier_suffix_limit(
+    fixture_payload: dict[str, Any],
+    field: str,
+    prefix: str,
+) -> None:
+    _set_identifier_suffix_length(fixture_payload, field, prefix, 120)
+
+    V2_VALIDATOR.validate(fixture_payload)
+    ChunkEnvelope.model_validate(fixture_payload)
+
+    _set_identifier_suffix_length(fixture_payload, field, prefix, 121)
+    assert V2_VALIDATOR.is_valid(fixture_payload) is False
+    with pytest.raises(ValidationError):
+        ChunkEnvelope.model_validate(fixture_payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("game_id", f"game_{'a' * 121}"),
+        ("chunk_id", f"chk_{'a' * 121}"),
+    ],
+)
+def test_ingest_acknowledgment_bounds_key_forming_identifiers(
+    field: str,
+    value: str,
+) -> None:
+    payload = {
+        "accepted": True,
+        "duplicate": False,
+        "game_id": "game_01",
+        "chunk_id": "chk_01",
+        "chunk_sequence": 1,
+        "accepted_event_range": {"first": 1, "last": 1},
+        "queued": True,
+        "server_received_at_ms": 1,
+    }
+    payload[field] = value
+
+    with pytest.raises(ValidationError):
+        IngestAcknowledgment.model_validate(payload)
 
 
 @pytest.mark.parametrize(

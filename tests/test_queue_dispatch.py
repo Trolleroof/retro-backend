@@ -1,11 +1,13 @@
 import hashlib
 import json
+import sys
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, override
 
 import pytest
 
+import retro_backend.consumers.dispatch as dispatch_module
 from retro_backend.consumers.dispatch import dispatch_queue
 
 
@@ -38,6 +40,51 @@ def _variant(payload: dict[str, Any], suffix: str) -> dict[str, Any]:
         event["chunk_id"] = payload["chunk_id"]
         event["event_id"] = f"{event['event_id']}_{suffix}"
     return payload
+
+
+def _seed_later_message(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    queue_message_factory: Any,
+    operation_order: list[str],
+    suffix: str,
+) -> Any:
+    payload = _variant(json.loads(json.dumps(fixture_payload)), suffix)
+    raw_body = _canonical(payload)
+    pointer = _pointer(payload, raw_body)
+    fake_env.RAW_BUCKET.seed_raw(
+        pointer["r2_key"], raw_body, pointer["payload_sha256"]
+    )
+    return queue_message_factory(
+        pointer,
+        message_id=f"later-{suffix}",
+        operation_order=operation_order,
+    )
+
+
+class _BodyGetterFailureMessage:
+    def __init__(self, operation_order: list[str]) -> None:
+        self.id = "getter-failure"
+        self.timestamp = datetime(2026, 7, 17, tzinfo=UTC)
+        self.operation_order = operation_order
+        self.ack_calls = 0
+        self.retry_calls = 0
+
+    @property
+    def body(self) -> object:
+        raise RuntimeError("private getter detail")
+
+    def ack(self) -> None:
+        self.ack_calls += 1
+
+    def retry(self) -> None:
+        self.operation_order.append("retry:getter-failure")
+        self.retry_calls += 1
+
+
+class _GetTimeFailure:
+    def getTime(self) -> float:
+        raise RuntimeError("private timestamp detail")
 
 
 async def test_dispatch_processes_sequentially_with_per_message_ack_and_retry(
@@ -141,6 +188,224 @@ async def test_dispatch_retries_every_message_when_consumer_initialization_is_tr
         "retry:message-1",
         "retry:message-2",
     ]
+
+
+async def test_dispatch_retries_all_messages_on_unexpected_consumer_init_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    class UnexpectedConsumer:
+        def __init__(self, _environment: object) -> None:
+            raise RuntimeError("private constructor detail")
+
+    monkeypatch.setattr(dispatch_module, "GameplayConsumer", UnexpectedConsumer)
+    operation_order: list[str] = []
+    messages = [
+        queue_message_factory(
+            {"message": index},
+            message_id=f"unexpected-init-{index}",
+            operation_order=operation_order,
+        )
+        for index in range(3)
+    ]
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", messages),
+        fake_env,
+    )
+
+    assert [(message.acked, message.retried) for message in messages] == [
+        (False, True),
+        (False, True),
+        (False, True),
+    ]
+
+
+async def test_dispatch_retries_proxy_getter_failure_and_continues(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    operation_order: list[str] = []
+    failed = _BodyGetterFailureMessage(operation_order)
+    later = _seed_later_message(
+        fake_env,
+        fixture_payload,
+        queue_message_factory,
+        operation_order,
+        "getter",
+    )
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", [failed, later]),
+        fake_env,
+    )
+
+    assert failed.retry_calls == 1
+    assert failed.ack_calls == 0
+    assert later.acked is True
+    assert later.retried is False
+    assert operation_order == ["retry:getter-failure", "ack:later-getter"]
+
+
+async def test_dispatch_retries_get_time_failure_and_continues(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    operation_order: list[str] = []
+    failed = queue_message_factory(
+        {"invalid": True},
+        message_id="get-time-failure",
+        timestamp=_GetTimeFailure(),
+        operation_order=operation_order,
+    )
+    later = _seed_later_message(
+        fake_env,
+        fixture_payload,
+        queue_message_factory,
+        operation_order,
+        "get-time",
+    )
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", [failed, later]),
+        fake_env,
+    )
+
+    assert failed.retried is True
+    assert failed.acked is False
+    assert later.acked is True
+    assert later.retried is False
+    assert operation_order == ["retry:get-time-failure", "ack:later-get-time"]
+
+
+async def test_dispatch_retries_unexpected_consumer_failure_and_continues(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    original_process = dispatch_module.GameplayConsumer.process
+    failing_body = {"unexpected": True}
+
+    async def fail_selected(
+        self: Any,
+        pointer_body: object,
+        *,
+        message_id: object | None = None,
+        message_timestamp_ms: object | None = None,
+    ) -> Any:
+        if pointer_body is failing_body:
+            raise RuntimeError("private consumer detail")
+        return await original_process(
+            self,
+            pointer_body,
+            message_id=message_id,
+            message_timestamp_ms=message_timestamp_ms,
+        )
+
+    monkeypatch.setattr(dispatch_module.GameplayConsumer, "process", fail_selected)
+    operation_order: list[str] = []
+    failed = queue_message_factory(
+        failing_body,
+        message_id="consumer-failure",
+        operation_order=operation_order,
+    )
+    later = _seed_later_message(
+        fake_env,
+        fixture_payload,
+        queue_message_factory,
+        operation_order,
+        "consumer",
+    )
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", [failed, later]),
+        fake_env,
+    )
+
+    assert failed.retried is True
+    assert failed.acked is False
+    assert later.acked is True
+    assert later.retried is False
+    assert operation_order == ["retry:consumer-failure", "ack:later-consumer"]
+
+
+def _over_depth_pointer_body() -> dict[str, object]:
+    nested: object = {"private_value": "trajectory-secret"}
+    for _ in range(max(sys.getrecursionlimit() + 100, 2_100)):
+        nested = {"next": nested}
+    body: dict[str, object] = {
+        "invalid": True,
+        "nested": nested,
+        "bearer_token": "bearer-secret",
+    }
+    body["cycle"] = body
+    return body
+
+
+class _ExplodingItemsMapping(dict[str, object]):
+    @override
+    def items(self) -> Any:
+        raise RuntimeError("node limit was not enforced")
+
+
+def _over_node_pointer_body() -> dict[str, object]:
+    nodes: list[object] = [{"value": index} for index in range(20_000)]
+    nodes[-1] = _ExplodingItemsMapping(private_value="trajectory-secret")
+    body: dict[str, object] = {
+        "invalid": True,
+        "nodes": nodes,
+        "bearer_token": "bearer-secret",
+        "private_value": "trajectory-secret",
+    }
+    body["cycle"] = body
+    return body
+
+
+@pytest.mark.parametrize(
+    "body_factory",
+    [_over_depth_pointer_body, _over_node_pointer_body],
+    ids=["depth-limit", "node-limit"],
+)
+async def test_bounded_pointer_digest_is_stable_and_safe_across_queue_retry(
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+    body_factory: Any,
+) -> None:
+    timestamp = datetime(2026, 7, 19, tzinfo=UTC)
+    messages = [
+        queue_message_factory(
+            body_factory(),
+            message_id="stable-bounded-message",
+            timestamp=timestamp,
+        )
+        for _ in range(2)
+    ]
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", messages),
+        fake_env,
+    )
+
+    assert [(message.acked, message.retried) for message in messages] == [
+        (True, False),
+        (True, False),
+    ]
+    assert len(fake_env.RAW_BUCKET.put_calls) == 1
+    put = fake_env.RAW_BUCKET.put_calls[0]
+    assert put.key.startswith("rejected/date=2026-07-19/quarantine=")
+    rejection_text = put.body.decode("utf-8")
+    assert "trajectory-secret" not in rejection_text
+    assert "bearer-secret" not in rejection_text
+    assert "private_value" not in rejection_text
 
 
 async def test_dispatch_persists_nonfinite_rejection_and_continues_later_message(

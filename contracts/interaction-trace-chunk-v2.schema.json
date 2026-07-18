@@ -3,7 +3,7 @@
   "$id": "https://tui-gamepigeon.dev/contracts/interaction-trace-chunk-v2.schema.json",
   "title": "Game-agnostic interaction trace chunk v2",
   "type": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": [
     "schema_version",
     "user_id",
@@ -20,17 +20,17 @@
     "events"
   ],
   "properties": {
-    "schema_version": { "const": 2 },
-    "user_id": { "type": "string", "pattern": "^usr_[A-Za-z0-9._-]+$" },
-    "game_id": { "type": "string", "pattern": "^game_[A-Za-z0-9._-]+$" },
+    "schema_version": { "type": "integer", "const": 2 },
+    "user_id": { "type": "string", "pattern": "^usr_[A-Za-z0-9._-]{1,120}$", "maxLength": 124 },
+    "game_id": { "type": "string", "pattern": "^game_[A-Za-z0-9._-]{1,120}$", "maxLength": 125 },
     "game_type": { "type": "string", "minLength": 1 },
     "game_version": { "type": "string", "minLength": 1 },
-    "chunk_id": { "type": "string", "pattern": "^chk_[A-Za-z0-9._-]+$" },
+    "chunk_id": { "type": "string", "pattern": "^chk_[A-Za-z0-9._-]{1,120}$", "maxLength": 124 },
     "chunk_sequence": { "type": "integer", "minimum": 1 },
     "first_event_sequence": { "type": "integer", "minimum": 1 },
     "last_event_sequence": { "type": "integer", "minimum": 1 },
     "event_count": { "type": "integer", "minimum": 1 },
-    "created_at_ms": { "type": "number", "minimum": 0 },
+    "created_at_ms": { "type": "integer", "minimum": 0 },
     "client": {
       "type": "object",
       "additionalProperties": false,
@@ -66,11 +66,11 @@
         "payload"
       ],
       "properties": {
-        "schema_version": { "const": 2 },
-        "user_id": { "type": "string", "pattern": "^usr_[A-Za-z0-9._-]+$" },
-        "game_id": { "type": "string", "pattern": "^game_[A-Za-z0-9._-]+$" },
-        "chunk_id": { "type": "string", "pattern": "^chk_[A-Za-z0-9._-]+$" },
-        "event_id": { "type": "string", "pattern": "^evt_[A-Za-z0-9._-]+$" },
+        "schema_version": { "type": "integer", "const": 2 },
+        "user_id": { "type": "string", "pattern": "^usr_[A-Za-z0-9._-]{1,120}$", "maxLength": 124 },
+        "game_id": { "type": "string", "pattern": "^game_[A-Za-z0-9._-]{1,120}$", "maxLength": 125 },
+        "chunk_id": { "type": "string", "pattern": "^chk_[A-Za-z0-9._-]{1,120}$", "maxLength": 124 },
+        "event_id": { "type": "string", "pattern": "^evt_[A-Za-z0-9._-]{1,120}$", "maxLength": 124 },
         "event_sequence": { "type": "integer", "minimum": 1 },
         "event_type": {
           "enum": [
@@ -83,7 +83,7 @@
             "episode_ended"
           ]
         },
-        "event_version": { "const": 1 },
+        "event_version": { "type": "integer", "const": 1 },
         "visibility": { "enum": ["policy", "privileged"] },
         "client_time_ms": { "type": "number", "minimum": 0 },
         "monotonic_time_us": { "type": "integer", "minimum": 0 },

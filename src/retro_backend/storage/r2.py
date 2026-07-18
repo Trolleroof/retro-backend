@@ -1,12 +1,16 @@
 """Deterministic R2 keys and conditional exact-byte writes."""
 
 import hashlib
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import import_module
 from typing import cast
 
 from ..bindings import R2Bucket, R2ObjectBody, is_binding_null, value_field
+from ..contracts import CHUNK_ID_PATTERN, GAME_ID_PATTERN, USER_ID_PATTERN
+
+R2_MAX_KEY_BYTES = 1_024
 
 
 class ObjectConflict(RuntimeError):
@@ -15,6 +19,18 @@ class ObjectConflict(RuntimeError):
 
 class DerivedObjectConflict(RuntimeError):
     """Raised when a deterministic derived key owns a different artifact."""
+
+
+def require_r2_key(key: str) -> str:
+    if len(key.encode("utf-8")) > R2_MAX_KEY_BYTES:
+        raise ValueError("R2 key must not exceed 1024 bytes")
+    return key
+
+
+def _require_identifier(name: str, value: str, pattern: str) -> str:
+    if re.fullmatch(pattern, value) is None:
+        raise ValueError(f"{name} has an invalid format")
+    return value
 
 
 def _worker_to_js(value: object) -> object:
@@ -90,7 +106,12 @@ class R2Store:
 
     @staticmethod
     def raw_key(*, user_id: str, game_id: str, chunk_id: str) -> str:
-        return f"raw/user={user_id}/game={game_id}/chunk={chunk_id}.json"
+        user_id = _require_identifier("user_id", user_id, USER_ID_PATTERN)
+        game_id = _require_identifier("game_id", game_id, GAME_ID_PATTERN)
+        chunk_id = _require_identifier("chunk_id", chunk_id, CHUNK_ID_PATTERN)
+        return require_r2_key(
+            f"raw/user={user_id}/game={game_id}/chunk={chunk_id}.json"
+        )
 
     @staticmethod
     def _require_matching_hash(stored: object, payload_sha256: str) -> None:
@@ -110,6 +131,7 @@ class R2Store:
             raise DerivedObjectConflict("derived object contains different bytes")
 
     async def get_raw(self, key: str) -> RawObjectData | None:
+        key = require_r2_key(key)
         stored = await self.bucket.get(key)
         if is_binding_null(stored):
             return None
@@ -134,6 +156,7 @@ class R2Store:
         custom_metadata: dict[str, str],
         require_matching_hash: Callable[[object, str], None],
     ) -> str:
+        key = require_r2_key(key)
         existing = await self.bucket.head(key)
         if not is_binding_null(existing):
             require_matching_hash(existing, payload_sha256)

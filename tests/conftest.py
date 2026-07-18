@@ -11,6 +11,9 @@ from httpx import ASGITransport, AsyncClient
 
 ROOT = Path(__file__).resolve().parents[1]
 V2_FIXTURE = ROOT / "contracts/fixtures/interaction-trace-chunk-v2.json"
+V2_CONTINUATION_FIXTURE = (
+    ROOT / "contracts/fixtures/interaction-trace-chunk-v2-continuation.json"
+)
 
 
 class FakeD1PreparedStatement:
@@ -355,6 +358,18 @@ def fixture_bytes() -> bytes:
 @pytest.fixture
 def fixture_payload(fixture_bytes: bytes) -> dict[str, Any]:
     return json.loads(fixture_bytes)
+
+
+@pytest.fixture
+def continuation_fixture_bytes() -> bytes:
+    return V2_CONTINUATION_FIXTURE.read_bytes()
+
+
+@pytest.fixture
+def continuation_fixture_payload(
+    continuation_fixture_bytes: bytes,
+) -> dict[str, Any]:
+    return json.loads(continuation_fixture_bytes)
 
 
 @pytest.fixture

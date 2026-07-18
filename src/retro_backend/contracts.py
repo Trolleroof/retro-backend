@@ -28,6 +28,17 @@ GameType = Literal[
     "sudoku",
 ]
 
+ID_SUFFIX_MAX_LENGTH = 120
+USER_ID_PATTERN = rf"^usr_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
+GAME_ID_PATTERN = rf"^game_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
+CHUNK_ID_PATTERN = rf"^chk_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
+EVENT_ID_PATTERN = rf"^evt_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
+
+_USER_ID_MAX_LENGTH = len("usr_") + ID_SUFFIX_MAX_LENGTH
+_GAME_ID_MAX_LENGTH = len("game_") + ID_SUFFIX_MAX_LENGTH
+_CHUNK_ID_MAX_LENGTH = len("chk_") + ID_SUFFIX_MAX_LENGTH
+_EVENT_ID_MAX_LENGTH = len("evt_") + ID_SUFFIX_MAX_LENGTH
+
 
 class ContractError(ValueError):
     """Raised when a valid envelope violates an authenticated contract."""
@@ -75,9 +86,9 @@ class GameplayPointer(BaseModel):
     version: Literal[1] = 1
     r2_key: str = Field(min_length=1)
     payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    user_id: str = Field(pattern=r"^usr_[A-Za-z0-9._-]+$")
-    game_id: str = Field(pattern=r"^game_[A-Za-z0-9._-]+$")
-    chunk_id: str = Field(pattern=r"^chk_[A-Za-z0-9._-]+$")
+    user_id: str = Field(pattern=USER_ID_PATTERN, max_length=_USER_ID_MAX_LENGTH)
+    game_id: str = Field(pattern=GAME_ID_PATTERN, max_length=_GAME_ID_MAX_LENGTH)
+    chunk_id: str = Field(pattern=CHUNK_ID_PATTERN, max_length=_CHUNK_ID_MAX_LENGTH)
     received_at_ms: int = Field(ge=0, strict=True)
 
     @model_validator(mode="after")
@@ -95,8 +106,8 @@ class IngestAcknowledgment(BaseModel):
 
     accepted: Literal[True] = True
     duplicate: bool
-    game_id: str
-    chunk_id: str
+    game_id: str = Field(pattern=GAME_ID_PATTERN, max_length=_GAME_ID_MAX_LENGTH)
+    chunk_id: str = Field(pattern=CHUNK_ID_PATTERN, max_length=_CHUNK_ID_MAX_LENGTH)
     chunk_sequence: int = Field(ge=1)
     accepted_event_range: EventRange
     queued: Literal[True] = True
@@ -166,7 +177,7 @@ class GameResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     result_id: str = Field(pattern=r"^res_[A-Za-z0-9._-]+$")
-    game_id: str = Field(pattern=r"^game_[A-Za-z0-9._-]+$")
+    game_id: str = Field(pattern=GAME_ID_PATTERN, max_length=_GAME_ID_MAX_LENGTH)
     game_type: GameType
     score: int = Field(ge=0, le=2**63 - 1, strict=True)
     completed_at: AwareDatetime
@@ -184,11 +195,11 @@ class ChunkEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     schema_version: Literal[2]
-    user_id: str = Field(pattern=r"^usr_[A-Za-z0-9._-]+$")
-    game_id: str = Field(pattern=r"^game_[A-Za-z0-9._-]+$")
+    user_id: str = Field(pattern=USER_ID_PATTERN, max_length=_USER_ID_MAX_LENGTH)
+    game_id: str = Field(pattern=GAME_ID_PATTERN, max_length=_GAME_ID_MAX_LENGTH)
     game_type: str = Field(min_length=1)
     game_version: str = Field(min_length=1)
-    chunk_id: str = Field(pattern=r"^chk_[A-Za-z0-9._-]+$")
+    chunk_id: str = Field(pattern=CHUNK_ID_PATTERN, max_length=_CHUNK_ID_MAX_LENGTH)
     chunk_sequence: int = Field(ge=1, strict=True)
     first_event_sequence: int = Field(ge=1, strict=True)
     last_event_sequence: int = Field(ge=1, strict=True)
@@ -228,7 +239,7 @@ class ChunkEnvelope(BaseModel):
         for index, event in enumerate(self.events):
             event_id = event.get("event_id")
             if not isinstance(event_id, str) or re.fullmatch(
-                r"evt_[A-Za-z0-9._-]+", event_id
+                EVENT_ID_PATTERN, event_id
             ) is None:
                 raise ValueError(f"events[{index}].event_id has an invalid format")
             sequence = event.get("event_sequence")
@@ -244,6 +255,13 @@ class ChunkEnvelope(BaseModel):
                 if event.get(field) != expected:
                     raise ValueError(f"events[{index}].{field} must match the chunk")
             _validate_v2_event(event, index)
+            if event.get("event_type") == "episode_started":
+                _validate_episode_started_payload(
+                    event,
+                    index,
+                    game_type=self.game_type,
+                    game_version=self.game_version,
+                )
         if self.events[0].get("event_sequence") != self.first_event_sequence:
             raise ValueError("first_event_sequence must match the first event")
         if self.events[-1].get("event_sequence") != self.last_event_sequence:
@@ -253,16 +271,11 @@ class ChunkEnvelope(BaseModel):
             for previous, current in zip(sequences, sequences[1:], strict=False)
         ):
             raise ValueError("event sequences must be strictly increasing")
-        first_event = self.events[0]
-        if first_event.get("event_type") != "episode_started":
+        if (
+            self.chunk_sequence == 1
+            and self.events[0].get("event_type") != "episode_started"
+        ):
             raise ValueError("the first event must be episode_started")
-        start_payload = first_event.get("payload")
-        if not isinstance(start_payload, Mapping):
-            raise ValueError("the episode_started payload must be an object")
-        if start_payload.get("game_type") != self.game_type:
-            raise ValueError("episode_started game_type must match the chunk")
-        if start_payload.get("game_version") != self.game_version:
-            raise ValueError("episode_started game_version must match the chunk")
         return self
 
     def validate_authenticated_identity(self, user_id: str) -> None:
@@ -332,10 +345,10 @@ def _validate_v2_event(event: Mapping[str, object], index: int) -> None:
     if not _is_exact_version(event.get("schema_version"), 2):
         raise ValueError(f"events[{index}].schema_version must equal 2")
     for field, pattern in (
-        ("user_id", r"usr_[A-Za-z0-9._-]+"),
-        ("game_id", r"game_[A-Za-z0-9._-]+"),
-        ("chunk_id", r"chk_[A-Za-z0-9._-]+"),
-        ("event_id", r"evt_[A-Za-z0-9._-]+"),
+        ("user_id", USER_ID_PATTERN),
+        ("game_id", GAME_ID_PATTERN),
+        ("chunk_id", CHUNK_ID_PATTERN),
+        ("event_id", EVENT_ID_PATTERN),
     ):
         if not _validate_identifier(event.get(field), pattern):
             raise ValueError(f"events[{index}].{field} has an invalid format")
@@ -364,6 +377,22 @@ def _validate_v2_event(event: Mapping[str, object], index: int) -> None:
         )
     if not isinstance(event.get("payload"), Mapping):
         raise ValueError(f"events[{index}].payload must be an object")
+
+
+def _validate_episode_started_payload(
+    event: Mapping[str, object],
+    index: int,
+    *,
+    game_type: str,
+    game_version: str,
+) -> None:
+    payload = event.get("payload")
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"events[{index}].episode_started payload must be an object")
+    if payload.get("game_type") != game_type:
+        raise ValueError("episode_started game_type must match the chunk")
+    if payload.get("game_version") != game_version:
+        raise ValueError("episode_started game_version must match the chunk")
 
 
 def _reject_non_json_constant(value: str) -> None:

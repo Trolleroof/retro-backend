@@ -136,6 +136,28 @@ async def test_valid_pointer_writes_exact_canonical_validated_artifact(
     )
 
 
+async def test_continuation_chunk_processes_without_episode_started_first(
+    fake_env: Any,
+    continuation_fixture_bytes: bytes,
+    continuation_fixture_payload: dict[str, Any],
+) -> None:
+    pointer = _pointer(continuation_fixture_payload, continuation_fixture_bytes)
+    fake_env.RAW_BUCKET.seed_raw(
+        pointer["r2_key"],
+        continuation_fixture_bytes,
+        pointer["payload_sha256"],
+    )
+
+    result = await GameplayConsumer(fake_env).process(pointer)
+
+    assert result.status == "processed"
+    assert result.artifact_key.endswith(
+        f"/chunk={continuation_fixture_payload['chunk_id']}.json"
+    )
+    artifact = json.loads(fake_env.RAW_BUCKET.put_calls[-1].body)
+    assert artifact["chunk"] == continuation_fixture_payload
+
+
 async def test_validated_date_comes_from_chunk_created_at_not_processing_or_receipt_time(
     fake_env: Any,
     fixture_bytes: bytes,
@@ -462,6 +484,22 @@ def _start_game_version(payload: dict[str, Any]) -> None:
     payload["events"][0]["payload"]["game_version"] = "different"
 
 
+def _later_start_game_type(payload: dict[str, Any]) -> None:
+    payload["events"][1]["event_type"] = "episode_started"
+    payload["events"][1]["payload"] = {
+        "game_type": "snake",
+        "game_version": payload["game_version"],
+    }
+
+
+def _later_start_game_version(payload: dict[str, Any]) -> None:
+    payload["events"][1]["event_type"] = "episode_started"
+    payload["events"][1]["payload"] = {
+        "game_type": payload["game_type"],
+        "game_version": "different",
+    }
+
+
 @pytest.mark.parametrize(
     "mutate",
     [
@@ -504,6 +542,8 @@ def _start_game_version(payload: dict[str, Any]) -> None:
         pytest.param(_first_event_type, id="first-episode-started"),
         pytest.param(_start_game_type, id="start-game-type"),
         pytest.param(_start_game_version, id="start-game-version"),
+        pytest.param(_later_start_game_type, id="later-start-game-type"),
+        pytest.param(_later_start_game_version, id="later-start-game-version"),
     ],
 )
 async def test_invalid_v2_event_semantics_are_permanently_rejected(
@@ -570,6 +610,112 @@ async def test_nonfinite_json_numbers_are_safely_rejected_anywhere(
     assert "trajectory-secret" not in rejection_text
     assert "offending_number" not in rejection_text
     assert json_number.decode("ascii") not in rejection_text
+
+
+def _use_maximum_identifier_suffixes(payload: dict[str, Any]) -> None:
+    payload["user_id"] = f"usr_{'u' * 120}"
+    payload["game_id"] = f"game_{'g' * 120}"
+    payload["chunk_id"] = f"chk_{'c' * 120}"
+    for index, event in enumerate(payload["events"]):
+        event["user_id"] = payload["user_id"]
+        event["game_id"] = payload["game_id"]
+        event["chunk_id"] = payload["chunk_id"]
+        event["event_id"] = f"evt_{'e' * 119}{index}"
+
+
+async def test_maximum_identifier_suffixes_form_bounded_raw_and_validated_keys(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+) -> None:
+    _use_maximum_identifier_suffixes(fixture_payload)
+    raw_body = _canonical(fixture_payload)
+    pointer = _pointer(fixture_payload, raw_body)
+    fake_env.RAW_BUCKET.seed_raw(
+        pointer["r2_key"], raw_body, pointer["payload_sha256"]
+    )
+
+    result = await GameplayConsumer(fake_env).process(pointer)
+
+    assert result.status == "processed"
+    assert len(str(pointer["r2_key"]).encode("utf-8")) <= 1024
+    assert len(result.artifact_key.encode("utf-8")) <= 1024
+    assert result.artifact_key.startswith("validated/")
+
+
+async def test_maximum_identifier_suffixes_form_bounded_rejected_key(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+) -> None:
+    _use_maximum_identifier_suffixes(fixture_payload)
+    fixture_payload["events"][1]["event_type"] = "unknown"
+    raw_body = _canonical(fixture_payload)
+    pointer = _pointer(fixture_payload, raw_body)
+    fake_env.RAW_BUCKET.seed_raw(
+        pointer["r2_key"], raw_body, pointer["payload_sha256"]
+    )
+
+    result = await GameplayConsumer(fake_env).process(pointer)
+
+    assert result.status == "rejected"
+    assert len(result.artifact_key.encode("utf-8")) <= 1024
+    assert result.artifact_key.startswith("rejected/")
+
+
+@pytest.mark.parametrize(
+    ("field", "prefix"),
+    [
+        ("user_id", "usr_"),
+        ("game_id", "game_"),
+        ("chunk_id", "chk_"),
+        ("event_id", "evt_"),
+    ],
+)
+async def test_overlong_envelope_identifier_is_permanently_rejected(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    field: str,
+    prefix: str,
+) -> None:
+    pointer_identity = dict(fixture_payload)
+    overlong = f"{prefix}{'a' * 121}"
+    if field == "event_id":
+        fixture_payload["events"][1][field] = overlong
+    else:
+        fixture_payload[field] = overlong
+        for event in fixture_payload["events"]:
+            event[field] = overlong
+
+    result = await _process_payload(
+        fake_env,
+        fixture_payload,
+        identity=pointer_identity,
+    )
+
+    assert result.status == "rejected"
+    assert result.reason_code == "invalid_chunk_contract"
+
+
+async def test_overlong_pointer_identifier_is_persisted_invalid_pointer(
+    fake_env: Any,
+    fixture_bytes: bytes,
+    fixture_payload: dict[str, Any],
+) -> None:
+    pointer = _pointer(fixture_payload, fixture_bytes)
+    pointer["user_id"] = f"usr_{'a' * 121}"
+    pointer["r2_key"] = (
+        f"raw/user={pointer['user_id']}/game={pointer['game_id']}"
+        f"/chunk={pointer['chunk_id']}.json"
+    )
+
+    result = await GameplayConsumer(fake_env).process(
+        pointer,
+        message_id="overlong-pointer",
+        message_timestamp_ms=MESSAGE_TIMESTAMP_MS,
+    )
+
+    assert result.status == "rejected"
+    assert result.reason_code == "invalid_pointer"
+    assert fake_env.RAW_BUCKET.get_calls == []
 
 
 async def test_top_level_chunk_extensions_are_preserved_in_validated_artifact(
