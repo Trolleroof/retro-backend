@@ -14,9 +14,11 @@ from retro_backend.worker_http import fetch_with_body_limit
 __all__ = ["ChunkGate", "Default"]
 
 
-class _IncomingRequest(Protocol):
+class _WorkerJsRequest(Protocol):
     url: str
     method: str
+    headers: object
+    body: object
     redirect: str
 
 
@@ -24,15 +26,16 @@ def _rebuild_worker_request(
     request: object,
     body: bytes,
     headers: list[tuple[str, str]],
-) -> Request:
-    incoming = cast(_IncomingRequest, request)
-    return Request(
+) -> _WorkerJsRequest:
+    incoming = cast(_WorkerJsRequest, request)
+    bounded_request = Request(
         incoming.url,
         method=cast(HTTPMethod, incoming.method),
         headers=headers,
         body=Blob(body).js_object,
         redirect=incoming.redirect,
     )
+    return bounded_request.js_object
 
 
 def _too_large_response() -> Response:

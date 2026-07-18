@@ -1,6 +1,8 @@
 import importlib
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
+from http import HTTPMethod
 from types import ModuleType, SimpleNamespace
 from typing import override
 
@@ -361,6 +363,31 @@ async def test_default_fetch_uses_bounded_rebuilt_worker_request(
         def __init__(self, body: bytes) -> None:
             self.js_object = body
 
+    class RuntimeJsHeaders:
+        def __init__(self, items: list[tuple[str, str]]) -> None:
+            self._items = items
+
+        def __iter__(self) -> Iterator[tuple[str, str]]:
+            return iter(self._items)
+
+    class RuntimeJsRequest:
+        def __init__(
+            self,
+            url: str,
+            *,
+            method: str,
+            headers: list[tuple[str, str]],
+            body: object,
+            redirect: str,
+        ) -> None:
+            self.url = url
+            self.method = method
+            self.headers = RuntimeJsHeaders(headers)
+            self.body = body
+            self.redirect = redirect
+
+    runtime_request_wrappers: list[object] = []
+
     class RuntimeRequest:
         def __init__(
             self,
@@ -371,11 +398,19 @@ async def test_default_fetch_uses_bounded_rebuilt_worker_request(
             body: object,
             redirect: str,
         ) -> None:
-            self.url = url
-            self.method = method
-            self.headers = headers
-            self.body = body
-            self.redirect = redirect
+            js_method = method.value if isinstance(method, HTTPMethod) else str(method)
+            self.js_object = RuntimeJsRequest(
+                url,
+                method=js_method,
+                headers=headers,
+                body=body,
+                redirect=redirect,
+            )
+            runtime_request_wrappers.append(self)
+
+        @property
+        def method(self) -> HTTPMethod:
+            return HTTPMethod[self.js_object.method]
 
     class RuntimeResponse:
         @staticmethod
@@ -390,7 +425,17 @@ async def test_default_fetch_uses_bounded_rebuilt_worker_request(
         def __init__(self, environment: object) -> None:
             self.env = environment
 
-    asgi_spy = AsgiFetchSpy()
+    asgi_calls: list[tuple[object, RuntimeJsRequest, object]] = []
+
+    async def asgi_spy(
+        app: object,
+        request: RuntimeJsRequest,
+        environment: object,
+    ) -> SimpleNamespace:
+        assert request.method == "PROPFIND"
+        asgi_calls.append((app, request, environment))
+        return SimpleNamespace(status=200)
+
     fake_asgi = ModuleType("asgi")
     fake_asgi.__dict__["fetch"] = asgi_spy
     fake_workers = ModuleType("workers")
@@ -418,17 +463,24 @@ async def test_default_fetch_uses_bounded_rebuilt_worker_request(
         response = await entry.Default(environment).fetch(request)
 
         assert getattr(response, "status", None) == 200
-        assert len(asgi_spy.calls) == 1
-        app, rebuilt, called_environment = asgi_spy.calls[0]
-        assert isinstance(rebuilt, RuntimeRequest)
+        assert len(asgi_calls) == 1
+        app, rebuilt, called_environment = asgi_calls[0]
+        assert isinstance(rebuilt, RuntimeJsRequest)
+        assert len(runtime_request_wrappers) == 1
+        wrapper = runtime_request_wrappers[0]
+        assert isinstance(wrapper, RuntimeRequest)
+        assert wrapper.js_object is rebuilt
+        with pytest.raises(KeyError, match="PROPFIND"):
+            _ = wrapper.method
         assert app is entry.app
         assert called_environment is environment
         assert rebuilt.url == request.url
         assert rebuilt.method == "PROPFIND"
         assert rebuilt.body == payload
         assert rebuilt.redirect == "manual"
-        assert ("content-length", str(len(payload))) not in rebuilt.headers
-        assert ("authorization", "Bearer opaque") in rebuilt.headers
+        rebuilt_headers = list(rebuilt.headers)
+        assert ("content-length", str(len(payload))) not in rebuilt_headers
+        assert ("authorization", "Bearer opaque") in rebuilt_headers
     finally:
         sys.modules.pop("retro_backend.entry", None)
         if previous_entry is not None:
