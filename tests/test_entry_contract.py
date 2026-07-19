@@ -16,7 +16,10 @@ MAKEFILE_PATH = ROOT / "Makefile"
 README_PATH = ROOT / "README.md"
 NODE_VERSION_PATH = ROOT / ".node-version"
 NODE_PREFLIGHT_PATH = ROOT / "scripts" / "node_preflight.py"
+DEPLOYMENT_PREFLIGHT_PATH = ROOT / "scripts" / "deployment_preflight.py"
 CI_PATH = ROOT / ".github" / "workflows" / "ci.yml"
+DEPLOY_PATH = ROOT / ".github" / "workflows" / "deploy.yml"
+R2_LIFECYCLE_PATH = ROOT / "cloudflare" / "r2-lifecycle.json"
 RESULTS_API_PATH = SOURCE_ROOT / "api" / "results.py"
 AUTH_CACHE_PATH = SOURCE_ROOT / "auth_cache.py"
 WORKER_HTTP_PATH = SOURCE_ROOT / "worker_http.py"
@@ -273,10 +276,17 @@ def test_wrangler_declares_worker_identity_and_observability() -> None:
     assert config["base_dir"] == "src"
     assert config["compatibility_date"] == "2026-07-17"
     assert config["compatibility_flags"] == ["python_workers"]
-    assert config["observability"] == {"enabled": True}
+    assert config["observability"] == {
+        "enabled": True,
+        "head_sampling_rate": 1.0,
+    }
+    assert config["workers_dev"] is False
+    assert config["routes"] == [
+        {"pattern": "api.runretroarcade.com", "custom_domain": True}
+    ]
 
 
-def test_wrangler_binds_d1_r2_and_one_gameplay_queue() -> None:
+def test_wrangler_binds_d1_r2_and_gameplay_dlq_archiver() -> None:
     config = _wrangler_config()
 
     assert config["d1_databases"] == [
@@ -304,7 +314,14 @@ def test_wrangler_binds_d1_r2_and_one_gameplay_queue() -> None:
                 "max_batch_timeout": 5,
                 "max_retries": 5,
                 "dead_letter_queue": "retro-gameplay-events-dlq",
-            }
+            },
+            {
+                "queue": "retro-gameplay-events-dlq",
+                "max_batch_size": 10,
+                "max_batch_timeout": 5,
+                "max_retries": 10,
+                "dead_letter_queue": "retro-gameplay-events-archive-dlq",
+            },
         ],
     }
 
@@ -343,11 +360,12 @@ def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
         "MAX_RESULT_BYTES": 16_384,
         "CHUNK_DEDUP_TTL_MS": 172_800_000,
         "CHUNK_PUBLISHING_LEASE_MS": 30_000,
-        "ENVIRONMENT": "development",
+        "ENVIRONMENT": "production",
     }
     assert config["vars"] == expected_vars
     assert "`AUTH_CACHE_TTL_SECONDS=60`" in readme
     assert "`MAX_RESULT_BYTES=16384`" in readme
+    assert "`ENVIRONMENT=production`" in readme
     assert "16 KiB" in readme
     assert not any(
         marker in key.casefold()
@@ -464,6 +482,7 @@ def test_documented_worker_commands_use_the_frozen_project_toolchain() -> None:
 
     assert _read(NODE_VERSION_PATH).strip() == "22.23.1"
     assert NODE_PREFLIGHT_PATH.is_file()
+    assert DEPLOYMENT_PREFLIGHT_PATH.is_file()
     assert "Node.js 22.x" in readme
     assert "22.23.1" in readme
     assert "Node.js 23 and newer are unsupported" in readme
@@ -474,8 +493,32 @@ def test_documented_worker_commands_use_the_frozen_project_toolchain() -> None:
     assert "make worker-dry-run" in readme
     assert "make migrate-local" in readme
     assert "make migrate-remote" in readme
+    assert "make deployment-preflight" in readme
+    assert "make apply-r2-lifecycle" in readme
     assert "uv run --frozen uv --version" in readme
     assert "UV_RUN := uv run --frozen" in makefile
+    assert "WRANGLER_VERSION ?= 4.112.0" in makefile
+    assert "WRANGLER := npx --yes wrangler@$(WRANGLER_VERSION)" in makefile
+
+
+def test_release_make_targets_use_the_pinned_wrangler() -> None:
+    for target in (
+        "worker-dry-run",
+        "dev",
+        "deploy",
+        "migrate-local",
+        "migrate-remote",
+        "apply-r2-lifecycle",
+    ):
+        result = subprocess.run(
+            ["make", "--dry-run", target],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "npx --yes wrangler@4.112.0" in result.stdout
 
 
 def test_worker_make_targets_run_node_preflight_first() -> None:
@@ -487,6 +530,7 @@ def test_worker_make_targets_run_node_preflight_first() -> None:
         "deploy",
         "migrate-local",
         "migrate-remote",
+        "apply-r2-lifecycle",
     ):
         result = subprocess.run(
             ["make", "--dry-run", target],
@@ -503,9 +547,31 @@ def test_worker_make_targets_run_node_preflight_first() -> None:
         pywrangler_index = next(
             index
             for index, command in enumerate(commands)
-            if "pywrangler" in command
+            if "pywrangler" in command or "npx --yes wrangler@" in command
         )
         assert preflight_index < pywrangler_index
+
+
+def test_live_make_targets_require_deployment_preflight() -> None:
+    for target in ("deploy", "migrate-remote", "apply-r2-lifecycle"):
+        result = subprocess.run(
+            ["make", "--dry-run", target],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        commands = result.stdout.splitlines()
+        deployment_preflight_index = commands.index(
+            "uv run --frozen python scripts/deployment_preflight.py --config wrangler.toml"
+        )
+        wrangler_index = next(
+            index
+            for index, command in enumerate(commands)
+            if "npx --yes wrangler@" in command
+        )
+        assert deployment_preflight_index < wrangler_index
 
 
 def test_ci_uses_pinned_toolchains_and_canonical_worker_verification() -> None:
@@ -532,6 +598,59 @@ def test_ci_uses_pinned_toolchains_and_canonical_worker_verification() -> None:
         "pywrangler deploy" not in command or "--dry-run" in command
         for command in commands
     )
+
+
+def test_manual_production_workflow_is_guarded_and_smoke_tests_the_custom_domain() -> None:
+    workflow = _read(DEPLOY_PATH)
+    commands = _workflow_run_commands(workflow)
+
+    assert re.search(r"^\s*workflow_dispatch:\s*$", workflow, flags=re.MULTILINE)
+    assert not re.search(r"^\s+push:\s*$", workflow, flags=re.MULTILINE)
+    assert "needs: verify" in workflow
+    assert "if: github.ref == 'refs/heads/main'" in workflow
+    assert "environment: production" in workflow
+    assert "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}" in workflow
+    assert "CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" in workflow
+    assert (
+        "CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}"
+        in workflow
+    )
+
+    expected_commands = [
+        "uv sync --frozen",
+        "make verify",
+        "make prepare-deployment-config",
+        "make worker-dry-run DEPLOY_CONFIG=wrangler.production.toml",
+        "make migrate-remote DEPLOY_CONFIG=wrangler.production.toml",
+        "make apply-r2-lifecycle DEPLOY_CONFIG=wrangler.production.toml",
+        "make deploy DEPLOY_CONFIG=wrangler.production.toml",
+        (
+            "curl --fail --silent --show-error --retry 8 --retry-all-errors "
+            "--retry-delay 5 https://api.runretroarcade.com/health/ready"
+        ),
+    ]
+    previous_index = -1
+    for expected in expected_commands:
+        previous_index = commands.index(expected, previous_index + 1)
+
+
+def test_r2_lifecycle_preserves_artifacts_and_transitions_them_after_30_days() -> None:
+    lifecycle = __import__("json").loads(_read(R2_LIFECYCLE_PATH))
+
+    assert lifecycle == {
+        "Rules": [
+            {
+                "ID": "transition-retro-artifacts-to-infrequent-access",
+                "Status": "Enabled",
+                "Transitions": [
+                    {
+                        "Days": 30,
+                        "StorageClass": "STANDARD_IA",
+                    }
+                ],
+            }
+        ]
+    }
 
 
 def test_readme_lists_the_implemented_high_scores_route() -> None:

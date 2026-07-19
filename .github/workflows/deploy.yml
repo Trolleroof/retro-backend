@@ -1,0 +1,56 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: retro-backend-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".node-version"
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: make verify
+      - run: make worker-sync
+      - run: make worker-dry-run
+
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".node-version"
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: make prepare-deployment-config
+      - run: make worker-sync
+      - run: make deployment-preflight DEPLOY_CONFIG=wrangler.production.toml
+      - run: make worker-dry-run DEPLOY_CONFIG=wrangler.production.toml
+      - run: make migrate-remote DEPLOY_CONFIG=wrangler.production.toml
+      - run: make apply-r2-lifecycle DEPLOY_CONFIG=wrangler.production.toml
+      - run: make deploy DEPLOY_CONFIG=wrangler.production.toml
+      - run: curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 https://api.runretroarcade.com/health/ready

@@ -1,0 +1,14 @@
+{
+  "Rules": [
+    {
+      "ID": "transition-retro-artifacts-to-infrequent-access",
+      "Status": "Enabled",
+      "Transitions": [
+        {
+          "Days": 30,
+          "StorageClass": "STANDARD_IA"
+        }
+      ]
+    }
+  ]
+}
