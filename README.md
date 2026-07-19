@@ -1,65 +1,208 @@
-# retro-backend
+# Retro Backend
 
-Operational backend for Retro Arcade gameplay data. The arcade client records durable, game-agnostic interaction chunks; this service authenticates and validates those chunks, stores exact request bytes plus normalized events in PostgreSQL, and projects them through a separate worker process. RL training is intentionally outside this repository.
+Retro is an all-Python Cloudflare Worker for authenticated gameplay ingestion,
+score APIs, and asynchronous gameplay artifact processing. FastAPI handles HTTP
+through Cloudflare's ASGI adapter; D1, R2, Queues, a Durable Object, and the
+native rate limiter are exposed through Worker bindings.
 
-## Architecture
+This repository contains deployment configuration and commands, but it has not
+been deployed to a Cloudflare account by this implementation.
 
-- **FastAPI API**: health, authenticated chunk ingestion, game metadata, and ordered event queries.
-- **PostgreSQL**: authoritative users, game sessions, exact immutable chunks, normalized events, and durable processing jobs.
-- **Worker**: claims jobs with `FOR UPDATE SKIP LOCKED`, projects session ranges/completion, and can later host enrichment/export work.
-- **Redis**: readiness, accepted-chunk notifications, and future coordination. PostgreSQL remains authoritative if Redis is unavailable.
-- **Alembic**: owns production schema migrations.
+## Architecture And Request Flow
 
-This follows Groudon's Python foundation (`uv`, FastAPI, async SQLAlchemy, PostgreSQL, Alembic, Redis, pytest, Ruff, BasedPyright) and its separate ingestion/consumer process shape. Retro starts with a PostgreSQL job queue rather than Redpanda; the worker interface can move to a stream without changing the client contract.
+The Worker may execute in any Cloudflare location and an isolate may be
+restarted at any time. Request state therefore stays local to a handler. Durable
+state is kept in bindings:
 
-## Local development
+- D1 is authoritative for users, token hashes, and high scores.
+- Cloudflare's Cache API stores positive token-hash-to-user resolutions briefly
+  at the edge; every auth cache miss falls through to D1.
+- R2 stores exact request bytes and deterministic derived gameplay artifacts.
+- `CHUNK_GATE` is one globally addressed Durable Object per logical user/chunk.
+- `GAMEPLAY_QUEUE` carries small pointers to R2 objects, never full trajectories.
+- `INGEST_RATE_LIMITER` limits authenticated ingestion before storage work.
+
+The Worker fetch boundary checks a valid `Content-Length`, then reads streamed
+bodies only up to the route's configured hard cap before the ASGI adapter can
+buffer them. It rebuilds the request from those exact bounded bytes without the
+original `Content-Length`. The current adapter then makes its own bounded copy
+for FastAPI. FastAPI authentication runs after this boundary copy and before
+rate limiting, storage, contract validation, or score mutation.
+
+Authentication hashes each opaque bearer token before checking
+`caches.default`. A valid hit avoids a D1 auth query. A miss, malformed cache
+entry, or Cache API failure queries D1 and caches only a successful resolution
+for 60 seconds. Invalid tokens are never cached, and raw tokens never enter
+cache keys or values. Leaderboard responses are not cached. R2 remains limited
+to raw and derived gameplay files; it never stores authentication data.
+
+This uses the programmatic Cache API from inside the Worker. Worker-level
+caching remains disabled so every request executes the authentication gateway;
+do not add a top-level `[cache] enabled = true` setting. Production should use a
+Cloudflare custom domain for functional edge-cache operations. Where Cache API
+operations are unavailable, authentication safely falls through to D1.
+
+For `POST /v1/game-event-chunks`, the fetch boundary permits at most 256 KiB.
+After FastAPI authentication, the route applies the native rate limit, validates
+the bounded body, and reserves the logical chunk in `CHUNK_GATE`. It writes the
+exact bytes to R2 before publishing a small object pointer to
+`retro-gameplay-events`. Only after Queue publication does the Durable Object
+persist the accepted acknowledgment. The consumer loads the exact object from
+R2, validates it again, and writes deterministic derived objects before
+acknowledging the Queue message.
+
+For `POST /v1/game-results` and any other body-bearing path, the fetch boundary
+permits at most 16 KiB. The authenticated result route then validates the JSON
+contract and conditionally updates the D1 high score. Rejected bodies never
+reach the score mutation.
+
+These resources do not form one global transaction. A Durable Object serializes
+transitions for its own chunk and has strongly consistent private storage. D1
+provides transactional database operations, while each R2 write and Queue send
+has its own success boundary. Deterministic keys, publication leases, cached
+acknowledgments, Queue retries, and the DLQ make those boundaries recoverable;
+they do not claim cross-service strong consistency. Queue delivery is at least
+once, and the native rate limiter is enforced per Cloudflare location.
+
+## Prerequisites
+
+- Python 3.13
+- `uv` to bootstrap the locked development environment
+- Node.js 22.x, pinned to `22.23.1` in `.node-version`, for pywrangler tooling
+- A Cloudflare account authenticated for pywrangler
 
 ```bash
-cp .env.example .env
-uv sync
-docker compose up -d postgres redis
-uv run alembic upgrade head
-uv run uvicorn retro_backend.main:app --reload
+uv sync --frozen
+make node-preflight
+uv run --frozen uv --version
+uv run --frozen pywrangler login
 ```
 
-Run the worker in a second terminal:
+The version check must print `uv 0.10.9`. The project intentionally installs
+that exact development-only version because pywrangler 1.15 uses `uv`
+internally and later releases reject the Pyodide 0.28.3 `pydantic-core` wheel
+selected for Python 3.13. Running pywrangler through `uv run --frozen` puts the
+project-local executable first on `PATH`, even when the outer bootstrap `uv` is
+newer.
+
+Node.js major 22 is required, and `22.23.1` is the tested repository pin.
+Node.js 23 and newer are unsupported by this current pywrangler toolchain:
+pywrangler's Pyodide interpreter probe uses a V8 flag that Node 26 rejects.
+`make node-preflight` checks the `node` selected by `PATH` before every
+pywrangler-facing Make target and reports how to select the pinned release.
+
+`uv.lock` reproduces the CPython development environment. The committed
+`pylock.toml` is pywrangler's generated Worker dependency lock and pins the
+packages installed into Pyodide. Do not hand-edit either lock. A maintainer can
+intentionally refresh both after compatibility testing with:
 
 ```bash
-uv run python -m retro_backend.worker
+uv lock
+uv sync --frozen
+make node-preflight
+uv run --frozen pywrangler sync --force --upgrade
 ```
 
-Or start the complete stack:
+Fresh `dev` and `deploy` commands automatically synchronize the committed
+Worker lock; a separate sync step is not required for a clean checkout.
+Use `make worker-sync` to materialize and verify it explicitly.
+
+`.env.example` contains only the optional, non-secret account selector. Do not
+put API tokens, bearer tokens, or service credentials in `wrangler.toml` or a
+committed environment file.
+
+## Provisioning
+
+The following commands create remote account resources and should be run only
+when intentionally provisioning an environment:
 
 ```bash
-docker compose up --build
+make node-preflight
+uv run --frozen pywrangler d1 create retro-backend
+uv run --frozen pywrangler r2 bucket create retro-gameplay-raw
+uv run --frozen pywrangler queues create retro-gameplay-events
+uv run --frozen pywrangler queues create retro-gameplay-events-dlq
 ```
 
-The published ports default to PostgreSQL `5432`, Redis `6379`, and API `8000`.
-Override `RETRO_POSTGRES_PORT`, `RETRO_REDIS_PORT`, or `RETRO_API_PORT` when those
-ports are already occupied; container-to-container URLs do not change.
+Replace the all-zero `database_id` in `wrangler.toml` with the UUID returned by
+the D1 create command. `INGEST_RATE_LIMITER` uses namespace `1001`; rate-limit
+namespace IDs are account-wide, so select another positive integer if `1001` is
+already used in the account.
 
-## Client configuration
+Apply the D1 migration locally or remotely:
 
 ```bash
-export GAMEPIGEON_INGEST_URL=http://127.0.0.1:8000/v1/game-event-chunks
-export GAMEPIGEON_INGEST_API_KEY=development-only-change-me
+make migrate-local
+make migrate-remote
 ```
 
-Requests use `Authorization: Bearer <key>`. Production must replace the development key.
+The remote command mutates the configured Cloudflare account. Review the target
+account and migration before running it.
 
-## API
+## Local Development
+
+```bash
+uv sync --frozen
+make migrate-local
+make dev
+```
+
+The local API is then available at `http://127.0.0.1:8787`. Useful routes are:
 
 - `GET /health/live`
 - `GET /health/ready`
+- `GET /v1/me`
 - `POST /v1/game-event-chunks`
-- `GET /v1/games/{game_id}`
-- `GET /v1/games/{game_id}/events?visibility=policy`
-- `GET /metrics`
+- `POST /v1/game-results`
+- `GET /v1/high-scores/{game_type}`
 
-Identical `(game_id, chunk_id)` retries are accepted idempotently. Reusing a chunk ID or chunk sequence with different bytes returns `409`. The database transaction stores the exact payload, normalized events, session counters, and processing job before returning `202`.
+Requests to authenticated routes use `Authorization: Bearer <opaque-token>`.
 
-## Verification
+## User Tokens
+
+Generate a one-time opaque token and hash-only insert template with:
+
+```bash
+uv run --frozen python scripts/issue_token.py > /tmp/retro-user.sql
+```
+
+The token is printed once to stderr, while stdout contains SQL with a `?1`
+placeholder for the user ID and only the SHA-256 token digest. Bind a trusted
+`usr_...` ID to `?1` through a prepared D1 statement, then run it in the target
+database. Deliver the token to the user over an appropriate secret channel. Do
+not store the plaintext token in D1, source control, logs, or analytics.
+
+## Configuration
+
+Non-secret Worker variables live in `wrangler.toml`:
+
+- `AUTH_CACHE_TTL_SECONDS=60`
+- `MAX_CHUNK_BYTES=262144`
+- `MAX_RESULT_BYTES=16384`
+- `CHUNK_DEDUP_TTL_MS=172800000`
+- `CHUNK_PUBLISHING_LEASE_MS=30000`
+- `ENVIRONMENT=development`
+
+Bindings grant the Worker access to D1, R2, Queue, Durable Object, and rate-limit
+resources without embedding account credentials. Any future runtime secret must
+be added through `uv run --frozen pywrangler secret put NAME`, never as a
+literal in the configuration or source.
+
+## Verification And Deployment
 
 ```bash
 make verify
+make worker-types
+make worker-dry-run
+make deploy
 ```
+
+The final command performs a live deployment; the preceding dry run does not.
+
+## Deferred Integrations
+
+PostHog analytics and Stripe billing are explicitly deferred. There are no
+PostHog or Stripe routes, modules, secrets, bindings, producers, or consumers in
+the active Worker, and there are no active tables or persistence for either
+integration. Future slices can define their own storage and delivery boundaries
+without changing the gameplay Queue contract.

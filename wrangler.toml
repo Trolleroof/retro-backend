@@ -1,0 +1,55 @@
+name = "retro-backend"
+main = "src/retro_backend/entry.py"
+base_dir = "src"
+compatibility_date = "2026-07-17"
+compatibility_flags = ["python_workers"]
+
+[observability]
+enabled = true
+
+[vars]
+AUTH_CACHE_TTL_SECONDS = 60
+MAX_CHUNK_BYTES = 262144
+MAX_RESULT_BYTES = 16384
+CHUNK_DEDUP_TTL_MS = 172800000
+CHUNK_PUBLISHING_LEASE_MS = 30000
+ENVIRONMENT = "development"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "retro-backend"
+# Replace this valid placeholder with the ID returned by `pywrangler d1 create`.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "RAW_BUCKET"
+bucket_name = "retro-gameplay-raw"
+
+[[queues.producers]]
+binding = "GAMEPLAY_QUEUE"
+queue = "retro-gameplay-events"
+
+[[queues.consumers]]
+queue = "retro-gameplay-events"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "retro-gameplay-events-dlq"
+
+[[durable_objects.bindings]]
+name = "CHUNK_GATE"
+class_name = "ChunkGate"
+
+[exports.ChunkGate]
+type = "durable-object"
+storage = "sqlite"
+
+[[ratelimits]]
+name = "INGEST_RATE_LIMITER"
+# Rate-limit namespaces are account-wide; keep this ID unique in the account.
+namespace_id = "1001"
+
+[ratelimits.simple]
+limit = 120
+period = 60

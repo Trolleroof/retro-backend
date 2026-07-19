@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+  "game_id": "game_018f0000-0000-7000-8000-000000000001",
+  "game_type": "tetris",
+  "game_version": "1",
+  "chunk_id": "chk_018f0000-0000-7000-8000-000000000008",
+  "chunk_sequence": 2,
+  "first_event_sequence": 6,
+  "last_event_sequence": 7,
+  "event_count": 2,
+  "created_at_ms": 1784239201000,
+  "client": {
+    "platform": "tui",
+    "application_version": "0.2.0",
+    "recording_sdk_version": "2"
+  },
+  "events": [
+    {
+      "schema_version": 2,
+      "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+      "game_id": "game_018f0000-0000-7000-8000-000000000001",
+      "chunk_id": "chk_018f0000-0000-7000-8000-000000000008",
+      "event_id": "evt_018f0000-0000-7000-8000-000000000009",
+      "event_sequence": 6,
+      "event_type": "observation",
+      "event_version": 1,
+      "visibility": "policy",
+      "client_time_ms": 1784239190200,
+      "monotonic_time_us": 200000,
+      "simulation_tick": 2,
+      "payload": {
+        "observation_id": "obs_018f0000-0000-7000-8000-000000000003",
+        "representation": "terminal_grid_delta_v1",
+        "base_observation_id": "obs_018f0000-0000-7000-8000-000000000002",
+        "width": 80,
+        "height": 24,
+        "state_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "changed_cells": []
+      }
+    },
+    {
+      "schema_version": 2,
+      "user_id": "usr_018f0000-0000-7000-8000-000000000000",
+      "game_id": "game_018f0000-0000-7000-8000-000000000001",
+      "chunk_id": "chk_018f0000-0000-7000-8000-000000000008",
+      "event_id": "evt_018f0000-0000-7000-8000-00000000000a",
+      "event_sequence": 7,
+      "event_type": "control_checkpoint",
+      "event_version": 1,
+      "visibility": "policy",
+      "client_time_ms": 1784239190201,
+      "monotonic_time_us": 201000,
+      "simulation_tick": 2,
+      "payload": {
+        "active_controls": [],
+        "based_on_observation_id": "obs_018f0000-0000-7000-8000-000000000003"
+      }
+    }
+  ]
+}
