@@ -6,8 +6,10 @@ from typing import cast
 
 from ..bindings import QueueBatch, QueueMessage, iter_binding_values, value_field
 from .gameplay import GameplayConsumer as GameplayConsumer
+from .gameplay import GameplayDeadLetterConsumer as GameplayDeadLetterConsumer
 
 GAMEPLAY_QUEUE_NAME = "retro-gameplay-events"
+GAMEPLAY_DLQ_NAME = "retro-gameplay-events-dlq"
 
 
 def _normalize_message_timestamp_ms(value: object | None) -> int | None:
@@ -37,12 +39,16 @@ def _normalize_message_timestamp_ms(value: object | None) -> int | None:
 async def dispatch_queue(batch: object, environment: object) -> None:
     queue_batch = cast(QueueBatch, batch)
     queue_name = value_field(queue_batch, "queue")
-    if queue_name != GAMEPLAY_QUEUE_NAME:
+    if queue_name == GAMEPLAY_QUEUE_NAME:
+        consumer_type = GameplayConsumer
+    elif queue_name == GAMEPLAY_DLQ_NAME:
+        consumer_type = GameplayDeadLetterConsumer
+    else:
         raise RuntimeError(f"unsupported Queue: {queue_name}")
 
     messages = value_field(queue_batch, "messages")
     try:
-        consumer = GameplayConsumer(environment)
+        consumer = consumer_type(environment)
     except Exception:
         for message in iter_binding_values(messages):
             cast(QueueMessage, message).retry()

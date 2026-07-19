@@ -612,8 +612,81 @@ class GameplayConsumer:
         )
 
 
+class GameplayDeadLetterConsumer:
+    """Archive exhausted gameplay pointers before acknowledging the DLQ."""
+
+    def __init__(
+        self,
+        environment: object,
+        *,
+        buffer_to_bytes: Callable[[object], bytes] = worker_buffer_to_bytes,
+        to_js: Callable[[object], object] | None = None,
+    ) -> None:
+        bucket = value_field(environment, "RAW_BUCKET")
+        if is_binding_null(bucket):
+            raise TransientGameplayError("gameplay storage unavailable")
+        self._buffer_to_bytes = buffer_to_bytes
+        if to_js is None:
+            self.store = R2Store(
+                cast(R2Bucket, bucket),
+                buffer_to_bytes=buffer_to_bytes,
+            )
+        else:
+            self.store = R2Store(
+                cast(R2Bucket, bucket),
+                buffer_to_bytes=buffer_to_bytes,
+                to_js=to_js,
+            )
+
+    async def process(
+        self,
+        pointer_body: object,
+        *,
+        message_id: object | None = None,
+        message_timestamp_ms: object | None = None,
+    ) -> str:
+        pointer_data, pointer_body_digest = _normalize_pointer_body(
+            pointer_body,
+            self._buffer_to_bytes,
+        )
+        stable_message_id = _stable_message_id(message_id)
+        stable_message_timestamp_ms = _stable_timestamp_ms(message_timestamp_ms)
+        archive_at_ms = (
+            stable_message_timestamp_ms
+            if stable_message_timestamp_ms is not None
+            else 0
+        )
+        archive_digest = _quarantine_digest(
+            stable_message_id,
+            archive_at_ms,
+            pointer_body_digest,
+        )
+        partition_date = _utc_date(archive_at_ms) or "1970-01-01"
+        artifact_key = require_r2_key(
+            f"dlq/date={partition_date}/message={archive_digest}.json"
+        )
+        artifact: dict[str, object] = {
+            "artifact_version": 1,
+            "message_body_sha256": pointer_body_digest,
+            "queue_message_timestamp_ms": archive_at_ms,
+            "reason": "gameplay processing retries exhausted",
+            "source_queue": "retro-gameplay-events",
+        }
+        artifact.update(_safe_pointer_fields(pointer_data))
+        if stable_message_id is not None:
+            artifact["message_id_sha256"] = hashlib.sha256(
+                stable_message_id.encode("utf-8")
+            ).hexdigest()
+        try:
+            await self.store.put_derived(artifact_key, _canonical_json(artifact))
+        except Exception as error:
+            raise TransientGameplayError("DLQ archive unavailable") from error
+        return artifact_key
+
+
 __all__ = [
     "GameplayConsumer",
+    "GameplayDeadLetterConsumer",
     "PermanentGameplayError",
     "TransientGameplayError",
 ]

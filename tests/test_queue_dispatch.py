@@ -616,3 +616,95 @@ async def test_unknown_queue_name_raises_visible_runtime_error(
 
     assert message.acked is False
     assert message.retried is False
+
+
+async def test_dlq_message_is_archived_to_r2_before_acknowledgment(
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    pointer = {
+        "version": 1,
+        "r2_key": "raw/user=usr_01/game=game_01/chunk=chk_01.json",
+        "payload_sha256": "a" * 64,
+        "user_id": "usr_01",
+        "game_id": "game_01",
+        "chunk_id": "chk_01",
+        "received_at_ms": 1_768_564_800_000,
+    }
+    message = queue_message_factory(
+        pointer,
+        message_id="exhausted-message",
+        timestamp=datetime(2026, 7, 17, 12, tzinfo=UTC),
+        operation_order=fake_env.operation_order,
+    )
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events-dlq", [message]),
+        fake_env,
+    )
+
+    assert message.acked is True
+    assert message.retried is False
+    assert fake_env.operation_order == ["r2.put", "ack:exhausted-message"]
+    [put_call] = fake_env.RAW_BUCKET.put_calls
+    assert put_call.key.startswith("dlq/date=2026-07-17/message=")
+    artifact = json.loads(put_call.body)
+    assert artifact == {
+        "artifact_version": 1,
+        "chunk_id": "chk_01",
+        "game_id": "game_01",
+        "message_body_sha256": hashlib.sha256(_canonical(pointer)).hexdigest(),
+        "message_id_sha256": hashlib.sha256(b"exhausted-message").hexdigest(),
+        "payload_sha256": "a" * 64,
+        "pointer_received_at_ms": 1_768_564_800_000,
+        "queue_message_timestamp_ms": 1_784_289_600_000,
+        "reason": "gameplay processing retries exhausted",
+        "source_queue": "retro-gameplay-events",
+        "user_id": "usr_01",
+    }
+
+
+async def test_dlq_r2_failure_retries_without_acknowledging(
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    fake_env.RAW_BUCKET.put_failure = RuntimeError("R2 unavailable")
+    message = queue_message_factory(
+        {"invalid": True},
+        message_id="archive-failure",
+    )
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events-dlq", [message]),
+        fake_env,
+    )
+
+    assert message.acked is False
+    assert message.retried is True
+
+
+async def test_dlq_archive_replay_is_idempotent(
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    timestamp = datetime(2026, 7, 17, 12, tzinfo=UTC)
+    messages = [
+        queue_message_factory(
+            {"invalid": True},
+            message_id="same-exhausted-message",
+            timestamp=timestamp,
+        )
+        for _ in range(2)
+    ]
+
+    for message in messages:
+        await dispatch_queue(
+            queue_batch_factory("retro-gameplay-events-dlq", [message]),
+            fake_env,
+        )
+
+    assert all(message.acked and not message.retried for message in messages)
+    assert len(fake_env.RAW_BUCKET.put_calls) == 1

@@ -3,9 +3,15 @@ main = "src/retro_backend/entry.py"
 base_dir = "src"
 compatibility_date = "2026-07-17"
 compatibility_flags = ["python_workers"]
+workers_dev = false
+
+[[routes]]
+pattern = "api.runretroarcade.com"
+custom_domain = true
 
 [observability]
 enabled = true
+head_sampling_rate = 1.0
 
 [vars]
 AUTH_CACHE_TTL_SECONDS = 60
@@ -13,7 +19,7 @@ MAX_CHUNK_BYTES = 262144
 MAX_RESULT_BYTES = 16384
 CHUNK_DEDUP_TTL_MS = 172800000
 CHUNK_PUBLISHING_LEASE_MS = 30000
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 
 [[d1_databases]]
 binding = "DB"
@@ -36,6 +42,13 @@ max_batch_size = 10
 max_batch_timeout = 5
 max_retries = 5
 dead_letter_queue = "retro-gameplay-events-dlq"
+
+[[queues.consumers]]
+queue = "retro-gameplay-events-dlq"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 10
+dead_letter_queue = "retro-gameplay-events-archive-dlq"
 
 [[durable_objects.bindings]]
 name = "CHUNK_GATE"
