@@ -10,7 +10,7 @@ from typing import Any, cast
 import pytest
 from fastapi import HTTPException
 
-from retro_backend.auth import hash_token, parse_bearer_token
+from retro_backend.auth import canonical_user_id, hash_token, parse_bearer_token
 from retro_backend.bindings import DurableObjectNamespace, value_field
 from retro_backend.observability import ALLOWED_EVENTS, ALLOWED_OUTCOMES, log_event
 
@@ -33,6 +33,14 @@ def test_token_hash_is_stable_and_does_not_contain_plaintext() -> None:
 
     assert digest == hashlib.sha256(b"retro_secret").hexdigest()
     assert "retro_secret" not in digest
+
+
+def test_canonical_user_id_is_stable_and_backend_safe() -> None:
+    user_id = canonical_user_id("better-auth-user-123")
+
+    assert user_id == canonical_user_id("better-auth-user-123")
+    assert user_id.startswith("usr_")
+    assert len(user_id) == 36
 
 
 def test_strict_bearer_parser_accepts_one_opaque_token() -> None:

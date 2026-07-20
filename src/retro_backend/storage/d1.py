@@ -7,6 +7,12 @@ from ..bindings import D1Database, is_binding_null, iter_binding_values, value_f
 
 _RESOLVE_USER_SQL = "SELECT id FROM users WHERE auth_token_hash = ?1"
 
+_UPSERT_AUTH_SESSION_SQL = """
+INSERT INTO users (id, auth_token_hash)
+VALUES (?1, ?2)
+ON CONFLICT(id) DO UPDATE SET auth_token_hash = excluded.auth_token_hash
+""".strip()
+
 _UPSERT_HIGH_SCORE_SQL = """
 INSERT INTO high_scores (user_id, game_type, score, achieved_at)
 VALUES (?1, ?2, CAST(?3 AS INTEGER), ?4)
@@ -79,6 +85,9 @@ class D1Repository:
             return None
         user_id = value_field(row, "id")
         return user_id if isinstance(user_id, str) else None
+
+    async def upsert_auth_session(self, user_id: str, token_digest: str) -> None:
+        await self.database.prepare(_UPSERT_AUTH_SESSION_SQL).bind(user_id, token_digest).run()
 
     async def upsert_high_score(
         self,

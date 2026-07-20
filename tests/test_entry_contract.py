@@ -356,6 +356,7 @@ def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
 
     expected_vars = {
         "AUTH_CACHE_TTL_SECONDS": 60,
+        "AUTH_SESSION_URL": "https://auth.runretroarcade.com/api/auth/get-session",
         "MAX_CHUNK_BYTES": 262_144,
         "MAX_RESULT_BYTES": 16_384,
         "CHUNK_DEDUP_TTL_MS": 172_800_000,
@@ -364,6 +365,7 @@ def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
     }
     assert config["vars"] == expected_vars
     assert "`AUTH_CACHE_TTL_SECONDS=60`" in readme
+    assert "`AUTH_SESSION_URL=https://auth.runretroarcade.com/api/auth/get-session`" in readme
     assert "`MAX_RESULT_BYTES=16384`" in readme
     assert "`ENVIRONMENT=production`" in readme
     assert "16 KiB" in readme
