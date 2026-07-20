@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 
 MAX_RESULT_BYTES = 16_384
@@ -77,6 +78,32 @@ async def test_current_user_returns_authenticated_user_id(
     assert fake_env.AUTH_CACHE.put_calls == [
         ("http://test/v1/me", digest, "usr_example"),
     ]
+
+
+async def test_current_user_accepts_and_persists_better_auth_session(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_env.AUTH_SESSION_URL = "https://auth.runretroarcade.com/api/auth/get-session"
+
+    async def resolve_session(token: str, session_url: str) -> str:
+        assert token == "better-auth-session"
+        assert session_url == fake_env.AUTH_SESSION_URL
+        return "usr_cloud_account"
+
+    monkeypatch.setattr("retro_backend.auth.resolve_auth_session", resolve_session)
+    response = await app_client.get(
+        "/v1/me",
+        headers={"Authorization": "Bearer better-auth-session"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "usr_cloud_account"}
+    digest = hashlib.sha256(b"better-auth-session").hexdigest()
+    assert fake_d1.bind_calls[-1] == ("usr_cloud_account", digest)
+    assert any("INSERT INTO users" in sql for sql in fake_d1.run_calls)
 
 
 async def test_current_user_cache_hit_skips_d1_lookup(

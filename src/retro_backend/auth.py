@@ -3,7 +3,9 @@
 import hashlib
 from contextlib import suppress
 from typing import cast
+from urllib.parse import urlsplit
 
+import httpx
 from fastapi import HTTPException, Request, status
 
 from .auth_cache import AuthCache
@@ -11,9 +13,45 @@ from .bindings import D1Database, value_field
 from .storage.d1 import D1Repository
 
 
+class AuthServiceUnavailable(RuntimeError):
+    pass
+
+
 def hash_token(token: str) -> str:
     """Return the stable digest stored in D1 for an opaque bearer token."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def canonical_user_id(auth_user_id: str) -> str:
+    return f"usr_{hashlib.sha256(auth_user_id.encode('utf-8')).hexdigest()[:32]}"
+
+
+async def resolve_auth_session(token: str, session_url: str) -> str | None:
+    parsed = urlsplit(session_url)
+    local = parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost"}
+    if not (local or parsed.scheme == "https"):
+        raise AuthServiceUnavailable("Auth session URL must use HTTPS")
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            response = await client.get(
+                session_url,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    except httpx.HTTPError as error:
+        raise AuthServiceUnavailable("Auth service unavailable") from error
+    if response.status_code in {401, 403}:
+        return None
+    if response.status_code != 200:
+        raise AuthServiceUnavailable("Auth service unavailable")
+    try:
+        payload = response.json()
+    except ValueError as error:
+        raise AuthServiceUnavailable("Auth service returned invalid JSON") from error
+    user = payload.get("user") if isinstance(payload, dict) else None
+    auth_user_id = user.get("id") if isinstance(user, dict) else None
+    if not isinstance(auth_user_id, str) or not auth_user_id or len(auth_user_id) > 256:
+        return None
+    return canonical_user_id(auth_user_id)
 
 
 def parse_bearer_token(authorization: str | None) -> str:
@@ -72,9 +110,20 @@ async def require_user_id(request: Request) -> str:
             detail="Database binding unavailable",
         )
 
-    user_id = await D1Repository(cast(D1Database, database)).resolve_user_hash(
-        token_digest
-    )
+    repository = D1Repository(cast(D1Database, database))
+    user_id = await repository.resolve_user_hash(token_digest)
+    if user_id is None:
+        session_url = value_field(environment, "AUTH_SESSION_URL")
+        if isinstance(session_url, str) and session_url:
+            try:
+                user_id = await resolve_auth_session(token, session_url)
+            except AuthServiceUnavailable as error:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=str(error),
+                ) from error
+            if user_id is not None:
+                await repository.upsert_auth_session(user_id, token_digest)
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

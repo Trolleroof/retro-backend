@@ -37,11 +37,13 @@ original `Content-Length`. The current adapter then makes its own bounded copy
 for FastAPI. FastAPI authentication runs after this boundary copy and before
 rate limiting, storage, contract validation, or score mutation.
 
-Authentication hashes each opaque bearer token before checking
+Authentication hashes each bearer token before checking
 `caches.default`. A valid hit avoids a D1 auth query. A miss, malformed cache
 entry, or Cache API failure queries D1 and caches only a successful resolution
-for 60 seconds. Invalid tokens are never cached, and raw tokens never enter
-cache keys or values. Leaderboard responses are not cached. R2 remains limited
+for 60 seconds. When D1 does not recognize a token, the Worker validates it
+against `AUTH_SESSION_URL`; a valid Better Auth session is mapped to a stable
+`usr_...` identity and its token hash is persisted for later requests. Invalid
+tokens are never cached, and raw tokens never enter cache keys or values. Leaderboard responses are not cached. R2 remains limited
 to raw and derived gameplay files; it never stores authentication data.
 
 This uses the programmatic Cache API from inside the Worker. Worker-level
@@ -220,6 +222,7 @@ not store the plaintext token in D1, source control, logs, or analytics.
 Non-secret Worker variables live in `wrangler.toml`:
 
 - `AUTH_CACHE_TTL_SECONDS=60`
+- `AUTH_SESSION_URL=https://auth.runretroarcade.com/api/auth/get-session`
 - `MAX_CHUNK_BYTES=262144`
 - `MAX_RESULT_BYTES=16384`
 - `CHUNK_DEDUP_TTL_MS=172800000`
