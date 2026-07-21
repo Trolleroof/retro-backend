@@ -1,18 +1,23 @@
 # Retro Backend
 
 Retro is an all-Python Cloudflare Worker for authenticated gameplay ingestion,
-score APIs, and asynchronous gameplay artifact processing. FastAPI handles HTTP
-through Cloudflare's ASGI adapter; D1, R2, Queues, a Durable Object, and the
-native rate limiter are exposed through Worker bindings.
+score APIs, 2048/1v1 multiplayer rooms, and asynchronous gameplay artifact
+processing. FastAPI handles HTTP through Cloudflare's ASGI adapter; D1, R2,
+Queues, Durable Objects, and the native rate limiter are exposed through Worker
+bindings.
 
-The production Worker is configured for the custom domain
-`api.runretroarcade.com`. This repository contains guarded deployment
-automation, but no live Cloudflare account deployment is performed by the
-repository itself.
+The production configuration template targets the custom domain
+`api.runretroarcade.com`. It is configuration only, not evidence of a live
+domain or deployment.
 
-The root `runretroarcade.com` domain remains available for a future website.
-Account authentication can be hosted separately at `auth.runretroarcade.com`;
-this Worker currently keeps its hash-only opaque-token authentication contract.
+This repository contains the multiplayer backend implementation, but this change
+does not deploy it, create remote Durable Object namespaces, run remote migrations,
+or publish a release.
+
+The `runretroarcade.com` and `auth.runretroarcade.com` hostnames describe a
+possible future website and separately hosted account authentication service.
+This change neither creates nor verifies either hostname; this Worker currently
+keeps its hash-only opaque-token authentication contract.
 
 ## Architecture And Request Flow
 
@@ -25,6 +30,8 @@ state is kept in bindings:
   at the edge; every auth cache miss falls through to D1.
 - R2 stores exact request bytes and deterministic derived gameplay artifacts.
 - `CHUNK_GATE` is one globally addressed Durable Object per logical user/chunk.
+- `GAME_ROOMS` creates one SQLite Durable Object per room and owns that room's
+  participants, tickets, sockets, boards, actions, and expiry alarm.
 - `GAMEPLAY_QUEUE` carries small pointers to R2 objects, never full trajectories.
 - The gameplay DLQ is consumed by this Worker and archived under deterministic
   `dlq/` R2 keys before messages are acknowledged.
@@ -80,6 +87,42 @@ has its own success boundary. Deterministic keys, publication leases, cached
 acknowledgments, Queue retries, and the DLQ make those boundaries recoverable;
 they do not claim cross-service strong consistency. Queue delivery is at least
 once, and the native rate limiter is enforced per Cloudflare location.
+
+## Multiplayer 2048/1v1
+
+The implemented multiplayer mode is 2048/1v1 with exactly two players. It gives
+them two independent boards that are visible to both players. Players may submit
+moves concurrently; neither player owns a turn. No-op moves consume nothing and
+return no error: they do not advance board or room versions, consume RNG state,
+or write an action. The room completes only when both boards are finished. The
+higher score wins; equal scores are a draw.
+
+An accepted legal move changes only the actor's board; only that board's RNG
+state and board version advance. The room persists the action and new room
+version before broadcasting a snapshot containing both boards.
+
+The five multiplayer routes are:
+
+| Route | Authentication | Implemented behavior |
+| --- | --- | --- |
+| `POST /v1/rooms` | Bearer token | Create a `2048`/`1v1` room and return its snapshot and invite URL. |
+| `GET /v1/rooms/{room_id}` | Bearer token | Return the room snapshot to a participant. |
+| `POST /v1/rooms/{room_id}/join` | Bearer token | Claim the second seat and return the updated snapshot. |
+| `POST /v1/rooms/{room_id}/tickets` | Bearer token | Issue the participant's one-time WebSocket ticket. |
+| `GET /v1/rooms/{room_id}/socket?ticket={ticket}` | One-time ticket | Upgrade directly to the room's WebSocket. |
+
+The authenticated ticket sequence is:
+
+1. Player one sends a bearer-authenticated `POST /v1/rooms` with
+   `{"game_type":"2048","mode":"1v1"}` and shares the returned invite URL.
+2. Player two sends a bearer-authenticated `POST /v1/rooms/{room_id}/join`.
+3. Either participant can refresh state with the bearer-authenticated
+   `GET /v1/rooms/{room_id}` route.
+4. Each participant requests a one-time WebSocket ticket with the
+   bearer-authenticated `POST /v1/rooms/{room_id}/tickets` route.
+5. The client opens `GET /v1/rooms/{room_id}/socket?ticket={ticket}` with a
+   WebSocket upgrade. `GAME_ROOMS` consumes the ticket once, attaches the
+   participant to that room, and sends the visible room snapshot.
 
 ## Prerequisites
 
@@ -145,34 +188,48 @@ npx --yes wrangler@4.112.0 queues create retro-gameplay-events-dlq
 npx --yes wrangler@4.112.0 queues create retro-gameplay-events-archive-dlq
 ```
 
-Replace the all-zero `database_id` in `wrangler.toml` with the UUID returned by
-the D1 create command. `INGEST_RATE_LIMITER` uses namespace `1001`; rate-limit
-namespace IDs are account-wide, so select another positive integer if `1001` is
-already used in the account.
+Leave the committed `wrangler.toml` template placeholders untouched; the
+deployment renderer verifies the template before creating an ignored production
+configuration. `INGEST_RATE_LIMITER` uses namespace `1001`; rate-limit namespace
+IDs are account-wide, so select another positive integer if `1001` is already
+used in the account.
 
-Apply the D1 migration locally or remotely:
+Apply the D1 migration locally before starting the local Worker:
 
 ```bash
 make migrate-local
-make migrate-remote
 ```
 
-The remote command mutates the configured Cloudflare account. Review the target
-account and migration before running it.
-
-The committed configuration intentionally retains an all-zero D1 ID so a
-developer cannot deploy to an implied account. Render an ignored,
-account-specific production configuration from the real D1 UUID:
+The committed configuration intentionally retains an all-zero D1 ID and inert
+multiplayer URL values so a developer cannot deploy to an implied account or
+client. Export the account D1 UUID and canonical public values, then render an
+ignored, account-specific production configuration:
 
 ```bash
 export CLOUDFLARE_D1_DATABASE_ID="<uuid-from-d1-create>"
+export PUBLIC_GAME_URL="<canonical-public-game-url>"
+export ALLOWED_GAME_ORIGINS="<comma-separated-canonical-origins>"
 make prepare-deployment-config
 make deployment-preflight DEPLOY_CONFIG=wrangler.production.toml
 ```
 
+The angle-bracket URL values are deliberately invalid operator replacement
+tokens, not deploy-ready defaults. Replace them in the protected environment
+with canonical URLs on domains the operator controls before rendering.
+
 The generated `wrangler.production.toml` is ignored by git. The preflight
-checks the D1 ID, exact custom domain, production mode, observability, Queue and
-DLQ consumers, and the checked-in R2 lifecycle policy.
+checks the D1 identity, rendered multiplayer URLs, exact custom domain,
+production mode, observability, Queue and DLQ consumers, and the checked-in R2
+lifecycle policy.
+
+Only after rendering and preflight succeeds, review the target account and D1
+migration, then run the remote migration against that same generated config:
+
+```bash
+make migrate-remote DEPLOY_CONFIG=wrangler.production.toml
+```
+
+The remote command mutates the configured Cloudflare account.
 
 Apply the lifecycle rule after creating the bucket:
 
@@ -228,18 +285,63 @@ Non-secret Worker variables live in `wrangler.toml`:
 - `CHUNK_DEDUP_TTL_MS=172800000`
 - `CHUNK_PUBLISHING_LEASE_MS=30000`
 - `ENVIRONMENT=production`
+- `PUBLIC_GAME_URL=https://gamepigeon.example`
+- `ALLOWED_GAME_ORIGINS=https://gamepigeon.example`
+
+`PUBLIC_GAME_URL` is the credential-free canonical HTTP(S) client base used to
+build invite URLs. It may include a canonical safe base path.
+`ALLOWED_GAME_ORIGINS` is a comma-separated list of unique canonical origins;
+each member is exactly `scheme://host[:port]` with no path. The committed
+`gamepigeon.example` values are inert placeholders and must be replaced in an
+account-specific production configuration. Preflight also rejects every
+hostname under `.example`, plus `example.com`, `example.net`, `example.org`, and
+all of their subdomains.
+
+Production value placeholders below are deliberately invalid and cannot pass
+preflight:
+
+```toml
+PUBLIC_GAME_URL = "<canonical-public-game-url>"
+ALLOWED_GAME_ORIGINS = "<comma-separated-canonical-origins>"
+```
+
+Local example for a client served on port 5173:
+
+```toml
+PUBLIC_GAME_URL = "http://localhost:5173/arcade"
+ALLOWED_GAME_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+```
+
+`GAME_ROOMS` creates one SQLite Durable Object per room. `wrangler.toml`
+declares `GameRoom` directly as a SQLite Durable Object export and contains no
+top-level Durable Object migrations block. No separate Durable Object migration
+command is required; a future real deploy reconciles the declarative export.
+This is separate from the existing D1 schema migration commands used for users,
+token hashes, and high scores.
 
 Bindings grant the Worker access to D1, R2, Queue, Durable Object, and rate-limit
 resources without embedding account credentials. Any future runtime secret must
 be added through `npx --yes wrangler@4.112.0 secret put NAME`, never as a
 literal in the configuration or source.
 
-## Verification And Deployment
+## Local Verification
 
 ```bash
 make verify
+make worker-sync
 make worker-types
 make worker-dry-run
+```
+
+These commands run repository-local tests, lint, type checking, dependency
+materialization, Worker type generation, and Wrangler's non-deploying dry run.
+
+## Production Deployment
+
+The guarded production commands remain available for an explicitly authorized
+account operation:
+
+```bash
 make deployment-preflight DEPLOY_CONFIG=wrangler.production.toml
 make migrate-remote DEPLOY_CONFIG=wrangler.production.toml
 make apply-r2-lifecycle DEPLOY_CONFIG=wrangler.production.toml
@@ -257,6 +359,13 @@ secrets:
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_D1_DATABASE_ID`
+
+`CLOUDFLARE_D1_DATABASE_ID` is a protected GitHub environment secret. Configure
+these protected GitHub environment variables with canonical, non-placeholder
+production values:
+
+- `PUBLIC_GAME_URL`
+- `ALLOWED_GAME_ORIGINS`
 
 The API token needs permission to deploy Workers and custom domains, apply D1
 migrations, manage Queue consumers, and write the R2 lifecycle configuration.

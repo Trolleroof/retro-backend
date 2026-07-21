@@ -53,9 +53,9 @@ class AuthCacheEnvironment:
 
     __slots__ = ("_auth_cache", "_environment")
 
-    def __init__(self, environment: object, auth_cache: AuthCache) -> None:
+    def __init__(self, environment: object, auth_cache: AuthCache | None) -> None:
         self._environment = environment
-        self._auth_cache = auth_cache
+        self._auth_cache = RequestAuthCache(auth_cache)
 
     @property
     def AUTH_CACHE(self) -> AuthCache:
@@ -89,6 +89,38 @@ def _cache_url(request_url: str, token_digest: str) -> str:
             "",
         )
     )
+
+
+class RequestAuthCache:
+    """Memoize positive auth resolutions for one Worker request."""
+
+    def __init__(self, backing: AuthCache | None) -> None:
+        self._backing = backing
+        self._resolved: dict[str, str] = {}
+
+    async def get(self, request_url: str, token_digest: str) -> str | None:
+        cache_url = _cache_url(request_url, token_digest)
+        cached_user_id = self._resolved.get(cache_url)
+        if cached_user_id is not None:
+            return cached_user_id
+        if self._backing is None:
+            return None
+
+        user_id = await self._backing.get(request_url, token_digest)
+        if user_id is not None:
+            self._resolved[cache_url] = user_id
+        return user_id
+
+    async def put(
+        self,
+        request_url: str,
+        token_digest: str,
+        user_id: str,
+    ) -> None:
+        cache_url = _cache_url(request_url, token_digest)
+        self._resolved[cache_url] = user_id
+        if self._backing is not None:
+            await self._backing.put(request_url, token_digest, user_id)
 
 
 class EdgeAuthCache:

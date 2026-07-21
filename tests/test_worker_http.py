@@ -14,6 +14,8 @@ from retro_backend.worker_http import (
     fetch_with_body_limit,
 )
 
+ROOM_ID = "123e4567-e89b-42d3-a456-426614174000"
+
 
 @dataclass(frozen=True, slots=True)
 class FakeReadResult:
@@ -74,6 +76,13 @@ class FailingCancelStream(FakeStream):
         raise RuntimeError("client stream already closed")
 
 
+class FailingReadReader(FakeReader):
+    @override
+    async def read(self) -> FakeReadResult:
+        self.read_calls += 1
+        raise RuntimeError("non-room stream read failed")
+
+
 class AsgiFetchSpy:
     def __init__(self) -> None:
         self.calls: list[tuple[object, object, object]] = []
@@ -102,11 +111,37 @@ class RequestFactorySpy:
         return SimpleNamespace(rebuilt=True, body=body, headers=headers)
 
 
+class RoomResponseFactorySpy:
+    def __init__(
+        self,
+        *,
+        guard_response: object | None,
+        invalid_response: object,
+    ) -> None:
+        self.guard_response = guard_response
+        self.invalid_response = invalid_response
+        self.calls: list[tuple[object, object, str | None, bool]] = []
+
+    def __call__(
+        self,
+        request: object,
+        environment: object,
+        *,
+        allowed_method: str | None,
+        invalid_request: bool,
+    ) -> object | None:
+        self.calls.append(
+            (request, environment, allowed_method, invalid_request)
+        )
+        return self.invalid_response if invalid_request else self.guard_response
+
+
 def _request(
     path: str,
     stream: FakeStream | None,
     *,
     content_length: str | None = None,
+    method: str | None = None,
 ) -> SimpleNamespace:
     headers = {
         "authorization": "Bearer opaque",
@@ -117,7 +152,7 @@ def _request(
         headers["content-length"] = content_length
     return SimpleNamespace(
         url=f"https://retro.example{path}?source=test",
-        method="POST" if stream is not None else "GET",
+        method=method if method is not None else ("POST" if stream is not None else "GET"),
         headers=headers,
         body=stream,
     )
@@ -223,6 +258,24 @@ async def test_fetch_boundary_stops_before_converting_overflow_chunk_and_cancels
     assert overflow.to_bytes_calls == 0
     assert stream.reader.read_calls == 2
     assert stream.reader.cancel_calls == ["request body exceeds maximum size"]
+    assert stream.reader.release_lock_calls == 1
+
+
+@pytest.mark.parametrize("path", ["/v1/game-results", "/v1/game-event-chunks"])
+async def test_non_room_reader_failure_preserves_existing_exception(path: str) -> None:
+    stream = FakeStream([])
+    stream.reader = FailingReadReader([])
+    request = _request(path, stream)
+
+    with pytest.raises(RuntimeError, match="non-room stream read failed"):
+        await _fetch(
+            request,
+            _environment(),
+            spy=AsgiFetchSpy(),
+            request_factory=RequestFactorySpy(),
+            too_large_response=SimpleNamespace(status=413),
+        )
+
     assert stream.reader.release_lock_calls == 1
 
 
@@ -381,6 +434,658 @@ async def test_fetch_boundary_enforces_configured_and_hard_route_caps(
 
     assert response is rejection
     assert spy.calls == []
+    assert stream.get_reader_calls == 0
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/%72ooms",
+        "/v%31/r%6fo%6Ds",
+        "/%76%31/%72%6F%6f%6Ds",
+        "/v1%2frooms",
+        "/v1%2Frooms",
+        "/v1%5crooms",
+        "/v1%5Crooms",
+        "/v1%252frooms",
+        "/v1%252Frooms",
+        "/v1%255crooms",
+        "/v1%255Crooms",
+        f"/v1/rooms%2F{ROOM_ID}",
+        f"/v1%252Frooms%252F{ROOM_ID}%252Fjoin",
+        f"/v1/rooms/{ROOM_ID[:-1]}%30",
+        f"/v1/rooms/{ROOM_ID}/%6aoin",
+        f"/v1/rooms/{ROOM_ID}/%6Aoin",
+        f"/v1/%72ooms/{ROOM_ID}/jo%69n",
+        f"/v1/rooms/{ROOM_ID}%25",
+        "/v1/rooms/%c3%a9",
+        "/v1/rooms/%C3%A9",
+        "/v1/rooms/%FF",
+        "/v1/%72ooms/%C3%28",
+        "/v1/rooms/%",
+        "/v1/rooms/%2",
+        "/v1/rooms/%GG",
+        "/v1/rooms/%2572",
+    ],
+)
+async def test_noncanonical_encoded_room_paths_reject_before_body_or_asgi(
+    path: str,
+) -> None:
+    stream = FakeStream([FakeJsChunk(b"{}")])
+    request = _request(path, stream, content_length="2", method="POST")
+    environment = _environment()
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+    room_rejection = object()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=None,
+        invalid_response=room_rejection,
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=spy,
+        request_factory=request_factory,
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is room_rejection
+    assert room_response_factory.calls == [(request, environment, None, True)]
+    assert spy.calls == []
+    assert request_factory.calls == []
+    assert stream.get_reader_calls == 0
+    assert stream.cancel_calls == []
+
+
+async def test_bodyless_encoded_room_alias_rejects_before_asgi() -> None:
+    request = _request("/v1/%72ooms", None, method="GET")
+    environment = _environment()
+    spy = AsgiFetchSpy()
+    room_rejection = object()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=None,
+        invalid_response=room_rejection,
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=spy,
+        request_factory=RequestFactorySpy(),
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is room_rejection
+    assert room_response_factory.calls == [(request, environment, None, True)]
+    assert spy.calls == []
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "allowed_method"),
+    [
+        ("POST", "/v1/rooms", "POST"),
+        ("GET", f"/v1/rooms/{ROOM_ID}", "GET"),
+        ("POST", f"/v1/rooms/{ROOM_ID}/join", "POST"),
+        ("POST", f"/v1/rooms/{ROOM_ID}/tickets", "POST"),
+    ],
+)
+async def test_raw_room_paths_are_not_encoded_aliases(
+    method: str,
+    path: str,
+    allowed_method: str | None,
+) -> None:
+    request = _request(path, None, method=method)
+    environment = _environment()
+    spy = AsgiFetchSpy()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=None,
+        invalid_response=object(),
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=spy,
+        request_factory=RequestFactorySpy(),
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert getattr(response, "status", None) == 200
+    assert room_response_factory.calls == (
+        [(request, environment, allowed_method, False)]
+        if allowed_method is not None
+        else []
+    )
+    assert spy.calls == [("fastapi-app", request, environment)]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1%2Fgame-results",
+        "/v1/game%2Fresults",
+        "/v1%252Fgame-results",
+        "/v1/%72esults",
+        "/v1/rooms-neighbor%2Fchild",
+        "/v1/%2572ooms",
+        "/v1/%FFrooms",
+        "/v1/%C3%28rooms",
+        "/v1/%",
+        "/v1/%2",
+        "/v1/%GG",
+        "/v1/rooms%25",
+        "/v1/rooms%FF",
+        "/v1/%72ooms%FF",
+    ],
+)
+async def test_non_room_percent_encoded_paths_keep_existing_result_flow(path: str) -> None:
+    payload = b"{}"
+    stream = FakeStream([FakeJsChunk(payload)])
+    request = _request(path, stream, content_length=str(len(payload)), method="POST")
+    environment = _environment(MAX_RESULT_BYTES="8")
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=None,
+        invalid_response=object(),
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=spy,
+        request_factory=request_factory,
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert getattr(response, "status", None) == 200
+    assert request_factory.calls == [
+        (
+            request,
+            payload,
+            [
+                ("authorization", "Bearer opaque"),
+                ("content-type", "application/json"),
+                ("x-request-id", "req_01"),
+            ],
+        )
+    ]
+    assert len(spy.calls) == 1
+    assert room_response_factory.calls == []
+
+
+async def test_exact_post_rooms_accepts_exact_hard_cap_despite_smaller_result_cap() -> None:
+    payload = b"x" * 4096
+    stream = FakeStream([FakeJsChunk(payload)])
+    request = _request(
+        "/v1/rooms",
+        stream,
+        content_length=str(len(payload)),
+        method="POST",
+    )
+    environment = _environment(MAX_RESULT_BYTES="8")
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+
+    response = await _fetch(
+        request,
+        environment,
+        spy=spy,
+        request_factory=request_factory,
+        too_large_response=SimpleNamespace(status=413),
+    )
+
+    assert getattr(response, "status", None) == 200
+    assert request_factory.calls[0][1] == payload
+    assert len(spy.calls) == 1
+
+
+async def test_exact_post_rooms_rejects_first_byte_over_hard_cap_before_reading() -> None:
+    stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+    request = _request(
+        "/v1/rooms",
+        stream,
+        content_length="4097",
+        method="POST",
+    )
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+    rejection = SimpleNamespace(status=400)
+
+    response = await _fetch(
+        request,
+        _environment(),
+        spy=spy,
+        request_factory=request_factory,
+        too_large_response=rejection,
+    )
+
+    assert response is rejection
+    assert spy.calls == []
+    assert request_factory.calls == []
+    assert stream.get_reader_calls == 0
+    assert stream.cancel_calls == ["request body exceeds maximum size"]
+
+
+async def test_exact_post_rooms_selects_room_overflow_for_declared_length() -> None:
+    stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+    request = _request(
+        "/v1/rooms",
+        stream,
+        content_length="4097",
+        method="POST",
+    )
+    generic_rejection = object()
+    room_rejection = object()
+    environment = _environment()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=None,
+        invalid_response=room_rejection,
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=AsgiFetchSpy(),
+        request_factory=RequestFactorySpy(),
+        too_large_response=lambda: generic_rejection,
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is room_rejection
+    assert room_response_factory.calls == [
+        (request, environment, "POST", False),
+        (request, environment, "POST", True),
+    ]
+    assert stream.get_reader_calls == 0
+    assert stream.cancel_calls == ["request body exceeds maximum size"]
+
+
+async def test_exact_post_rooms_selects_room_overflow_for_streamed_body() -> None:
+    stream = FakeStream(
+        [
+            FakeJsChunk(b"x" * 4096),
+            FakeJsChunk(b"overflow"),
+            FakeJsChunk(b"must-not-be-read"),
+        ]
+    )
+    request = _request("/v1/rooms", stream, method="POST")
+    generic_rejection = object()
+    room_rejection = object()
+    environment = _environment()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=None,
+        invalid_response=room_rejection,
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=AsgiFetchSpy(),
+        request_factory=RequestFactorySpy(),
+        too_large_response=lambda: generic_rejection,
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is room_rejection
+    assert room_response_factory.calls == [
+        (request, environment, "POST", False),
+        (request, environment, "POST", True),
+    ]
+    assert stream.reader.read_calls == 2
+    assert stream.reader.cancel_calls == ["request body exceeds maximum size"]
+    assert stream.reader.release_lock_calls == 1
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "/v1/rooms"),
+        ("GET", f"/v1/rooms/{ROOM_ID}"),
+        ("POST", f"/v1/rooms/{ROOM_ID}/join"),
+        ("POST", f"/v1/rooms/{ROOM_ID}/tickets"),
+    ],
+)
+async def test_canonical_room_origin_guard_rejects_before_body_access(
+    method: str,
+    path: str,
+) -> None:
+    stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+    request = _request(path, stream, method=method)
+    environment = _environment()
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+    forbidden = object()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=forbidden,
+        invalid_response=object(),
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=spy,
+        request_factory=request_factory,
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is forbidden
+    assert room_response_factory.calls == [
+        (request, environment, method, False)
+    ]
+    assert spy.calls == []
+    assert request_factory.calls == []
+    assert stream.get_reader_calls == 0
+    assert stream.cancel_calls == []
+
+
+@pytest.mark.parametrize("overflow_mode", ["declared", "streamed"])
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", f"/v1/rooms/{ROOM_ID}"),
+        ("POST", f"/v1/rooms/{ROOM_ID}/join"),
+        ("POST", f"/v1/rooms/{ROOM_ID}/tickets"),
+    ],
+)
+async def test_canonical_noncreate_rooms_keep_result_cap_and_room_overflow(
+    overflow_mode: str,
+    method: str,
+    path: str,
+) -> None:
+    if overflow_mode == "declared":
+        stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+        content_length = "9"
+    else:
+        stream = FakeStream(
+            [
+                FakeJsChunk(b"x" * 8),
+                FakeJsChunk(b"overflow"),
+                FakeJsChunk(b"must-not-be-read"),
+            ]
+        )
+        content_length = None
+    request = _request(
+        path,
+        stream,
+        content_length=content_length,
+        method=method,
+    )
+    environment = _environment(MAX_RESULT_BYTES="8")
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+    generic_rejection = object()
+    room_rejection = object()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=None,
+        invalid_response=room_rejection,
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=spy,
+        request_factory=request_factory,
+        too_large_response=lambda: generic_rejection,
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is room_rejection
+    assert room_response_factory.calls == [
+        (request, environment, method, False),
+        (request, environment, method, True),
+    ]
+    assert spy.calls == []
+    assert request_factory.calls == []
+    if overflow_mode == "declared":
+        assert stream.get_reader_calls == 0
+        assert stream.cancel_calls == ["request body exceeds maximum size"]
+    else:
+        assert stream.reader.read_calls == 2
+        assert stream.reader.cancel_calls == ["request body exceeds maximum size"]
+        assert stream.reader.release_lock_calls == 1
+
+
+@pytest.mark.parametrize("overflow_mode", ["declared", "streamed"])
+@pytest.mark.parametrize(
+    ("path", "allowed_method", "wrong_method"),
+    [
+        ("/v1/rooms", "POST", "GET"),
+        (f"/v1/rooms/{ROOM_ID}", "GET", "POST"),
+        (f"/v1/rooms/{ROOM_ID}/join", "POST", "GET"),
+        (f"/v1/rooms/{ROOM_ID}/tickets", "POST", "GET"),
+    ],
+)
+@pytest.mark.parametrize("request_kind", ["options", "wrong", "extension"])
+async def test_canonical_room_method_response_precedes_body_access(
+    overflow_mode: str,
+    path: str,
+    allowed_method: str,
+    wrong_method: str,
+    request_kind: str,
+) -> None:
+    if overflow_mode == "declared":
+        stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+        content_length = "9"
+    else:
+        stream = FakeStream(
+            [FakeJsChunk(b"x" * 8), FakeJsChunk(b"overflow")]
+        )
+        content_length = None
+    method = {
+        "options": "OPTIONS",
+        "wrong": wrong_method,
+        "extension": "PROPFIND",
+    }[request_kind]
+    request = _request(
+        path,
+        stream,
+        content_length=content_length,
+        method=method,
+    )
+    environment = _environment(MAX_RESULT_BYTES="8")
+    direct_response = object()
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=direct_response,
+        invalid_response=object(),
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=spy,
+        request_factory=request_factory,
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is direct_response
+    assert room_response_factory.calls == [
+        (request, environment, allowed_method, False)
+    ]
+    assert spy.calls == []
+    assert request_factory.calls == []
+    assert stream.get_reader_calls == 0
+    assert stream.cancel_calls == []
+    assert stream.reader.read_calls == 0
+
+
+async def test_non_room_neighbor_reaches_asgi_without_room_policy() -> None:
+    payload = b"{}"
+    stream = FakeStream([FakeJsChunk(payload)])
+    request = _request(
+        "/v1/rooms-neighbor",
+        stream,
+        content_length=str(len(payload)),
+        method="POST",
+    )
+    environment = _environment(MAX_RESULT_BYTES="8")
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=object(),
+        invalid_response=object(),
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=spy,
+        request_factory=request_factory,
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert getattr(response, "status", None) == 200
+    assert room_response_factory.calls == []
+    assert request_factory.calls[0][1] == payload
+    assert len(spy.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/rooms/",
+        f"/v1/rooms/{ROOM_ID}/join/",
+        f"/v1/rooms/{ROOM_ID}/ticket",
+        f"/v1/rooms/{ROOM_ID}/socket",
+    ],
+)
+async def test_unsupported_room_path_runs_policy_before_body(path: str) -> None:
+    stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+    request = _request(path, stream, content_length="9", method="POST")
+    environment = _environment(MAX_RESULT_BYTES="8")
+    invalid_response = object()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=object(),
+        invalid_response=invalid_response,
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=AsgiFetchSpy(),
+        request_factory=RequestFactorySpy(),
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is invalid_response
+    assert room_response_factory.calls == [(request, environment, None, True)]
+    assert stream.get_reader_calls == 0
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/rooms/not-a-room-id",
+        f"/v1/rooms/{ROOM_ID.upper()}",
+    ],
+)
+async def test_structural_room_member_runs_policy_before_uuid_validation(
+    path: str,
+) -> None:
+    stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+    request = _request(path, stream, content_length="9", method="GET")
+    environment = _environment(MAX_RESULT_BYTES="8")
+    direct_response = object()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=direct_response,
+        invalid_response=object(),
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=AsgiFetchSpy(),
+        request_factory=RequestFactorySpy(),
+        too_large_response=lambda: object(),
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is direct_response
+    assert room_response_factory.calls == [(request, environment, "GET", False)]
+    assert stream.get_reader_calls == 0
+
+
+async def test_non_room_overflow_never_calls_room_response_factory() -> None:
+    stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+    request = _request("/v1/game-results", stream, content_length="9")
+    environment = _environment(MAX_RESULT_BYTES="8")
+    generic_rejection = object()
+    room_response_factory = RoomResponseFactorySpy(
+        guard_response=object(),
+        invalid_response=object(),
+    )
+
+    response = await fetch_with_body_limit(
+        request,
+        environment,
+        app="fastapi-app",
+        asgi_fetch=AsgiFetchSpy(),
+        request_factory=RequestFactorySpy(),
+        too_large_response=lambda: generic_rejection,
+        room_response_factory=room_response_factory,
+    )
+
+    assert response is generic_rejection
+    assert room_response_factory.calls == []
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/v1/rooms"),
+        ("post", "/v1/rooms"),
+        ("POST", "/v1/rooms/"),
+        ("POST", "/v1/rooms/123e4567-e89b-42d3-a456-426614174000"),
+        ("POST", "/v1/rooms/123e4567-e89b-42d3-a456-426614174000/join"),
+        ("POST", "/v1/rooms/123e4567-e89b-42d3-a456-426614174000/tickets"),
+        ("POST", "/v1/rooms/123e4567-e89b-42d3-a456-426614174000/socket"),
+        ("POST", "/v1/rooms-neighbor"),
+    ],
+)
+async def test_room_create_method_and_path_neighbors_keep_result_cap(
+    method: str,
+    path: str,
+) -> None:
+    stream = FakeStream([FakeJsChunk(b"must-not-be-read")])
+    request = _request(path, stream, content_length="9", method=method)
+    spy = AsgiFetchSpy()
+    request_factory = RequestFactorySpy()
+    rejection = SimpleNamespace(status=413)
+
+    response = await _fetch(
+        request,
+        _environment(MAX_RESULT_BYTES="8"),
+        spy=spy,
+        request_factory=request_factory,
+        too_large_response=rejection,
+    )
+
+    assert response is rejection
+    assert spy.calls == []
+    assert request_factory.calls == []
     assert stream.get_reader_calls == 0
 
 

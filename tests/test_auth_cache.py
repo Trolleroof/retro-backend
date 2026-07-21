@@ -89,6 +89,30 @@ def test_auth_cache_environment_delegates_bindings_without_mutating_source() -> 
     assert not hasattr(source, "AUTH_CACHE")
 
 
+@pytest.mark.parametrize("with_backing_cache", [False, True])
+async def test_request_auth_cache_reuses_positive_resolution_across_route_paths(
+    with_backing_cache: bool,
+) -> None:
+    source = SimpleNamespace(DB="database")
+    cache_api = FakeCache()
+    backing_cache = _cache(cache_api) if with_backing_cache else None
+    environment = AuthCacheEnvironment(source, backing_cache)
+    request_cache = environment.AUTH_CACHE
+
+    assert await request_cache.get(REQUEST_URL, DIGEST) is None
+    await request_cache.put(REQUEST_URL, DIGEST, "usr_example")
+    assert (
+        await request_cache.get(
+            "https://api.example.com/v1/rooms",
+            DIGEST,
+        )
+        == "usr_example"
+    )
+
+    assert cache_api.match_calls == ([CACHE_URL] if with_backing_cache else [])
+    assert len(cache_api.put_calls) == (1 if with_backing_cache else 0)
+
+
 def test_runtime_cache_setup_failure_returns_original_d1_environment() -> None:
     source = SimpleNamespace(DB="database", AUTH_CACHE_TTL_SECONDS="60")
 
