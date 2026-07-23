@@ -80,6 +80,19 @@ permits at most 16 KiB. The authenticated result route then validates the JSON
 contract and conditionally updates the D1 high score. Rejected bodies never
 reach the score mutation.
 
+A successful score upsert returns `200 OK` because the D1 write has already
+completed when the response is written; there is no deferred work behind this
+route. The acknowledgment body is:
+
+```json
+{"accepted": true, "personal_best": 32768, "high_score_updated": true}
+```
+
+The `tui-gamepigeon` score outbox (`HttpResultTransport`) treats any status
+other than `200` as a transport failure, so this route must not be changed to
+`202 Accepted`. Asynchronous gameplay ingestion (`POST /v1/game-event-chunks`)
+is different and intentionally keeps `202 Accepted`.
+
 These resources do not form one global transaction. A Durable Object serializes
 transitions for its own chunk and has strongly consistent private storage. D1
 provides transactional database operations, while each R2 write and Queue send
@@ -254,8 +267,8 @@ The local API is then available at `http://127.0.0.1:8787`. Useful routes are:
 - `GET /health/live`
 - `GET /health/ready`
 - `GET /v1/me`
-- `POST /v1/game-event-chunks`
-- `POST /v1/game-results`
+- `POST /v1/game-event-chunks` (`202 Accepted` on success)
+- `POST /v1/game-results` (`200 OK` on success)
 - `GET /v1/high-scores/{game_type}`
 
 Requests to authenticated routes use `Authorization: Bearer <opaque-token>`.

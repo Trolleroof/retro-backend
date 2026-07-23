@@ -33,7 +33,7 @@ def _repository(request: Request) -> D1Repository:
     return D1Repository(cast(D1Database, database))
 
 
-@router.post("/v1/game-results", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/v1/game-results", status_code=status.HTTP_200_OK)
 async def submit_result(
     request: Request,
     user_id: Annotated[str, Depends(require_user_id)],
