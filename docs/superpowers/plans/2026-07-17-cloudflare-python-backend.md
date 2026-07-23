@@ -127,7 +127,7 @@ async def test_result_route_requires_auth_and_returns_personal_best(app_client, 
             "completed_at": "2026-07-17T18:42:00Z",
         },
     )
-    assert response.status_code == 202
+    assert response.status_code == 200
     assert response.json() == {
         "accepted": True,
         "personal_best": 32768,
@@ -221,7 +221,7 @@ RETURNING score
 
 When `RETURNING` produces no row, select the existing score and report `updated=False`.
 
-Create `app = FastAPI(title="Retro Backend", version="0.2.0")`, include health and result routers, and return `202` for accepted game results. The Worker fetch boundary enforces the hard 16 KiB streaming limit before ASGI buffering. FastAPI then authenticates before the route calls `GameResultRequest.model_validate_json()`, so invalid JSON remains `422` and rejected input cannot mutate scores.
+Create `app = FastAPI(title="Retro Backend", version="0.2.0")`, include health and result routers, and return `200` for accepted game results (the D1 upsert is already durable when the response is written, and the `tui-gamepigeon` result transport accepts only `200`). The Worker fetch boundary enforces the hard 16 KiB streaming limit before ASGI buffering. FastAPI then authenticates before the route calls `GameResultRequest.model_validate_json()`, so invalid JSON remains `422` and rejected input cannot mutate scores.
 
 `migrations/0001_core.sql` creates only `users` and `high_scores`, enables foreign keys, and adds a descending leaderboard index.
 

@@ -122,6 +122,8 @@ GET  /v1/high-scores/{game_type}
 
 Gameplay and score routes use `Authorization: Bearer <opaque-token>`.
 
+`POST /v1/game-results` answers `200 OK` on success: its D1 high-score upsert is complete before the response is written, and the `tui-gamepigeon` result transport accepts only `200`. `POST /v1/game-event-chunks` keeps `202 Accepted` because its processing is asynchronous.
+
 The v2 gameplay request remains compatible with `interaction-trace-chunk-v2.json`. The Worker fetch boundary bounds the raw stream before the ASGI adapter buffers it. FastAPI then performs authentication, bounded-body defense in depth, schema-envelope checks, and authenticated identity checks. Complete event semantics remain asynchronous.
 
 The Cloudflare acknowledgment removes Kafka-specific offsets:

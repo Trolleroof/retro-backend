@@ -300,7 +300,7 @@ async def test_result_route_requires_auth_and_returns_personal_best(
         json=_result_payload(),
     )
 
-    assert response.status_code == 202
+    assert response.status_code == 200
     assert response.json() == {
         "accepted": True,
         "personal_best": 32768,
@@ -334,7 +334,7 @@ async def test_result_route_normalizes_completion_offsets_for_text_ordering(
             headers={"Authorization": "Bearer opaque"},
             json=payload,
         )
-        assert response.status_code == 202
+        assert response.status_code == 200
 
     bound_times = [
         values[3] for values in fake_d1.bind_calls if len(values) == 4
