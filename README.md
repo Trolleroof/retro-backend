@@ -18,7 +18,6 @@ The `runretroarcade.com` and `auth.runretroarcade.com` hostnames describe a
 possible future website and separately hosted account authentication service.
 This change neither creates nor verifies either hostname; this Worker currently
 keeps its hash-only opaque-token authentication contract.
-
 ## Architecture And Request Flow
 
 The Worker may execute in any Cloudflare location and an isolate may be
