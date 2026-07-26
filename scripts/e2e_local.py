@@ -20,7 +20,9 @@ Run against ``make dev`` (see docs/e2e-local.md).
 """
 
 import argparse
+import hashlib
 import json
+import re
 import secrets
 import subprocess
 import sys
@@ -112,6 +114,22 @@ def r2_object_exists(bucket: str, key: str, persist_to: str | None) -> bool:
         args += ["--persist-to", persist_to]
     completed = wrangler(*args)
     return completed.returncode == 0
+
+
+def client_normalize_account_id(value: str) -> str:
+    """Mirror ``normalizeAccountId`` from the client's ``recording/identity.ts``.
+
+    Reproduced exactly, hyphens included: a Better Auth id matching
+    ``[A-Za-z0-9._-]+`` takes the prefix branch, so the hash branch is
+    unreachable for real ids. Keep this faithful to the client, or the guard
+    below can pass while the derivation it claims to cover goes unchecked.
+    """
+    if value.startswith("usr_") and re.fullmatch(r"usr_[A-Za-z0-9._-]+", value):
+        return value
+    if re.fullmatch(r"[A-Za-z0-9._-]+", value):
+        return f"usr_{value}"
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+    return f"usr_{digest}"
 
 
 def sql_quote(value: str) -> str:
@@ -298,9 +316,15 @@ def run(arguments: argparse.Namespace) -> None:
 
         step("Regression guard: the client's current identity derivation is rejected")
         for label, wrong_user_id in (
-            ("normalizeAccountId prefix", f"usr_{auth_user_id}"),
+            ("normalizeAccountId prefix", client_normalize_account_id(auth_user_id)),
             ("local user_id file", f"usr_{uuid4()}"),
         ):
+            if wrong_user_id == user_id:
+                # Only reachable when --auth-user-id contains characters outside
+                # [A-Za-z0-9._-], which sends the client down its sha256 branch
+                # and coincidentally lands on the canonical id.
+                ok(f"{label} happens to equal the canonical id; nothing to guard")
+                continue
             wrong = build_chunk(wrong_user_id)
             rejected = post(client, "/v1/game-event-chunks", token, wrong)
             if rejected.status_code != 400:
