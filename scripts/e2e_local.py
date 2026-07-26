@@ -298,7 +298,7 @@ def run(arguments: argparse.Namespace) -> None:
 
         step("Regression guard: the client's current identity derivation is rejected")
         for label, wrong_user_id in (
-            ("normalizeAccountId prefix", f"usr_{auth_user_id.replace('-', '')}"),
+            ("normalizeAccountId prefix", f"usr_{auth_user_id}"),
             ("local user_id file", f"usr_{uuid4()}"),
         ):
             wrong = build_chunk(wrong_user_id)
