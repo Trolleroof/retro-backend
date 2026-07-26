@@ -352,10 +352,14 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
         "self",
         "request",
     ]
-    assert [argument.arg for argument in _async_method(default, "queue").args.args] == [
+    queue_arguments = _async_method(default, "queue").args
+    assert [argument.arg for argument in queue_arguments.args] == [
         "self",
         "batch",
     ]
+    # The runtime calls queue(self, batch, env, ctx); without a catch-all every
+    # batch raises TypeError and retries into the dead-letter queue.
+    assert queue_arguments.vararg is not None
 
     source = _read(ENTRY_PATH)
     assert "return await fetch_with_body_limit(" in source

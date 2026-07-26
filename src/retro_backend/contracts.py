@@ -196,6 +196,19 @@ def _is_exact_version(value: object, expected: int) -> bool:
     )
 
 
+def _identity_mismatch_message(field: str, expected: str, received: object) -> str:
+    """Name both identities so a mismatched client can diagnose itself.
+
+    ``expected`` is the caller's own canonical id, which they can already read
+    from ``GET /v1/me`` with the same token, so echoing it reveals nothing new.
+    """
+    return (
+        f"{field} must match the authenticated user "
+        + f"(expected {expected}, received {received}); "
+        + "use the user_id returned by GET /v1/me"
+    )
+
+
 class ChunkEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -284,12 +297,25 @@ class ChunkEnvelope(BaseModel):
         return self
 
     def validate_authenticated_identity(self, user_id: str) -> None:
+        """Reject envelopes whose identity differs from the bearer token's user.
+
+        The expected value is the caller's own canonical id, already readable at
+        ``GET /v1/me``, so naming it here costs no confidentiality and turns an
+        opaque 400 into a self-diagnosing one.
+        """
         if self.user_id != user_id:
-            raise ContractError("user_id must match the authenticated user")
+            raise ContractError(
+                _identity_mismatch_message("user_id", user_id, self.user_id)
+            )
         for index, event in enumerate(self.events):
-            if event.get("user_id") != user_id:
+            event_user_id = event.get("user_id")
+            if event_user_id != user_id:
                 raise ContractError(
-                    f"events[{index}].user_id must match the authenticated user"
+                    _identity_mismatch_message(
+                        f"events[{index}].user_id",
+                        user_id,
+                        event_user_id,
+                    )
                 )
 
 

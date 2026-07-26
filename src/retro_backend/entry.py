@@ -387,5 +387,12 @@ class Default(WorkerEntrypoint):
             room_response_factory=_room_policy_response,
         )
 
-    async def queue(self, batch: object) -> None:
+    async def queue(self, batch: object, *_runtime_args: object) -> None:
+        """Consume one gameplay queue batch.
+
+        The Workers Python runtime invokes the handler as
+        ``queue(self, batch, env, ctx)``. Bindings are already reachable through
+        ``self.env``, so the trailing arguments are accepted and ignored; without
+        the catch-all every batch raises ``TypeError`` and retries into the DLQ.
+        """
         await dispatch_queue(batch, self.env)
