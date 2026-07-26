@@ -1,4 +1,4 @@
-.PHONY: test lint typecheck verify node-preflight deployment-preflight prepare-deployment-config worker-sync worker-types worker-dry-run dev deploy migrate-local migrate-remote apply-r2-lifecycle
+.PHONY: test lint typecheck verify node-preflight deployment-preflight prepare-deployment-config worker-sync worker-types worker-dry-run dev deploy migrate-local migrate-remote apply-r2-lifecycle e2e-local
 
 D1_DATABASE ?= retro-backend
 R2_BUCKET ?= retro-gameplay-raw
@@ -17,7 +17,7 @@ lint:
 	$(UV_RUN) ruff check src tests scripts
 
 typecheck:
-	$(UV_RUN) basedpyright src tests scripts/node_preflight.py scripts/deployment_preflight.py
+	$(UV_RUN) basedpyright src tests scripts/node_preflight.py scripts/deployment_preflight.py scripts/e2e_local.py
 
 verify: test lint typecheck
 	git diff --check
@@ -45,6 +45,11 @@ dev: worker-sync
 
 deploy: worker-sync deployment-preflight
 	$(WRANGLER) deploy --config $(DEPLOY_CONFIG)
+
+# Requires `make dev` running in another shell; see docs/e2e-local.md.
+e2e-local:
+	$(UV_RUN) python scripts/e2e_local.py --base-url http://$(DEV_IP):$(PORT) \
+		--database $(D1_DATABASE) --bucket $(R2_BUCKET)
 
 migrate-local: node-preflight
 	$(WRANGLER) d1 migrations apply $(D1_DATABASE) --local

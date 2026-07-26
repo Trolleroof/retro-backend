@@ -286,6 +286,13 @@ placeholder for the user ID and only the SHA-256 token digest. Bind a trusted
 database. Deliver the token to the user over an appropriate secret channel. Do
 not store the plaintext token in D1, source control, logs, or analytics.
 
+The ID bound to `?1` must be the **canonical** user ID,
+`usr_ + sha256(auth_user_id)[:32]` (`canonical_user_id` in
+`src/retro_backend/auth.py`) — the same value `GET /v1/me` returns. Binding a
+raw upstream auth ID here makes every chunk upload fail with `400`, because
+ingestion requires the envelope and all of its events to carry the canonical
+ID. See [docs/e2e-local.md](docs/e2e-local.md#the-identity-rule).
+
 ## Configuration
 
 Non-secret Worker variables live in `wrangler.toml`:
@@ -347,6 +354,18 @@ make worker-dry-run
 
 These commands run repository-local tests, lint, type checking, dependency
 materialization, Worker type generation, and Wrangler's non-deploying dry run.
+
+To prove the full ingestion contract against a running local Worker — auth,
+`/v1/me`, chunk upload, R2, the queue consumer's derived artifact, and the D1
+high score — start `make dev` in one shell and run:
+
+```bash
+make e2e-local
+```
+
+See [docs/e2e-local.md](docs/e2e-local.md) for the step-by-step runbook, the
+canonical-identity rule clients must follow, and notes on opaque token digests
+versus `AUTH_SESSION_URL`.
 
 ## Production Deployment
 

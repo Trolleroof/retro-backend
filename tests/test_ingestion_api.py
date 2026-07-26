@@ -297,7 +297,11 @@ async def test_authenticated_identity_mismatch_returns_400(
 
     assert response.status_code == 400
     assert response.json() == {
-        "detail": "user_id must match the authenticated user"
+        "detail": (
+            "user_id must match the authenticated user "
+            f"(expected {authenticated_user}, received usr_someone_else); "
+            "use the user_id returned by GET /v1/me"
+        )
     }
     assert fake_env.operation_order == []
 
