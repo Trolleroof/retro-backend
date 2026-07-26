@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any, get_args
 
@@ -430,3 +431,35 @@ def test_v2_envelope_rejects_authenticated_event_identity_mismatch(
         match=r"events\[2\]\.user_id must match the authenticated user",
     ):
         envelope.validate_authenticated_identity(fixture_payload["user_id"])
+
+
+def _peer_repo() -> Path | None:
+    """Locate a local tui-gamepigeon checkout, if one is available."""
+    configured = os.environ.get("TUI_GAMEPIGEON_REPO")
+    if configured:
+        return Path(configured)
+    sibling = ROOT.parent / "tui-gamepigeon"
+    return sibling if sibling.is_dir() else None
+
+
+@pytest.mark.skipif(
+    _peer_repo() is None,
+    reason="no local tui-gamepigeon checkout (set TUI_GAMEPIGEON_REPO to enable)",
+)
+def test_contracts_match_tui_gamepigeon_checkout() -> None:
+    """Guard against issue #15: contract files must stay byte-identical across repos.
+
+    Runs only when a local client checkout is discoverable, since CI here has
+    no access to the sibling repo. See scripts/check_contract_drift.py.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "check_contract_drift", ROOT / "scripts/check_contract_drift.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    problems = module.find_drift(_peer_repo())  # type: ignore[arg-type]
+    assert problems == []
