@@ -88,6 +88,10 @@ def ok(message: str) -> None:
     print(f"    \033[32m✓\033[0m {message}", flush=True)
 
 
+def fail(message: str) -> None:
+    print(f"    \033[31m✗\033[0m {message}", flush=True)
+
+
 def check(condition: bool, message: str) -> None:
     if not condition:
         raise E2EFailure(message)
@@ -203,16 +207,16 @@ def cleanup(
     scope: Scope,
     user_id: str,
     object_keys: list[str],
-) -> None:
-    """Remove everything a remote run wrote, so production keeps no test state."""
+) -> list[str]:
+    """Remove everything a remote run wrote, and report whatever survived."""
     step("Clean up the artifacts this run created")
-    failed_keys: list[str] = []
+    survivors: list[str] = []
     for key in object_keys:
         if r2_object_delete(bucket, key, scope):
             ok(f"deleted R2 {key}")
         else:
-            print(f"    \033[33mleft behind\033[0m R2 {key} (delete it by hand)")
-            failed_keys.append(key)
+            survivors.append(f"R2 {bucket}/{key}")
+            fail(f"could not delete R2 {key}")
     try:
         d1_execute(
             database,
@@ -220,12 +224,12 @@ def cleanup(
             + f"DELETE FROM users WHERE id = {sql_quote(user_id)};",
             scope,
         )
-        ok(f"deleted D1 users/high_scores rows for {user_id}")
     except E2EFailure as error:
-        print(f"    \033[33mleft behind\033[0m D1 rows for {user_id}: {error}")
-        raise E2EFailure(f"cleanup failed: D1 rows for {user_id} could not be deleted") from error
-    if failed_keys:
-        raise E2EFailure(f"cleanup failed: could not delete R2 objects: {', '.join(failed_keys)}")
+        survivors.append(f"D1 users/high_scores rows for {user_id}")
+        fail(f"could not delete D1 rows for {user_id}: {error}")
+    else:
+        ok(f"deleted D1 users/high_scores rows for {user_id}")
+    return survivors
 
 
 def run(arguments: argparse.Namespace) -> None:
@@ -241,11 +245,24 @@ def run(arguments: argparse.Namespace) -> None:
     user_id = canonical_user_id(auth_user_id)
     object_keys: list[str] = []
 
+    if not scope.remote:
+        walk(arguments, scope, base_url, database, bucket, user_id, object_keys)
+        return
+
     try:
         walk(arguments, scope, base_url, database, bucket, user_id, object_keys)
-    finally:
-        if scope.remote:
-            cleanup(database, bucket, scope, user_id, object_keys)
+    except BaseException:
+        # The walk already failed; still try to clear production, but let the
+        # original contract failure be the one that surfaces.
+        cleanup(database, bucket, scope, user_id, object_keys)
+        raise
+    survivors = cleanup(database, bucket, scope, user_id, object_keys)
+    if survivors:
+        raise E2EFailure(
+            "the contract held, but this run left test state in production:\n  "
+            + "\n  ".join(survivors)
+            + "\ndelete it by hand before treating this run as clean"
+        )
 
 
 def walk(

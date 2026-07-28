@@ -363,7 +363,8 @@ make e2e-local
 ```
 
 The same walk runs against the deployed Worker. It writes to production D1 and
-R2 and deletes every row and object it created before it exits:
+R2, deletes every row and object it created before it exits, and fails the run
+if any of that cleanup does not stick:
 
 ```bash
 make e2e-remote DEPLOY_CONFIG=wrangler.production.toml
