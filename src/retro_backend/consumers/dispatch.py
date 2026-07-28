@@ -1,5 +1,7 @@
 """Sequential per-message dispatch for Cloudflare Queue batches."""
 
+import hashlib
+import json
 import math
 from datetime import UTC, datetime
 from typing import cast
@@ -10,6 +12,21 @@ from .gameplay import GameplayDeadLetterConsumer as GameplayDeadLetterConsumer
 
 GAMEPLAY_QUEUE_NAME = "retro-gameplay-events"
 GAMEPLAY_DLQ_NAME = "retro-gameplay-events-dlq"
+
+
+def _log_retry(queue_name: object, message_id: object, error: Exception) -> None:
+    """Log retry metadata without logging message bodies or user data."""
+    message_digest = (
+        hashlib.sha256(message_id.encode("utf-8")).hexdigest()
+        if isinstance(message_id, str)
+        else None
+    )
+    print(json.dumps({
+        "event": "queue_message_retry",
+        "queue": queue_name,
+        "message_id_sha256": message_digest,
+        "error_type": type(error).__name__,
+    }, separators=(",", ":")))
 
 
 def _normalize_message_timestamp_ms(value: object | None) -> int | None:
@@ -67,7 +84,8 @@ async def dispatch_queue(batch: object, environment: object) -> None:
                 message_id=message_id,
                 message_timestamp_ms=message_timestamp_ms,
             )
-        except Exception:
+        except Exception as error:
+            _log_retry(queue_name, value_field(queue_message, "id"), error)
             queue_message.retry()
         else:
             queue_message.ack()

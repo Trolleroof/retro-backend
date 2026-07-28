@@ -34,6 +34,8 @@ class R2Bucket(Protocol):
 class QueueBinding(Protocol):
     async def send(self, message: object) -> object: ...
 
+    async def metrics(self) -> object: ...
+
 
 class QueueMessage(Protocol):
     @property

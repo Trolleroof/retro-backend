@@ -235,6 +235,11 @@ class FakeQueueBinding:
         self.operation_order = operation_order
         self.send_calls: list[object] = []
         self.failure: Exception | None = None
+        self.metrics_result: object = {
+            "backlog_count": 0,
+            "backlog_bytes": 0,
+            "oldest_message_timestamp_ms": 0,
+        }
 
     async def send(self, message: object) -> object:
         self.operation_order.append("queue.send")
@@ -242,6 +247,9 @@ class FakeQueueBinding:
         if self.failure is not None:
             raise self.failure
         return {"accepted": True}
+
+    async def metrics(self) -> object:
+        return self.metrics_result
 
 
 class FakeRateLimiter:

@@ -82,21 +82,26 @@ before anything touches Cloudflare.
 
 ## 2. Cloudflare notifications
 
-Configure in the Cloudflare dashboard for the account that owns the Worker,
-under Notifications. Wrangler has no command for this. Create three:
+The Worker now checks all three queue metrics every five minutes through its
+scheduled handler. Configure one Workers Observability notification for
+`retro-backend` scheduled-invocation failures, then deploy the Worker. Wrangler
+has no command for creating the notification policy.
+
+The health check treats these as failures:
+
+- any message in `retro-gameplay-events-archive-dlq`;
+- a message older than ten minutes in the main queue or first DLQ.
+
+The archive queue is intentionally left unconsumed: it is the operator
+intervention queue, and a message arriving there means a gameplay payload
+failed processing five times and then failed archival ten more. The scheduled
+check makes that state visible without a separate API-token poller.
+
+For the existing account, configure the notification in the Cloudflare
+dashboard under Notifications. Create one policy:
 
 - **Worker errors** — on `retro-backend`, alerting on elevated error rate or
   invocation failures.
-- **Queue backlog** — on `retro-gameplay-events`, alerting when the backlog or
-  message age grows beyond normal steady state.
-- **Archive DLQ depth** — alert on *any* message reaching
-  `retro-gameplay-events-archive-dlq`.
-
-The third is the important one. `retro-gameplay-events-archive-dlq` is
-intentionally left unconsumed: it is the operator intervention queue, and a
-message arriving there means a gameplay payload failed processing five times
-and then failed archival ten more. Nothing drains it automatically, so without
-an alert those messages sit unnoticed until someone happens to look.
 
 ## What is already done
 

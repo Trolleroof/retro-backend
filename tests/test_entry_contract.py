@@ -1347,7 +1347,15 @@ def test_wrangler_binds_d1_r2_and_gameplay_dlq_archiver() -> None:
             {
                 "binding": "GAMEPLAY_QUEUE",
                 "queue": "retro-gameplay-events",
-            }
+            },
+            {
+                "binding": "GAMEPLAY_DLQ",
+                "queue": "retro-gameplay-events-dlq",
+            },
+            {
+                "binding": "GAMEPLAY_ARCHIVE_DLQ",
+                "queue": "retro-gameplay-events-archive-dlq",
+            },
         ],
         "consumers": [
             {
