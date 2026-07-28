@@ -62,6 +62,16 @@ fallback, costing one extra D1 read only on the miss path. That check is what
 makes revocation stick when the upstream auth service still considers the token
 valid.
 
+It deliberately does **not** check the tombstone on a successful
+`auth_sessions` hit. Doing so would reject a token during the sub-millisecond
+gap between the tombstone write and the delete, but it costs a second D1 read on
+every authenticated request that misses the edge cache — doubling the auth read
+path and breaking the one-lookup contract asserted by
+`test_repeated_valid_token_uses_one_d1_auth_lookup`. That gap is roughly five
+orders of magnitude smaller than the 60-second edge-cache window documented
+below, which stays open regardless. Paying a permanent per-request cost to close
+the smaller of two windows is not a good trade.
+
 ## Residual Window
 
 The Workers Cache API is per-data-center; there is no global purge. Logout
