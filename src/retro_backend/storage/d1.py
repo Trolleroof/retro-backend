@@ -147,10 +147,17 @@ class D1Repository:
         await self._prune_revocations()
         return _deleted_row_count(result) > 0
 
-    async def revoke_user_sessions(self, user_id: str) -> int:
+    async def revoke_user_sessions(self, user_id: str, bearer_token_digest: str | None = None) -> int:
         """Revoke every device token for one user, returning how many were live."""
+        # Tombstone the bearer token explicitly, even if it has no live session row,
+        # to prevent self-heal after cache purge.
+        if bearer_token_digest is not None:
+            await self.database.prepare(_TOMBSTONE_TOKEN_SQL).bind(bearer_token_digest).run()
         await self.database.prepare(_TOMBSTONE_USER_SESSIONS_SQL).bind(user_id).run()
         result = await self.database.prepare(_DELETE_USER_SESSIONS_SQL).bind(user_id).run()
+        # Tombstone again to catch any concurrent inserts that happened between
+        # the initial tombstone and the delete.
+        await self.database.prepare(_TOMBSTONE_USER_SESSIONS_SQL).bind(user_id).run()
         await self._prune_revocations()
         return _deleted_row_count(result)
 

@@ -123,6 +123,10 @@ async def require_user_id(request: Request) -> str:
 
     repository = request_repository(request)
     user_id = await repository.resolve_user_hash(token_digest)
+    # Check revocation even when a session exists, to catch tokens tombstoned
+    # during the window before their session row is deleted.
+    if user_id is not None and await repository.is_token_revoked(token_digest):
+        user_id = None
     if user_id is None:
         session_url = value_field(environment, "AUTH_SESSION_URL")
         # A revoked digest must not be re-mirrored from the upstream auth

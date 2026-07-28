@@ -36,7 +36,7 @@ async def logout(
     repository = request_repository(request)
 
     if scope == "all_devices":
-        revoked_sessions = await repository.revoke_user_sessions(user_id)
+        revoked_sessions = await repository.revoke_user_sessions(user_id, token_digest)
     else:
         revoked_sessions = int(await repository.revoke_session(token_digest))
 
