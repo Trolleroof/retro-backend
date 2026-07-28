@@ -206,12 +206,13 @@ def cleanup(
 ) -> None:
     """Remove everything a remote run wrote, so production keeps no test state."""
     step("Clean up the artifacts this run created")
+    failed_keys: list[str] = []
     for key in object_keys:
-        ok(
-            f"deleted R2 {key}"
-            if r2_object_delete(bucket, key, scope)
-            else f"\033[33mleft behind\033[0m R2 {key} (delete it by hand)"
-        )
+        if r2_object_delete(bucket, key, scope):
+            ok(f"deleted R2 {key}")
+        else:
+            print(f"    \033[33mleft behind\033[0m R2 {key} (delete it by hand)")
+            failed_keys.append(key)
     try:
         d1_execute(
             database,
@@ -219,10 +220,12 @@ def cleanup(
             + f"DELETE FROM users WHERE id = {sql_quote(user_id)};",
             scope,
         )
+        ok(f"deleted D1 users/high_scores rows for {user_id}")
     except E2EFailure as error:
         print(f"    \033[33mleft behind\033[0m D1 rows for {user_id}: {error}")
-        return
-    ok(f"deleted D1 users/high_scores rows for {user_id}")
+        raise E2EFailure(f"cleanup failed: D1 rows for {user_id} could not be deleted") from error
+    if failed_keys:
+        raise E2EFailure(f"cleanup failed: could not delete R2 objects: {', '.join(failed_keys)}")
 
 
 def run(arguments: argparse.Namespace) -> None:
