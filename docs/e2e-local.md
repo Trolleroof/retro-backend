@@ -48,7 +48,8 @@ safe to wire into CI or a pre-deploy gate.
 | 6 | R2 object at `validated/date=…/user=…/…json` | **Queue consumer is failing** — check the `make dev` log |
 | 7 | `POST /v1/game-results` → `200` + `high_scores` row | Result contract or D1 write drifted |
 | 8 | A client-derived identity is rejected with `400` | The identity guard regressed |
-| 9 | (`--remote` only) every row and object the run created is deleted | Test state survived in production; the step names it and the run exits non-zero |
+| 9–11 | A second device stays signed in, logout revokes only the presented token, and the revoked token is not re-mirrored | The multi-device or revocation contract regressed |
+| 12 | (`--remote` only) every row and object the run created is deleted | Test state survived in production; the step names it and the run exits non-zero |
 
 Step 6 is worth calling out: a broken queue consumer is invisible from the HTTP
 response, because ingestion returns `202` as soon as the pointer is enqueued.
@@ -70,7 +71,7 @@ uv run python scripts/e2e_local.py --help
 
 ## Against the deployed Worker
 
-The same nine steps run against `api.runretroarcade.com`:
+The same steps run against `api.runretroarcade.com`:
 
 ```bash
 make prepare-deployment-config
@@ -81,10 +82,11 @@ make e2e-remote DEPLOY_CONFIG=wrangler.production.toml
 `PUBLIC_GAME_URL`, and `ALLOWED_GAME_ORIGINS` in the environment, and
 `wrangler` must be logged into the account that owns the resources.
 
-A remote run touches production: it upserts a `users` row for
-`--auth-user-id` (default `e2e-remote-smoke-user`), uploads one raw chunk, lets
-the consumer derive one validated artifact, and writes one `high_scores` row.
-Step 9 deletes all four again. If anything survives the delete, the run names it
+A remote run touches production: it upserts a `users` row for `--auth-user-id`
+(default `e2e-remote-smoke-user`) plus an `auth_sessions` row per device, uploads
+one raw chunk, lets the consumer derive one validated artifact, writes one
+`high_scores` row, and leaves a `revoked_tokens` tombstone behind the logout
+step. Step 12 deletes all of it again. If anything survives the delete, the run names it
 and exits non-zero even though the contract itself held, so a green
 `PASS remote end-to-end sync contract verified` always means production is clean
 too. Because the smoke user is its own canonical identity, a remote run never
@@ -132,16 +134,34 @@ use the user_id returned by GET /v1/me
 
 The Worker accepts a bearer token two ways, tried in this order:
 
-1. **Opaque token digest in D1.** `users.auth_token_hash` holds
-   `sha256(token)`. `scripts/e2e_local.py` provisions one automatically; for a
-   manual token use `scripts/issue_token.py`, which prints the token on stderr
-   and the `INSERT` on stdout. Bind `?1` to the **canonical** id — inserting a
-   raw Better Auth id here reproduces exactly the mismatch above.
+1. **Opaque token digest in D1.** `auth_sessions.token_hash` holds
+   `sha256(token)`, one row per signed-in device. `scripts/e2e_local.py`
+   provisions one automatically; for a manual token use
+   `scripts/issue_token.py`, which prints the token on stderr and the two
+   `INSERT`s on stdout. Bind `?1` to the **canonical** id — inserting a raw
+   Better Auth id here reproduces exactly the mismatch above.
+   (`users.auth_token_hash` is a legacy mirror of the most recent token and is
+   no longer read during authentication.)
 
 2. **`AUTH_SESSION_URL` fallback.** On a D1 miss the Worker calls the configured
    Better Auth `get-session` endpoint with the same bearer token, hashes the
    returned `user.id` into the canonical id, and caches the pairing back into
-   D1. The URL must be HTTPS, except for `127.0.0.1`/`localhost`.
+   D1. The URL must be HTTPS, except for `127.0.0.1`/`localhost`. A digest with
+   a `revoked_tokens` tombstone skips this fallback entirely, so logout is not
+   undone by the next request.
+
+## Logout and revocation
+
+`POST /v1/auth/logout` revokes the presented token; `?scope=all_devices` revokes
+every session the caller holds. Both tombstone the digests in `revoked_tokens`
+before deleting the `auth_sessions` rows, so a concurrent request cannot
+re-mirror a token mid-revocation.
+
+D1 revocation is immediate. The edge auth cache is purged only in the data
+center that served the logout, so a colo that already cached the digest keeps
+accepting the token until the TTL expires — the response reports that residual
+window as `edge_cache_ttl_seconds` (default 60, capped at 300). Treat that value
+as the revocation SLA, not zero.
 
 The local runbook uses path 1 so it needs no auth service. To exercise path 2,
 point `AUTH_SESSION_URL` at a local stub returning `{"user": {"id": "..."}}` and

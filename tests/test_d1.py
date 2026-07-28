@@ -46,7 +46,7 @@ async def test_auth_repository_resolves_token_hash(fake_d1: Any) -> None:
 
     assert user_id == "usr_example"
     assert fake_d1.bind_calls[-1] == (hash_token("opaque"),)
-    assert "auth_token_hash = ?1" in fake_d1.prepared_sql[-1]
+    assert "FROM auth_sessions WHERE token_hash = ?1" in fake_d1.prepared_sql[-1]
 
 
 async def test_auth_repository_accepts_precomputed_token_hash(fake_d1: Any) -> None:

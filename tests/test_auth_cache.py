@@ -200,6 +200,43 @@ async def test_delete_failure_does_not_replace_cache_miss() -> None:
     assert await _cache(cache).get(REQUEST_URL, DIGEST) is None
 
 
+async def test_revocation_purges_the_digest_from_this_data_center() -> None:
+    cache_api = FakeCache()
+    cache = _cache(cache_api)
+    await cache.put(REQUEST_URL, DIGEST, "usr_example")
+
+    await cache.delete("https://api.example.com/v1/auth/logout", DIGEST)
+
+    assert cache_api.delete_calls == [CACHE_URL]
+    assert await cache.get(REQUEST_URL, DIGEST) is None
+
+
+async def test_revocation_purge_failure_is_best_effort() -> None:
+    cache_api = FakeCache()
+    cache_api.delete_failure = RuntimeError("cache unavailable")
+
+    await _cache(cache_api).delete(REQUEST_URL, DIGEST)
+
+    assert cache_api.delete_calls == [CACHE_URL]
+
+
+@pytest.mark.parametrize("with_backing_cache", [True, False])
+async def test_request_auth_cache_drops_the_memo_on_revocation(
+    with_backing_cache: bool,
+) -> None:
+    cache_api = FakeCache()
+    backing_cache = _cache(cache_api) if with_backing_cache else None
+    request_cache = AuthCacheEnvironment(
+        SimpleNamespace(DB="database"), backing_cache
+    ).AUTH_CACHE
+    await request_cache.put(REQUEST_URL, DIGEST, "usr_example")
+
+    await request_cache.delete(REQUEST_URL, DIGEST)
+
+    assert await request_cache.get(REQUEST_URL, DIGEST) is None
+    assert cache_api.delete_calls == ([CACHE_URL] if with_backing_cache else [])
+
+
 @pytest.mark.parametrize(
     "digest",
     ["", "a" * 63, "A" * 64, "g" * 64],
@@ -211,6 +248,8 @@ async def test_cache_rejects_noncanonical_token_digest(digest: str) -> None:
         await cache.get(REQUEST_URL, digest)
     with pytest.raises(ValueError, match="lowercase hexadecimal SHA-256"):
         await cache.put(REQUEST_URL, digest, "usr_example")
+    with pytest.raises(ValueError, match="lowercase hexadecimal SHA-256"):
+        await cache.delete(REQUEST_URL, digest)
 
 
 @pytest.mark.parametrize(

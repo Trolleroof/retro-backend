@@ -184,4 +184,6 @@ def test_issue_token_separates_one_time_secret_from_parameter_safe_sql() -> None
     assert completed.stdout == (
         "INSERT INTO users (id, auth_token_hash) "
         f"VALUES (?1, '{digest}');\n"
+        "INSERT INTO auth_sessions (token_hash, user_id) "
+        f"VALUES ('{digest}', ?1);\n"
     )

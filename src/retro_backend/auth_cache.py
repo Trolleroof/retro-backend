@@ -26,6 +26,8 @@ class AuthCache(Protocol):
         user_id: str,
     ) -> None: ...
 
+    async def delete(self, request_url: str, token_digest: str) -> None: ...
+
 
 class CacheApi(Protocol):
     async def match(self, key: object) -> object | None: ...
@@ -122,6 +124,12 @@ class RequestAuthCache:
         if self._backing is not None:
             await self._backing.put(request_url, token_digest, user_id)
 
+    async def delete(self, request_url: str, token_digest: str) -> None:
+        cache_url = _cache_url(request_url, token_digest)
+        _ = self._resolved.pop(cache_url, None)
+        if self._backing is not None:
+            await self._backing.delete(request_url, token_digest)
+
 
 class EdgeAuthCache:
     """Store short-lived positive token resolutions in one edge data center."""
@@ -188,11 +196,31 @@ class EdgeAuthCache:
         except Exception:
             return
 
+    async def delete(self, request_url: str, token_digest: str) -> None:
+        """Purge one digest from this data center's cache; other colos keep it
+        until the TTL expires, so revocation is only bounded, never instant."""
+        cache_url = _cache_url(request_url, token_digest)
+        try:
+            key = self._request_factory(cache_url)
+        except Exception:
+            return
+        await self._delete_best_effort(key)
+
     async def _delete_best_effort(self, key: object) -> None:
         try:
             await self._cache.delete(key)
         except Exception:
             return
+
+
+def configured_auth_cache_ttl_seconds(environment: object) -> int:
+    """Return the effective edge TTL, which bounds how long revocation lags."""
+    ttl_seconds = positive_int_field(
+        environment,
+        "AUTH_CACHE_TTL_SECONDS",
+        DEFAULT_AUTH_CACHE_TTL_SECONDS,
+    )
+    return min(ttl_seconds, MAX_AUTH_CACHE_TTL_SECONDS)
 
 
 def build_auth_cache_environment(

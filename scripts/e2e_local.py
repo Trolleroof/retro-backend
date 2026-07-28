@@ -207,6 +207,7 @@ def cleanup(
     scope: Scope,
     user_id: str,
     object_keys: list[str],
+    token_digests: list[str],
 ) -> list[str]:
     """Remove everything a remote run wrote, and report whatever survived."""
     step("Clean up the artifacts this run created")
@@ -217,18 +218,22 @@ def cleanup(
         else:
             survivors.append(f"R2 {bucket}/{key}")
             fail(f"could not delete R2 {key}")
+
+    quoted_digests = ", ".join(sql_quote(digest) for digest in token_digests)
+    statements = [
+        f"DELETE FROM high_scores WHERE user_id = {sql_quote(user_id)};",
+        f"DELETE FROM auth_sessions WHERE user_id = {sql_quote(user_id)};",
+        # Tombstones are keyed by digest alone, so they outlive the user row.
+        f"DELETE FROM revoked_tokens WHERE token_hash IN ({quoted_digests});",
+        f"DELETE FROM users WHERE id = {sql_quote(user_id)};",
+    ]
     try:
-        d1_execute(
-            database,
-            f"DELETE FROM high_scores WHERE user_id = {sql_quote(user_id)};"
-            + f"DELETE FROM users WHERE id = {sql_quote(user_id)};",
-            scope,
-        )
+        d1_execute(database, " ".join(statements), scope)
     except E2EFailure as error:
-        survivors.append(f"D1 users/high_scores rows for {user_id}")
+        survivors.append(f"D1 rows for {user_id}")
         fail(f"could not delete D1 rows for {user_id}: {error}")
     else:
-        ok(f"deleted D1 users/high_scores rows for {user_id}")
+        ok(f"deleted every D1 row for {user_id}")
     return survivors
 
 
@@ -244,19 +249,26 @@ def run(arguments: argparse.Namespace) -> None:
     )
     user_id = canonical_user_id(auth_user_id)
     object_keys: list[str] = []
+    token_digests: list[str] = []
 
     if not scope.remote:
-        walk(arguments, scope, base_url, database, bucket, user_id, object_keys)
+        walk(
+            arguments, scope, base_url, database, bucket,
+            user_id, object_keys, token_digests,
+        )
         return
 
     try:
-        walk(arguments, scope, base_url, database, bucket, user_id, object_keys)
+        walk(
+            arguments, scope, base_url, database, bucket,
+            user_id, object_keys, token_digests,
+        )
     except BaseException:
         # The walk already failed; still try to clear production, but let the
         # original contract failure be the one that surfaces.
-        cleanup(database, bucket, scope, user_id, object_keys)
+        cleanup(database, bucket, scope, user_id, object_keys, token_digests)
         raise
-    survivors = cleanup(database, bucket, scope, user_id, object_keys)
+    survivors = cleanup(database, bucket, scope, user_id, object_keys, token_digests)
     if survivors:
         raise E2EFailure(
             "the contract held, but this run left test state in production:\n  "
@@ -273,6 +285,7 @@ def walk(
     bucket: str,
     user_id: str,
     object_keys: list[str],
+    token_digests: list[str],
 ) -> None:
     auth_user_id: str = arguments.auth_user_id
 
@@ -299,6 +312,7 @@ def walk(
         step("Provision an opaque bearer token for the canonical user")
         token = secrets.token_urlsafe(32)
         digest = hash_token(token)
+        token_digests.append(digest)
         print(f"    auth_user_id   {auth_user_id}")
         print(f"    canonical id   {user_id}")
         d1_execute(
@@ -306,10 +320,15 @@ def walk(
             "INSERT INTO users (id, auth_token_hash) VALUES "
             + f"({sql_quote(user_id)}, {sql_quote(digest)}) "
             + "ON CONFLICT(id) DO UPDATE SET "
-            + "auth_token_hash = excluded.auth_token_hash;",
+            + "auth_token_hash = excluded.auth_token_hash; "
+            + "INSERT INTO auth_sessions (token_hash, user_id) VALUES "
+            + f"({sql_quote(digest)}, {sql_quote(user_id)}) "
+            + "ON CONFLICT(token_hash) DO UPDATE SET "
+            + "user_id = excluded.user_id;",
             scope,
         )
-        ok(f"users row upserted in {'remote' if scope.remote else 'local'} D1")
+        where = "remote" if scope.remote else "local"
+        ok(f"users and auth_sessions rows upserted in {where} D1")
 
         step("GET /v1/me returns the identity clients must record with")
         me = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
@@ -441,6 +460,78 @@ def walk(
                     + f"got: {detail}"
                 )
             ok(f"{label} -> 400 naming the expected id")
+
+        step("A second device signs in without evicting the first")
+        second_token = secrets.token_urlsafe(32)
+        second_digest = hash_token(second_token)
+        token_digests.append(second_digest)
+        d1_execute(
+            database,
+            "INSERT INTO auth_sessions (token_hash, user_id) VALUES "
+            + f"({sql_quote(second_digest)}, {sql_quote(user_id)}) "
+            + "ON CONFLICT(token_hash) DO UPDATE SET user_id = excluded.user_id;",
+            scope,
+        )
+        for label, device_token in (("first", token), ("second", second_token)):
+            me = client.get(
+                "/v1/me", headers={"Authorization": f"Bearer {device_token}"}
+            )
+            if me.status_code != 200 or me.json() != {"user_id": user_id}:
+                raise E2EFailure(
+                    f"{label} device token: expected 200 with {user_id}, "
+                    + f"got {me.status_code}: {me.text}"
+                )
+            ok(f"{label} device token still resolves to {user_id}")
+
+        step("Logout revokes the presented token and leaves the other device alone")
+        logout = client.post(
+            "/v1/auth/logout", headers={"Authorization": f"Bearer {second_token}"}
+        )
+        if logout.status_code != 200:
+            raise E2EFailure(
+                f"expected 200 from /v1/auth/logout, got {logout.status_code}: "
+                + logout.text
+            )
+        check(
+            logout.json().get("revoked_sessions") == 1,
+            "logout reports exactly one revoked session",
+        )
+        rows = d1_execute(
+            database,
+            "SELECT token_hash FROM auth_sessions WHERE user_id = "
+            + f"{sql_quote(user_id)};",
+            scope,
+        )
+        check(
+            [str(row.get("token_hash")) for row in rows] == [digest],
+            "only the first device's session row survives in D1",
+        )
+        rows = d1_execute(
+            database,
+            "SELECT token_hash FROM revoked_tokens WHERE token_hash = "
+            + f"{sql_quote(second_digest)};",
+            scope,
+        )
+        check(bool(rows), "revoked_tokens holds a tombstone for the logged-out token")
+
+        step("The revoked token is not re-mirrored by the self-heal fallback")
+        # The edge cache is not populated for this digest in `wrangler dev`, so
+        # the rejection is immediate here; in production a colo that cached the
+        # digest keeps accepting it until AUTH_CACHE_TTL_SECONDS elapses.
+        revoked_me = client.get(
+            "/v1/me", headers={"Authorization": f"Bearer {second_token}"}
+        )
+        if revoked_me.status_code != 401:
+            raise E2EFailure(
+                "expected 401 for the revoked token, "
+                + f"got {revoked_me.status_code}: {revoked_me.text}"
+            )
+        ok("GET /v1/me with the revoked token -> 401")
+        surviving = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+        check(
+            surviving.status_code == 200,
+            "the first device is still signed in after the other device logged out",
+        )
 
 
 def main() -> int:
