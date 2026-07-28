@@ -23,6 +23,7 @@ from retro_backend.consumers.dispatch import dispatch_queue
 from retro_backend.multiplayer.errors import RoomFault
 from retro_backend.multiplayer.protocol import canonical_http_origin, parse_room_id
 from retro_backend.multiplayer.room import GameRoom
+from retro_backend.queue_health import check_queue_health
 from retro_backend.worker_http import (
     fetch_with_body_limit,
     is_room_http_surface,
@@ -396,3 +397,6 @@ class Default(WorkerEntrypoint):
         the catch-all every batch raises ``TypeError`` and retries into the DLQ.
         """
         await dispatch_queue(batch, self.env)
+
+    async def scheduled(self, _controller: object, environment: object, _ctx: object) -> None:
+        await check_queue_health(environment)

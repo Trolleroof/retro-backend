@@ -39,6 +39,14 @@ bucket_name = "retro-gameplay-raw"
 binding = "GAMEPLAY_QUEUE"
 queue = "retro-gameplay-events"
 
+[[queues.producers]]
+binding = "GAMEPLAY_DLQ"
+queue = "retro-gameplay-events-dlq"
+
+[[queues.producers]]
+binding = "GAMEPLAY_ARCHIVE_DLQ"
+queue = "retro-gameplay-events-archive-dlq"
+
 [[queues.consumers]]
 queue = "retro-gameplay-events"
 max_batch_size = 10
@@ -77,3 +85,6 @@ namespace_id = "1001"
 [ratelimits.simple]
 limit = 120
 period = 60
+
+[triggers]
+crons = ["*/5 * * * *"]
