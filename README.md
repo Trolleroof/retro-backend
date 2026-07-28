@@ -12,10 +12,9 @@ the `retro-backend` D1 database, the `retro-gameplay-raw` R2 bucket, and the
 lifecycle rule is in place. `make e2e-remote` walks the whole ingestion contract
 against that deployment and cleans up after itself.
 
-The live Worker is built from `0001_core`. **`0002_auth_sessions` has not been
-applied to the production database yet**, so the multi-device session and
-logout routes are not live; `make migrate-remote` and a deploy have to run
-together before `make e2e-remote` will pass against production.
+Both `0001_core` and `0002_auth_sessions` are applied to the production
+database, so the multi-device session and logout routes are live and
+`make e2e-remote` passes against production.
 
 `auth.runretroarcade.com` is the separately hosted account authentication
 service this Worker calls through `AUTH_SESSION_URL`; it is deployed from the
@@ -435,7 +434,8 @@ Python Workers remain a Cloudflare beta surface, so the Worker dry run and a
 live health probe are both release gates.
 
 Two operational items are still outstanding and can only be done by an account
-or repository administrator:
+or repository administrator. Both are written up step by step in
+[docs/production-setup.md](docs/production-setup.md):
 
 - The GitHub `production` environment does not exist yet, so the workflow's
   deployment job has no secrets to read. Until it is created with the secrets

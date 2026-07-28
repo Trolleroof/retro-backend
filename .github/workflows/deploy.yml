@@ -11,7 +11,21 @@ permissions:
   contents: read
 
 jobs:
+  # `workflow_dispatch` accepts any ref. Without this gate a dispatch from a
+  # branch runs `verify`, silently skips the `main`-only `deploy` job, and
+  # still reports the run as green -- a release that deployed nothing but
+  # looks successful. Fail loudly instead. Branches are verified by ci.yml.
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to release from a ref other than main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Deploy production must be dispatched from main, got ${{ github.ref }}."
+          exit 1
+
   verify:
+    needs: guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +36,8 @@ jobs:
         with:
           node-version-file: ".node-version"
       - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.9"
       - run: uv sync --frozen
       - run: make verify
       - run: make worker-sync
@@ -47,6 +63,8 @@ jobs:
         with:
           node-version-file: ".node-version"
       - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.9"
       - run: uv sync --frozen
       - run: make prepare-deployment-config
       - run: make worker-sync
@@ -56,3 +74,9 @@ jobs:
       - run: make apply-r2-lifecycle DEPLOY_CONFIG=wrangler.production.toml
       - run: make deploy DEPLOY_CONFIG=wrangler.production.toml
       - run: curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 https://api.runretroarcade.com/health/ready
+      # /health/ready only proves the isolate booted. This walks the whole
+      # ingestion contract against the deployment -- auth, multi-device
+      # sessions, logout revocation, R2, the queue consumer, and the D1 high
+      # score -- then deletes everything it wrote and fails if that cleanup
+      # does not stick.
+      - run: make e2e-remote DEPLOY_CONFIG=wrangler.production.toml
