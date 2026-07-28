@@ -43,6 +43,20 @@ growth while outliving any edge-cached copy of the digest.
 3. Purge the digest from the edge auth cache, best-effort.
 4. Return `revoked_sessions`, `scope`, and `edge_cache_ttl_seconds`.
 
+`all_devices` needs two extra guards, because D1 has no multi-statement
+transaction here and each statement lands separately:
+
+- The caller's own digest is tombstoned unconditionally, before the sweep. A
+  caller that authenticated from the edge cache may hold no `auth_sessions` row
+  at all, so a user-scoped sweep alone would leave its token free to self-heal.
+- The sweep tombstones a *snapshot* of the user's digests. A concurrent
+  self-heal can insert a row after that snapshot and before the delete, so every
+  digest the delete actually returns is tombstoned again afterwards.
+
+A digest inserted after the delete still escapes. That token is one the auth
+service considers valid and that was mirrored after logout completed; closing it
+needs a real transaction (`D1.batch`), which is the natural follow-up.
+
 `require_user_id` checks `is_token_revoked` before the `AUTH_SESSION_URL`
 fallback, costing one extra D1 read only on the miss path. That check is what
 makes revocation stick when the upstream auth service still considers the token

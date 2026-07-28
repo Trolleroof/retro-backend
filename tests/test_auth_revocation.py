@@ -78,17 +78,56 @@ async def test_revoke_session_reports_no_live_session(fake_d1: Any) -> None:
 
 
 async def test_revoke_user_sessions_counts_every_device(fake_d1: Any) -> None:
-    fake_d1.run_rows = [[], _deleted(DIGEST_A, DIGEST_B), []]
+    fake_d1.run_rows = [[], [], _deleted(DIGEST_A, DIGEST_B), [], [], []]
 
-    revoked = await D1Repository(fake_d1).revoke_user_sessions(USER_ID)
+    revoked = await D1Repository(fake_d1).revoke_user_sessions(USER_ID, DIGEST_A)
 
     assert revoked == 2
-    assert "INSERT INTO revoked_tokens" in fake_d1.run_calls[0]
     assert "SELECT token_hash FROM auth_sessions WHERE user_id = ?1" in (
-        fake_d1.run_calls[0]
+        fake_d1.run_calls[1]
     )
-    assert "DELETE FROM auth_sessions WHERE user_id = ?1" in fake_d1.run_calls[1]
-    assert fake_d1.bind_calls[:2] == [(USER_ID,), (USER_ID,)]
+    assert "DELETE FROM auth_sessions WHERE user_id = ?1" in fake_d1.run_calls[2]
+    assert fake_d1.bind_calls[:3] == [(DIGEST_A,), (USER_ID,), (USER_ID,)]
+
+
+async def test_revoke_all_devices_tombstones_a_bearer_with_no_session_row(
+    fake_d1: Any,
+) -> None:
+    """An edge-cache hit authenticates without an `auth_sessions` row, so the
+    user-scoped sweep alone would never tombstone the caller's own token."""
+    fake_d1.run_rows = [[], [], _deleted(DIGEST_B), [], []]
+
+    revoked = await D1Repository(fake_d1).revoke_user_sessions(USER_ID, DIGEST_A)
+
+    assert revoked == 1
+    assert "INSERT INTO revoked_tokens" in fake_d1.run_calls[0]
+    assert fake_d1.bind_calls[0] == (DIGEST_A,)
+    tombstoned = {
+        bind[0]
+        for sql, bind in zip(fake_d1.run_calls, fake_d1.bind_calls, strict=True)
+        if "INSERT INTO revoked_tokens (token_hash)\nVALUES (?1)" in sql
+    }
+    assert tombstoned == {DIGEST_A, DIGEST_B}
+
+
+async def test_revoke_all_devices_tombstones_rows_added_after_the_snapshot(
+    fake_d1: Any,
+) -> None:
+    """A concurrent self-heal can insert a row between the snapshot and the
+    delete; that digest must still end up tombstoned."""
+    # The snapshot saw nothing, but the delete still removed a row.
+    fake_d1.run_rows = [[], [], _deleted(DIGEST_B), [], []]
+
+    _ = await D1Repository(fake_d1).revoke_user_sessions(USER_ID, DIGEST_A)
+
+    tombstones_after_delete = [
+        bind
+        for sql, bind in list(
+            zip(fake_d1.run_calls, fake_d1.bind_calls, strict=True)
+        )[3:]
+        if "INSERT INTO revoked_tokens" in sql
+    ]
+    assert tombstones_after_delete == [(DIGEST_B,)]
 
 
 async def test_revocation_prunes_expired_tombstones(fake_d1: Any) -> None:
@@ -142,7 +181,7 @@ async def test_logout_all_devices_revokes_every_session(
     fake_d1: Any,
 ) -> None:
     fake_d1.first_rows.append({"id": USER_ID})
-    fake_d1.run_rows = [[], _deleted(DIGEST_A, DIGEST_B), []]
+    fake_d1.run_rows = [[], [], _deleted(DIGEST_A, DIGEST_B), [], [], []]
 
     response = await app_client.post(
         "/v1/auth/logout?scope=all_devices",
@@ -152,7 +191,7 @@ async def test_logout_all_devices_revokes_every_session(
     assert response.status_code == 200
     assert response.json()["revoked_sessions"] == 2
     assert response.json()["scope"] == "all_devices"
-    assert fake_d1.bind_calls[1:3] == [(USER_ID,), (USER_ID,)]
+    assert fake_d1.bind_calls[1:4] == [(DIGEST_A,), (USER_ID,), (USER_ID,)]
 
 
 async def test_logout_reports_the_configured_edge_cache_window(

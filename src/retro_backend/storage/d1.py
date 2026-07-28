@@ -95,14 +95,14 @@ def _score_from_row(row: object) -> int:
     return score
 
 
-def _deleted_row_count(result: object) -> int:
-    """Count the rows a ``DELETE ... RETURNING token_hash`` statement removed."""
+def _deleted_token_hashes(result: object) -> list[str]:
+    """Read the digests a ``DELETE ... RETURNING token_hash`` statement removed."""
     rows = value_field(result, "results", [])
-    return sum(
-        1
+    return [
+        token_hash
         for row in iter_binding_values(rows)
-        if isinstance(value_field(row, "token_hash"), str)
-    )
+        if isinstance(token_hash := value_field(row, "token_hash"), str)
+    ]
 
 
 class D1Repository:
@@ -145,21 +145,29 @@ class D1Repository:
         await self.database.prepare(_TOMBSTONE_TOKEN_SQL).bind(token_digest).run()
         result = await self.database.prepare(_DELETE_SESSION_SQL).bind(token_digest).run()
         await self._prune_revocations()
-        return _deleted_row_count(result) > 0
+        return len(_deleted_token_hashes(result)) > 0
 
-    async def revoke_user_sessions(self, user_id: str, bearer_token_digest: str | None = None) -> int:
-        """Revoke every device token for one user, returning how many were live."""
-        # Tombstone the bearer token explicitly, even if it has no live session row,
-        # to prevent self-heal after cache purge.
-        if bearer_token_digest is not None:
-            await self.database.prepare(_TOMBSTONE_TOKEN_SQL).bind(bearer_token_digest).run()
+    async def revoke_user_sessions(self, user_id: str, token_digest: str) -> int:
+        """Revoke every device token for one user, returning how many were live.
+
+        ``token_digest`` is the caller's own bearer digest. It is tombstoned
+        unconditionally because the caller may have authenticated from the edge
+        cache without holding an ``auth_sessions`` row, in which case the
+        user-scoped sweep below would never see it.
+        """
+        await self.database.prepare(_TOMBSTONE_TOKEN_SQL).bind(token_digest).run()
         await self.database.prepare(_TOMBSTONE_USER_SESSIONS_SQL).bind(user_id).run()
         result = await self.database.prepare(_DELETE_USER_SESSIONS_SQL).bind(user_id).run()
-        # Tombstone again to catch any concurrent inserts that happened between
-        # the initial tombstone and the delete.
-        await self.database.prepare(_TOMBSTONE_USER_SESSIONS_SQL).bind(user_id).run()
+
+        # The sweep above tombstones a snapshot. A concurrent self-heal can add a
+        # row between that snapshot and the delete, so tombstone whatever the
+        # delete actually removed.
+        revoked = _deleted_token_hashes(result)
+        for deleted_digest in revoked:
+            await self.database.prepare(_TOMBSTONE_TOKEN_SQL).bind(deleted_digest).run()
+
         await self._prune_revocations()
-        return _deleted_row_count(result)
+        return len(revoked)
 
     async def _prune_revocations(self) -> None:
         await (
