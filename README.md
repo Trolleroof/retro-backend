@@ -434,7 +434,8 @@ Python Workers remain a Cloudflare beta surface, so the Worker dry run and a
 live health probe are both release gates.
 
 Two operational items are still outstanding and can only be done by an account
-or repository administrator:
+or repository administrator. Both are written up step by step in
+[docs/production-setup.md](docs/production-setup.md):
 
 - The GitHub `production` environment does not exist yet, so the workflow's
   deployment job has no secrets to read. Until it is created with the secrets
