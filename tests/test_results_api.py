@@ -102,8 +102,12 @@ async def test_current_user_accepts_and_persists_better_auth_session(
     assert response.status_code == 200
     assert response.json() == {"user_id": "usr_cloud_account"}
     digest = hashlib.sha256(b"better-auth-session").hexdigest()
-    assert fake_d1.bind_calls[-1] == ("usr_cloud_account", digest)
+    assert fake_d1.bind_calls[-2:] == [
+        ("usr_cloud_account", digest),
+        (digest, "usr_cloud_account"),
+    ]
     assert any("INSERT INTO users" in sql for sql in fake_d1.run_calls)
+    assert any("INSERT INTO auth_sessions" in sql for sql in fake_d1.run_calls)
 
 
 async def test_current_user_cache_hit_skips_d1_lookup(

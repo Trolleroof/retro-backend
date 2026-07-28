@@ -83,17 +83,35 @@ def request_environment(request: Request) -> object | None:
     return getattr(request.app.state, "env", None)
 
 
+def request_auth_cache(request: Request) -> AuthCache | None:
+    """Return the request-local auth cache adapter, if the Worker injected one."""
+    environment = request_environment(request)
+    auth_cache_value = (
+        value_field(environment, "AUTH_CACHE") if environment is not None else None
+    )
+    if auth_cache_value is None:
+        return None
+    return cast(AuthCache, auth_cache_value)
+
+
+def request_repository(request: Request) -> D1Repository:
+    """Return a D1 repository, or fail closed when the binding is missing."""
+    environment = request_environment(request)
+    database = value_field(environment, "DB") if environment is not None else None
+    if database is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database binding unavailable",
+        )
+    return D1Repository(cast(D1Database, database))
+
+
 async def require_user_id(request: Request) -> str:
     """Resolve an authenticated user from edge cache, falling back to D1."""
     token = parse_bearer_token(request.headers.get("Authorization"))
     token_digest = hash_token(token)
     environment = request_environment(request)
-    auth_cache_value = (
-        value_field(environment, "AUTH_CACHE") if environment is not None else None
-    )
-    auth_cache = (
-        cast(AuthCache, auth_cache_value) if auth_cache_value is not None else None
-    )
+    auth_cache = request_auth_cache(request)
 
     if auth_cache is not None:
         try:
@@ -103,18 +121,17 @@ async def require_user_id(request: Request) -> str:
         if cached_user_id is not None:
             return cached_user_id
 
-    database = value_field(environment, "DB") if environment is not None else None
-    if database is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database binding unavailable",
-        )
-
-    repository = D1Repository(cast(D1Database, database))
+    repository = request_repository(request)
     user_id = await repository.resolve_user_hash(token_digest)
     if user_id is None:
         session_url = value_field(environment, "AUTH_SESSION_URL")
-        if isinstance(session_url, str) and session_url:
+        # A revoked digest must not be re-mirrored from the upstream auth
+        # service, which may still consider the token valid.
+        if (
+            isinstance(session_url, str)
+            and session_url
+            and not await repository.is_token_revoked(token_digest)
+        ):
             try:
                 user_id = await resolve_auth_session(token, session_url)
             except AuthServiceUnavailable as error:

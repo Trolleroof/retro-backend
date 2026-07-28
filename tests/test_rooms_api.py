@@ -331,12 +331,16 @@ async def test_create_room_accepts_better_auth_session_and_uses_canonical_identi
     token_digest = hashlib.sha256(token.encode()).hexdigest()
     assert fake_d1.bind_calls == [
         (token_digest,),
+        (token_digest,),
         (canonical_user_id, token_digest),
+        (token_digest, canonical_user_id),
     ]
-    assert len(fake_d1.first_calls) == 1
-    assert "SELECT id FROM users" in fake_d1.first_calls[0]
-    assert len(fake_d1.run_calls) == 1
+    assert len(fake_d1.first_calls) == 2
+    assert "FROM auth_sessions WHERE token_hash = ?1" in fake_d1.first_calls[0]
+    assert "FROM revoked_tokens WHERE token_hash = ?1" in fake_d1.first_calls[1]
+    assert len(fake_d1.run_calls) == 2
     assert "INSERT INTO users" in fake_d1.run_calls[0]
+    assert "INSERT INTO auth_sessions" in fake_d1.run_calls[1]
 
 
 @pytest.mark.parametrize(
