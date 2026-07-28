@@ -1,4 +1,4 @@
-# Local end-to-end sync runbook
+# End-to-end sync runbook
 
 Proves the whole ingestion contract on one machine: **auth → `/v1/me` → chunk →
 R2 → queue consumer → derived artifact → D1 high score**, plus a regression
@@ -48,6 +48,7 @@ safe to wire into CI or a pre-deploy gate.
 | 6 | R2 object at `validated/date=…/user=…/…json` | **Queue consumer is failing** — check the `make dev` log |
 | 7 | `POST /v1/game-results` → `200` + `high_scores` row | Result contract or D1 write drifted |
 | 8 | A client-derived identity is rejected with `400` | The identity guard regressed |
+| 9 | (`--remote` only) every row and object the run created is deleted | Test state was left in production; the step names what survived |
 
 Step 6 is worth calling out: a broken queue consumer is invisible from the HTTP
 response, because ingestion returns `202` as soon as the pointer is enqueued.
@@ -64,6 +65,29 @@ uv run python scripts/e2e_local.py --help
 - `--auth-user-id` — the upstream auth subject; the Worker hashes it
 - `--persist-to` — pass the same directory you gave `wrangler dev`, if any
 - `--queue-timeout` — seconds to wait for the derived artifact (default 30)
+- `--remote` — use the account's real D1 and R2 instead of the dev sim
+- `--config` — Wrangler config that resolves the remote D1 (`--remote` only)
+
+## Against the deployed Worker
+
+The same nine steps run against `api.runretroarcade.com`:
+
+```bash
+make prepare-deployment-config
+make e2e-remote DEPLOY_CONFIG=wrangler.production.toml
+```
+
+`make prepare-deployment-config` needs `CLOUDFLARE_D1_DATABASE_ID`,
+`PUBLIC_GAME_URL`, and `ALLOWED_GAME_ORIGINS` in the environment, and
+`wrangler` must be logged into the account that owns the resources.
+
+A remote run touches production: it upserts a `users` row for
+`--auth-user-id` (default `e2e-remote-smoke-user`), uploads one raw chunk, lets
+the consumer derive one validated artifact, and writes one `high_scores` row.
+Step 9 deletes all four again, and reports anything it could not remove rather
+than failing silently — read that step's output before walking away. Because the
+smoke user is its own canonical identity, a remote run never touches real user
+rows or artifacts.
 
 ## The identity rule
 

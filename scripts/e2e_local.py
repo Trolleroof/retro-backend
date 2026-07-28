@@ -1,4 +1,4 @@
-"""Prove the local sync contract end to end, failing loudly on any mismatch.
+"""Prove the sync contract end to end, failing loudly on any mismatch.
 
 Walks the path a real client takes and asserts every hop:
 
@@ -16,7 +16,10 @@ client derives ``usr_<better-auth-id>`` or a random ``usr_<uuid>``, neither of
 which can equal ``usr_`` + ``sha256(auth_user_id)[:32]``. Until the client reads
 its id from ``/v1/me``, every real upload 400s.
 
-Run against ``make dev`` (see docs/e2e-local.md).
+Run against ``make dev`` (see docs/e2e-local.md), or against the deployed
+Worker with ``--remote --base-url https://api.runretroarcade.com``. Remote runs
+touch production D1 and R2, so every row and object they create is removed
+again before the run exits.
 """
 
 import argparse
@@ -27,6 +30,7 @@ import secrets
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -44,7 +48,27 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8787"
 DEFAULT_DATABASE = "retro-backend"
 DEFAULT_BUCKET = "retro-gameplay-raw"
 DEFAULT_AUTH_USER_ID = "e2e-local-auth-user"
+DEFAULT_REMOTE_CONFIG = "wrangler.production.toml"
 WRANGLER_VERSION = "4.112.0"
+
+
+@dataclass(frozen=True)
+class Scope:
+    """Where ``wrangler`` should look for D1 and R2: the dev sim, or the account."""
+
+    remote: bool
+    persist_to: str | None
+    config: str
+
+    def d1_flags(self) -> list[str]:
+        if not self.remote:
+            return ["--local", *(["--persist-to", self.persist_to] if self.persist_to else [])]
+        return ["--remote", "--config", self.config]
+
+    def r2_flags(self) -> list[str]:
+        if not self.remote:
+            return ["--local", *(["--persist-to", self.persist_to] if self.persist_to else [])]
+        return ["--remote"]
 
 
 class E2EFailure(RuntimeError):
@@ -81,10 +105,8 @@ def wrangler(*args: str, capture: bool = True) -> subprocess.CompletedProcess[st
     )
 
 
-def d1_execute(database: str, sql: str, persist_to: str | None) -> list[dict[str, Any]]:
-    args = ["d1", "execute", database, "--local", "--json", "--command", sql]
-    if persist_to:
-        args += ["--persist-to", persist_to]
+def d1_execute(database: str, sql: str, scope: Scope) -> list[dict[str, Any]]:
+    args = ["d1", "execute", database, "--json", "--command", sql, *scope.d1_flags()]
     completed = wrangler(*args)
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
@@ -108,12 +130,15 @@ def d1_execute(database: str, sql: str, persist_to: str | None) -> list[dict[str
     return results
 
 
-def r2_object_exists(bucket: str, key: str, persist_to: str | None) -> bool:
-    args = ["r2", "object", "get", f"{bucket}/{key}", "--local", "--pipe"]
-    if persist_to:
-        args += ["--persist-to", persist_to]
+def r2_object_exists(bucket: str, key: str, scope: Scope) -> bool:
+    args = ["r2", "object", "get", f"{bucket}/{key}", "--pipe", *scope.r2_flags()]
     completed = wrangler(*args)
     return completed.returncode == 0
+
+
+def r2_object_delete(bucket: str, key: str, scope: Scope) -> bool:
+    args = ["r2", "object", "delete", f"{bucket}/{key}", *scope.r2_flags()]
+    return wrangler(*args).returncode == 0
 
 
 def client_normalize_account_id(value: str) -> str:
@@ -172,22 +197,77 @@ def post(
     )
 
 
+def cleanup(
+    database: str,
+    bucket: str,
+    scope: Scope,
+    user_id: str,
+    object_keys: list[str],
+) -> None:
+    """Remove everything a remote run wrote, so production keeps no test state."""
+    step("Clean up the artifacts this run created")
+    for key in object_keys:
+        ok(
+            f"deleted R2 {key}"
+            if r2_object_delete(bucket, key, scope)
+            else f"\033[33mleft behind\033[0m R2 {key} (delete it by hand)"
+        )
+    try:
+        d1_execute(
+            database,
+            f"DELETE FROM high_scores WHERE user_id = {sql_quote(user_id)};"
+            + f"DELETE FROM users WHERE id = {sql_quote(user_id)};",
+            scope,
+        )
+    except E2EFailure as error:
+        print(f"    \033[33mleft behind\033[0m D1 rows for {user_id}: {error}")
+        return
+    ok(f"deleted D1 users/high_scores rows for {user_id}")
+
+
 def run(arguments: argparse.Namespace) -> None:
     base_url: str = arguments.base_url.rstrip("/")
     database: str = arguments.database
     bucket: str = arguments.bucket
-    persist_to: str | None = arguments.persist_to
     auth_user_id: str = arguments.auth_user_id
+    scope = Scope(
+        remote=arguments.remote,
+        persist_to=arguments.persist_to,
+        config=arguments.config,
+    )
     user_id = canonical_user_id(auth_user_id)
+    object_keys: list[str] = []
+
+    try:
+        walk(arguments, scope, base_url, database, bucket, user_id, object_keys)
+    finally:
+        if scope.remote:
+            cleanup(database, bucket, scope, user_id, object_keys)
+
+
+def walk(
+    arguments: argparse.Namespace,
+    scope: Scope,
+    base_url: str,
+    database: str,
+    bucket: str,
+    user_id: str,
+    object_keys: list[str],
+) -> None:
+    auth_user_id: str = arguments.auth_user_id
 
     with httpx.Client(base_url=base_url, timeout=15) as client:
         step(f"Worker liveness and readiness at {base_url}")
         try:
             live = client.get("/health/live")
         except httpx.HTTPError as error:
+            hint = (
+                "check the deployment"
+                if scope.remote
+                else "start it with `make dev`"
+            )
             raise E2EFailure(
-                f"cannot reach the Worker at {base_url}; "
-                + f"start it with `make dev`\n  {error}"
+                f"cannot reach the Worker at {base_url}; {hint}\n  {error}"
             ) from error
         check(live.status_code == 200, f"GET /health/live -> {live.status_code}")
         ready = client.get("/health/ready")
@@ -207,9 +287,9 @@ def run(arguments: argparse.Namespace) -> None:
             + f"({sql_quote(user_id)}, {sql_quote(digest)}) "
             + "ON CONFLICT(id) DO UPDATE SET "
             + "auth_token_hash = excluded.auth_token_hash;",
-            persist_to,
+            scope,
         )
-        ok("users row upserted in local D1")
+        ok(f"users row upserted in {'remote' if scope.remote else 'local'} D1")
 
         step("GET /v1/me returns the identity clients must record with")
         me = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
@@ -255,8 +335,9 @@ def run(arguments: argparse.Namespace) -> None:
             f"raw/user={user_id}/game={chunk['game_id']}"
             f"/chunk={chunk['chunk_id']}.json"
         )
+        object_keys.append(raw_key)
         check(
-            r2_object_exists(bucket, raw_key, persist_to),
+            r2_object_exists(bucket, raw_key, scope),
             f"R2 object present at {raw_key}",
         )
 
@@ -265,9 +346,10 @@ def run(arguments: argparse.Namespace) -> None:
             f"validated/date={utc_date(chunk['created_at_ms'])}/user={user_id}"
             f"/game={chunk['game_id']}/chunk={chunk['chunk_id']}.json"
         )
+        object_keys.append(validated_key)
         deadline = time.monotonic() + arguments.queue_timeout
         while True:
-            if r2_object_exists(bucket, validated_key, persist_to):
+            if r2_object_exists(bucket, validated_key, scope):
                 ok(f"derived artifact present at {validated_key}")
                 break
             if time.monotonic() >= deadline:
@@ -306,7 +388,7 @@ def run(arguments: argparse.Namespace) -> None:
             "SELECT score FROM high_scores WHERE user_id = "
             + f"{sql_quote(user_id)} "
             + f"AND game_type = {sql_quote(chunk['game_type'])};",
-            persist_to,
+            scope,
         )
         check(bool(rows), "high_scores row exists for the canonical user")
         check(
@@ -356,6 +438,19 @@ def main() -> int:
         default=None,
         help="Local persistence directory, if `wrangler dev` was given one.",
     )
+    parser.add_argument(
+        "--remote",
+        action="store_true",
+        help=(
+            "Read and write the account's real D1 and R2 instead of the dev "
+            + "sim. Everything the run creates is deleted before it exits."
+        ),
+    )
+    parser.add_argument(
+        "--config",
+        default=DEFAULT_REMOTE_CONFIG,
+        help="Wrangler config used to resolve remote D1 (--remote only).",
+    )
     parser.add_argument("--queue-timeout", type=float, default=30.0)
     arguments = parser.parse_args()
 
@@ -364,7 +459,8 @@ def main() -> int:
     except E2EFailure as error:
         print(f"\n\033[31mFAIL\033[0m {error}", file=sys.stderr)
         return 1
-    print("\n\033[32mPASS\033[0m local end-to-end sync contract verified", flush=True)
+    where = "remote" if arguments.remote else "local"
+    print(f"\n\033[32mPASS\033[0m {where} end-to-end sync contract verified", flush=True)
     return 0
 
 

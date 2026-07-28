@@ -1,4 +1,4 @@
-.PHONY: test lint typecheck verify node-preflight deployment-preflight prepare-deployment-config worker-sync worker-types worker-dry-run dev deploy migrate-local migrate-remote apply-r2-lifecycle e2e-local
+.PHONY: test lint typecheck verify node-preflight deployment-preflight prepare-deployment-config worker-sync worker-types worker-dry-run dev deploy migrate-local migrate-remote apply-r2-lifecycle e2e-local e2e-remote
 
 D1_DATABASE ?= retro-backend
 R2_BUCKET ?= retro-gameplay-raw
@@ -7,6 +7,8 @@ DEPLOY_CONFIG ?= wrangler.toml
 WRANGLER_VERSION ?= 4.112.0
 DEV_IP ?= 127.0.0.1
 PORT ?= 8787
+REMOTE_BASE_URL ?= https://api.runretroarcade.com
+REMOTE_AUTH_USER_ID ?= e2e-remote-smoke-user
 UV_RUN := uv run --frozen
 WRANGLER := npx --yes wrangler@$(WRANGLER_VERSION)
 
@@ -50,6 +52,13 @@ deploy: worker-sync deployment-preflight
 e2e-local:
 	$(UV_RUN) python scripts/e2e_local.py --base-url http://$(DEV_IP):$(PORT) \
 		--database $(D1_DATABASE) --bucket $(R2_BUCKET)
+
+# Same walk against the deployed Worker. Writes to production D1/R2 and
+# deletes everything it wrote before exiting; see docs/e2e-local.md.
+e2e-remote: deployment-preflight
+	$(UV_RUN) python scripts/e2e_local.py --remote --base-url $(REMOTE_BASE_URL) \
+		--database $(D1_DATABASE) --bucket $(R2_BUCKET) \
+		--config $(DEPLOY_CONFIG) --auth-user-id $(REMOTE_AUTH_USER_ID)
 
 migrate-local: node-preflight
 	$(WRANGLER) d1 migrations apply $(D1_DATABASE) --local

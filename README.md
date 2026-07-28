@@ -6,18 +6,16 @@ processing. FastAPI handles HTTP through Cloudflare's ASGI adapter; D1, R2,
 Queues, Durable Objects, and the native rate limiter are exposed through Worker
 bindings.
 
-The production configuration template targets the custom domain
-`api.runretroarcade.com`. It is configuration only, not evidence of a live
-domain or deployment.
+The Worker is deployed to the custom domain `api.runretroarcade.com`, backed by
+the `retro-backend` D1 database, the `retro-gameplay-raw` R2 bucket, and the
+`retro-gameplay-events` queue with its two dead-letter queues. Remote migrations
+are applied and the R2 lifecycle rule is in place. `make e2e-remote` walks the
+whole ingestion contract against that deployment and cleans up after itself.
 
-This repository contains the multiplayer backend implementation, but this change
-does not deploy it, create remote Durable Object namespaces, run remote migrations,
-or publish a release.
-
-The `runretroarcade.com` and `auth.runretroarcade.com` hostnames describe a
-possible future website and separately hosted account authentication service.
-This change neither creates nor verifies either hostname; this Worker currently
-keeps its hash-only opaque-token authentication contract.
+`auth.runretroarcade.com` is the separately hosted account authentication
+service this Worker calls through `AUTH_SESSION_URL`; it is deployed from the
+`tui-gamepigeon` repository, not this one. The Worker still accepts hash-only
+opaque tokens from D1 as its first authentication path.
 ## Architecture And Request Flow
 
 The Worker may execute in any Cloudflare location and an isolate may be
@@ -334,7 +332,8 @@ ALLOWED_GAME_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 `GAME_ROOMS` creates one SQLite Durable Object per room. `wrangler.toml`
 declares `GameRoom` directly as a SQLite Durable Object export and contains no
 top-level Durable Object migrations block. No separate Durable Object migration
-command is required; a future real deploy reconciles the declarative export.
+command is required; each deploy reconciles the declarative export, and the
+`ChunkGate` and `GameRoom` namespaces exist in the account.
 This is separate from the existing D1 schema migration commands used for users,
 token hashes, and high scores.
 
@@ -363,14 +362,20 @@ high score — start `make dev` in one shell and run:
 make e2e-local
 ```
 
+The same walk runs against the deployed Worker. It writes to production D1 and
+R2 and deletes every row and object it created before it exits:
+
+```bash
+make e2e-remote DEPLOY_CONFIG=wrangler.production.toml
+```
+
 See [docs/e2e-local.md](docs/e2e-local.md) for the step-by-step runbook, the
 canonical-identity rule clients must follow, and notes on opaque token digests
 versus `AUTH_SESSION_URL`.
 
 ## Production Deployment
 
-The guarded production commands remain available for an explicitly authorized
-account operation:
+The guarded production commands mutate the configured Cloudflare account:
 
 ```bash
 make deployment-preflight DEPLOY_CONFIG=wrangler.production.toml
@@ -407,10 +412,19 @@ the lifecycle, deploys, and probes
 `https://api.runretroarcade.com/health/ready`. Concurrency is serialized so two
 production releases cannot overlap.
 
-After the first deployment, configure Cloudflare notifications for Worker
-errors and Queue backlog, and alert on any message in
-`retro-gameplay-events-archive-dlq`. Python Workers remain a Cloudflare beta
-surface, so the Worker dry run and a live health probe are both release gates.
+Python Workers remain a Cloudflare beta surface, so the Worker dry run and a
+live health probe are both release gates.
+
+Two operational items are still outstanding and can only be done by an account
+or repository administrator:
+
+- The GitHub `production` environment does not exist yet, so the workflow's
+  deployment job has no secrets to read. Until it is created with the secrets
+  and variables above, releases must be cut from a workstation with the
+  commands in this section.
+- Cloudflare notifications are not configured. Add alerts for Worker errors and
+  Queue backlog, and alert on any message reaching
+  `retro-gameplay-events-archive-dlq`.
 
 ## Deferred Integrations
 

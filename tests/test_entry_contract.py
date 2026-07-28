@@ -1616,20 +1616,15 @@ def test_readme_documents_implemented_multiplayer_contract_and_routes() -> None:
 def test_readme_documents_multiplayer_configuration_and_delivery_boundary() -> None:
     readme = _read(README_PATH)
     normalized = " ".join(readme.split())
-    delivery_boundary = (
-        "This repository contains the multiplayer backend implementation, but this change\n"
-        "does not deploy it, create remote Durable Object namespaces, run remote migrations,\n"
-        "or publish a release."
-    )
 
-    assert delivery_boundary in readme
     assert "`GAME_ROOMS` creates one SQLite Durable Object per room" in normalized
     assert "Production value placeholders" in normalized
     assert "Local example" in normalized
     assert "No separate Durable Object migration command is required" in normalized
-    assert "a future real deploy reconciles the declarative export" in normalized
-    assert "remains available" not in readme
-    assert "neither creates nor verifies either hostname" in normalized
+    assert "each deploy reconciles the declarative export" in normalized
+    # The Worker is live; the README must not claim otherwise.
+    assert "not evidence of a live" not in normalized
+    assert "does not deploy it" not in normalized
     assert "workerd" not in readme.casefold()
 
 
