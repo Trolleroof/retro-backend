@@ -107,16 +107,34 @@ use the user_id returned by GET /v1/me
 
 The Worker accepts a bearer token two ways, tried in this order:
 
-1. **Opaque token digest in D1.** `users.auth_token_hash` holds
-   `sha256(token)`. `scripts/e2e_local.py` provisions one automatically; for a
-   manual token use `scripts/issue_token.py`, which prints the token on stderr
-   and the `INSERT` on stdout. Bind `?1` to the **canonical** id — inserting a
-   raw Better Auth id here reproduces exactly the mismatch above.
+1. **Opaque token digest in D1.** `auth_sessions.token_hash` holds
+   `sha256(token)`, one row per signed-in device. `scripts/e2e_local.py`
+   provisions one automatically; for a manual token use
+   `scripts/issue_token.py`, which prints the token on stderr and the two
+   `INSERT`s on stdout. Bind `?1` to the **canonical** id — inserting a raw
+   Better Auth id here reproduces exactly the mismatch above.
+   (`users.auth_token_hash` is a legacy mirror of the most recent token and is
+   no longer read during authentication.)
 
 2. **`AUTH_SESSION_URL` fallback.** On a D1 miss the Worker calls the configured
    Better Auth `get-session` endpoint with the same bearer token, hashes the
    returned `user.id` into the canonical id, and caches the pairing back into
-   D1. The URL must be HTTPS, except for `127.0.0.1`/`localhost`.
+   D1. The URL must be HTTPS, except for `127.0.0.1`/`localhost`. A digest with
+   a `revoked_tokens` tombstone skips this fallback entirely, so logout is not
+   undone by the next request.
+
+## Logout and revocation
+
+`POST /v1/auth/logout` revokes the presented token; `?scope=all_devices` revokes
+every session the caller holds. Both tombstone the digests in `revoked_tokens`
+before deleting the `auth_sessions` rows, so a concurrent request cannot
+re-mirror a token mid-revocation.
+
+D1 revocation is immediate. The edge auth cache is purged only in the data
+center that served the logout, so a colo that already cached the digest keeps
+accepting the token until the TTL expires — the response reports that residual
+window as `edge_cache_ttl_seconds` (default 60, capped at 300). Treat that value
+as the revocation SLA, not zero.
 
 The local runbook uses path 1 so it needs no auth service. To exercise path 2,
 point `AUTH_SESSION_URL` at a local stub returning `{"user": {"id": "..."}}` and

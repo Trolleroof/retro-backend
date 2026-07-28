@@ -206,10 +206,14 @@ def run(arguments: argparse.Namespace) -> None:
             "INSERT INTO users (id, auth_token_hash) VALUES "
             + f"({sql_quote(user_id)}, {sql_quote(digest)}) "
             + "ON CONFLICT(id) DO UPDATE SET "
-            + "auth_token_hash = excluded.auth_token_hash;",
+            + "auth_token_hash = excluded.auth_token_hash; "
+            + "INSERT INTO auth_sessions (token_hash, user_id) VALUES "
+            + f"({sql_quote(digest)}, {sql_quote(user_id)}) "
+            + "ON CONFLICT(token_hash) DO UPDATE SET "
+            + "user_id = excluded.user_id;",
             persist_to,
         )
-        ok("users row upserted in local D1")
+        ok("users and auth_sessions rows upserted in local D1")
 
         step("GET /v1/me returns the identity clients must record with")
         me = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
@@ -339,6 +343,77 @@ def run(arguments: argparse.Namespace) -> None:
                     + f"got: {detail}"
                 )
             ok(f"{label} -> 400 naming the expected id")
+
+        step("A second device signs in without evicting the first")
+        second_token = secrets.token_urlsafe(32)
+        second_digest = hash_token(second_token)
+        d1_execute(
+            database,
+            "INSERT INTO auth_sessions (token_hash, user_id) VALUES "
+            + f"({sql_quote(second_digest)}, {sql_quote(user_id)}) "
+            + "ON CONFLICT(token_hash) DO UPDATE SET user_id = excluded.user_id;",
+            persist_to,
+        )
+        for label, device_token in (("first", token), ("second", second_token)):
+            me = client.get(
+                "/v1/me", headers={"Authorization": f"Bearer {device_token}"}
+            )
+            if me.status_code != 200 or me.json() != {"user_id": user_id}:
+                raise E2EFailure(
+                    f"{label} device token: expected 200 with {user_id}, "
+                    + f"got {me.status_code}: {me.text}"
+                )
+            ok(f"{label} device token still resolves to {user_id}")
+
+        step("Logout revokes the presented token and leaves the other device alone")
+        logout = client.post(
+            "/v1/auth/logout", headers={"Authorization": f"Bearer {second_token}"}
+        )
+        if logout.status_code != 200:
+            raise E2EFailure(
+                f"expected 200 from /v1/auth/logout, got {logout.status_code}: "
+                + logout.text
+            )
+        check(
+            logout.json().get("revoked_sessions") == 1,
+            "logout reports exactly one revoked session",
+        )
+        rows = d1_execute(
+            database,
+            "SELECT token_hash FROM auth_sessions WHERE user_id = "
+            + f"{sql_quote(user_id)};",
+            persist_to,
+        )
+        check(
+            [str(row.get("token_hash")) for row in rows] == [digest],
+            "only the first device's session row survives in D1",
+        )
+        rows = d1_execute(
+            database,
+            "SELECT token_hash FROM revoked_tokens WHERE token_hash = "
+            + f"{sql_quote(second_digest)};",
+            persist_to,
+        )
+        check(bool(rows), "revoked_tokens holds a tombstone for the logged-out token")
+
+        step("The revoked token is not re-mirrored by the self-heal fallback")
+        # The edge cache is not populated for this digest in `wrangler dev`, so
+        # the rejection is immediate here; in production a colo that cached the
+        # digest keeps accepting it until AUTH_CACHE_TTL_SECONDS elapses.
+        revoked_me = client.get(
+            "/v1/me", headers={"Authorization": f"Bearer {second_token}"}
+        )
+        if revoked_me.status_code != 401:
+            raise E2EFailure(
+                "expected 401 for the revoked token, "
+                + f"got {revoked_me.status_code}: {revoked_me.text}"
+            )
+        ok("GET /v1/me with the revoked token -> 401")
+        surviving = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+        check(
+            surviving.status_code == 200,
+            "the first device is still signed in after the other device logged out",
+        )
 
 
 def main() -> int:

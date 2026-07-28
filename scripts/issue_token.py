@@ -14,6 +14,10 @@ def main() -> None:
         "INSERT INTO users (id, auth_token_hash) "
         f"VALUES (?1, '{digest}');"
     )
+    print(
+        "INSERT INTO auth_sessions (token_hash, user_id) "
+        f"VALUES ('{digest}', ?1);"
+    )
 
 
 if __name__ == "__main__":

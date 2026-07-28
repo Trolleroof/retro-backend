@@ -265,8 +265,10 @@ class FakeAuthCache:
         self.values: dict[str, str] = {}
         self.get_calls: list[tuple[str, str]] = []
         self.put_calls: list[tuple[str, str, str]] = []
+        self.delete_calls: list[tuple[str, str]] = []
         self.get_failure: Exception | None = None
         self.put_failure: Exception | None = None
+        self.delete_failure: Exception | None = None
 
     async def get(self, request_url: str, token_digest: str) -> str | None:
         self.get_calls.append((request_url, token_digest))
@@ -284,6 +286,12 @@ class FakeAuthCache:
         if self.put_failure is not None:
             raise self.put_failure
         self.values[token_digest] = user_id
+
+    async def delete(self, request_url: str, token_digest: str) -> None:
+        self.delete_calls.append((request_url, token_digest))
+        if self.delete_failure is not None:
+            raise self.delete_failure
+        _ = self.values.pop(token_digest, None)
 
 
 class FakeChunkGateStub:

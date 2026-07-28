@@ -266,6 +266,7 @@ The local API is then available at `http://127.0.0.1:8787`. Useful routes are:
 - `GET /health/live`
 - `GET /health/ready`
 - `GET /v1/me`
+- `POST /v1/auth/logout` (`?scope=session|all_devices`, default `session`)
 - `POST /v1/game-event-chunks` (`202 Accepted` on success)
 - `POST /v1/game-results` (`200 OK` on success)
 - `GET /v1/high-scores/{game_type}`
@@ -280,8 +281,9 @@ Generate a one-time opaque token and hash-only insert template with:
 uv run --frozen python scripts/issue_token.py > /tmp/retro-user.sql
 ```
 
-The token is printed once to stderr, while stdout contains SQL with a `?1`
-placeholder for the user ID and only the SHA-256 token digest. Bind a trusted
+The token is printed once to stderr, while stdout contains two `INSERT`s (a
+`users` row and an `auth_sessions` row) with a `?1` placeholder for the user ID
+and only the SHA-256 token digest. Bind a trusted
 `usr_...` ID to `?1` through a prepared D1 statement, then run it in the target
 database. Deliver the token to the user over an appropriate secret channel. Do
 not store the plaintext token in D1, source control, logs, or analytics.
@@ -292,6 +294,16 @@ The ID bound to `?1` must be the **canonical** user ID,
 raw upstream auth ID here makes every chunk upload fail with `400`, because
 ingestion requires the envelope and all of its events to carry the canonical
 ID. See [docs/e2e-local.md](docs/e2e-local.md#the-identity-rule).
+
+Each token is its own `auth_sessions` row, so a user can hold several at once
+and signing in on a second device does not sign the first one out. `POST
+/v1/auth/logout` revokes the presented token (or all of them with
+`?scope=all_devices`) and tombstones the digest so the `AUTH_SESSION_URL`
+fallback cannot re-create it. D1 revocation is immediate; a data center that
+already cached the digest keeps accepting the token for up to
+`AUTH_CACHE_TTL_SECONDS`, which the logout response returns as
+`edge_cache_ttl_seconds`. See
+[docs/superpowers/specs/2026-07-27-token-revocation-design.md](docs/superpowers/specs/2026-07-27-token-revocation-design.md).
 
 ## Configuration
 
