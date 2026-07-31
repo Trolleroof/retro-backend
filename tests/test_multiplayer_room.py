@@ -1546,10 +1546,8 @@ async def test_deleted_room_entrypoints_match_empty_instance_until_explicit_crea
     )
     assert fetched.status == 404
     assert _json_body(fetched) == {"error": missing["error"]}
-    # The RPC entrypoints above re-create the empty schema and leave it in
-    # place. The socket route is reachable unauthenticated, so it now hands
-    # back what it had to allocate rather than persisting an empty object that
-    # no alarm would ever reclaim.
+    # The RPC entrypoints above leave their re-created schema in place; the
+    # socket route hands its allocation back.
     assert harness.storage.table_names() == set()
 
     created = await harness.room.create_room_rpc(
@@ -1637,10 +1635,6 @@ def _table_names(harness: GameRoomHarness) -> list[str]:
 async def test_unknown_room_socket_reclaims_the_storage_it_allocated(
     harness: GameRoomHarness,
 ) -> None:
-    # `/socket` is reachable without authentication, and naming an object is
-    # enough to construct it and write the schema. An unknown room must not
-    # leave a persisted object behind: no room row means no expiry alarm, so
-    # nothing would ever reclaim it.
     assert _table_names(harness) != []
     harness.storage.reset_observations()
 
@@ -1678,8 +1672,6 @@ async def test_unknown_room_socket_leaves_no_alarm_behind(
 async def test_socket_for_a_different_room_id_keeps_the_real_room(
     harness: GameRoomHarness,
 ) -> None:
-    # A live room answering for someone else's id is still a 404, but its
-    # storage belongs to a real room and must survive.
     harness.create_direct()
     harness.storage.reset_observations()
 
@@ -1699,8 +1691,6 @@ async def test_socket_for_a_different_room_id_keeps_the_real_room(
 async def test_unknown_room_socket_keeps_storage_while_sockets_are_attached(
     harness: GameRoomHarness,
 ) -> None:
-    # An object with live sockets is in use regardless of what the room table
-    # says; never pull storage out from under it.
     harness.context.add_socket(FakeWebSocket("attached", harness.storage.events))
     harness.storage.reset_observations()
 
@@ -1719,8 +1709,6 @@ async def test_unknown_room_socket_keeps_storage_while_sockets_are_attached(
 async def test_reclaimed_object_still_serves_a_later_real_room(
     harness: GameRoomHarness,
 ) -> None:
-    # Reclaiming must be reusable: the same object id can be created for real
-    # afterwards, which means the schema has to come back.
     await harness.room.fetch(
         FakeRequest(
             f"https://game.example/v1/rooms/{ROOM_ID}/socket?ticket={'A' * 43}",
@@ -1738,8 +1726,6 @@ async def test_reclaimed_object_still_serves_a_later_real_room(
 async def test_reclaim_failure_still_answers_404(
     harness: GameRoomHarness,
 ) -> None:
-    # Best effort only: a storage failure while reclaiming must not turn a
-    # clean 404 into a 503.
     harness.storage.fail_next_delete_all = True
     harness.storage.reset_observations()
 

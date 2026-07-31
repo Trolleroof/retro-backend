@@ -342,9 +342,6 @@ class GameRoom(DurableObject):
         try:
             self.store.require_room_id(path_room_id)
         except RoomFault as fault:
-            # This is the one room surface reachable without authentication, so
-            # it is the cheapest way to strand storage: any well-formed uuid
-            # gets an object built for it. Give back what we just allocated.
             await self._discard_storage_if_empty()
             return self._fault_response(fault)
         except (StorageFault, StoredStateFault):
@@ -653,28 +650,19 @@ class GameRoom(DurableObject):
         )
 
     async def _discard_storage_if_empty(self) -> None:
-        """Drop the SQLite storage this object created just by being addressed.
-
-        Naming a Durable Object constructs it, and the constructor writes the
-        room schema before anything checks whether the room exists. Without
-        this, one request for an unknown room id leaves a persisted, billable
-        object behind that no alarm will ever reclaim — the room row is what
-        arms the expiry alarm, and there is none.
-
-        The room read is deliberately synchronous and immediately precedes the
-        delete so a concurrent ``create_room_rpc`` cannot slip in between; live
-        sockets are treated as in-use regardless.
-        """
+        """Drop storage this object holds only because a request named it."""
         if self._storage_deleted:
             return
         try:
             if list(self.ctx.getWebSockets()):
                 return
+            # Synchronous read immediately before the delete; an await here
+            # would let a concurrent create_room_rpc land in between.
             if self.store.holds_room():
                 return
             await self.ctx.storage.deleteAll()
         except Exception:
-            # Reclaiming is best effort: never turn a clean 404 into a 503.
+            # Best effort: a clean 404 must not become a 503.
             return
         self._storage_deleted = True
 

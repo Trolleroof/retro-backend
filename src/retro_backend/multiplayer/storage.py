@@ -195,12 +195,7 @@ class RoomStore:
             raise StorageFault from error
 
     def holds_room(self) -> bool:
-        """Whether this object has ever had a room written to it.
-
-        Addressing a Durable Object is enough to construct it, and the
-        constructor writes the schema. A ``False`` here means the object holds
-        nothing but that empty schema and can be discarded.
-        """
+        """Whether a room has ever been written to this object."""
         try:
             return self._read_optional_room() is not None
         except (RoomFault, StorageFault):
