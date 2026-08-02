@@ -34,6 +34,8 @@ async def test_put_raw_writes_exact_bytes_with_deterministic_metadata(
         user_id=fixture_payload["user_id"],
         game_id=fixture_payload["game_id"],
         chunk_id=fixture_payload["chunk_id"],
+        game_type=fixture_payload["game_type"],
+        event_count=fixture_payload["event_count"],
         raw_body=fixture_bytes,
         payload_sha256=digest,
     )
@@ -54,6 +56,8 @@ async def test_put_raw_writes_exact_bytes_with_deterministic_metadata(
             "user_id": fixture_payload["user_id"],
             "game_id": fixture_payload["game_id"],
             "chunk_id": fixture_payload["chunk_id"],
+            "game_type": fixture_payload["game_type"],
+            "event_count": str(fixture_payload["event_count"]),
         },
     }
     assert all(
@@ -83,6 +87,8 @@ async def test_put_raw_converts_body_and_options_before_crossing_r2_boundary(
         user_id=fixture_payload["user_id"],
         game_id=fixture_payload["game_id"],
         chunk_id=fixture_payload["chunk_id"],
+        game_type=fixture_payload["game_type"],
+        event_count=fixture_payload["event_count"],
         raw_body=fixture_bytes,
         payload_sha256=digest,
     )
@@ -99,6 +105,8 @@ async def test_put_raw_converts_body_and_options_before_crossing_r2_boundary(
                 "user_id": fixture_payload["user_id"],
                 "game_id": fixture_payload["game_id"],
                 "chunk_id": fixture_payload["chunk_id"],
+                "game_type": fixture_payload["game_type"],
+                "event_count": str(fixture_payload["event_count"]),
             },
         },
     ]
@@ -121,6 +129,8 @@ async def test_put_raw_reuses_existing_object_with_matching_proxy_metadata(
         user_id=fixture_payload["user_id"],
         game_id=fixture_payload["game_id"],
         chunk_id=fixture_payload["chunk_id"],
+        game_type=fixture_payload["game_type"],
+        event_count=fixture_payload["event_count"],
         raw_body=fixture_bytes,
         payload_sha256=digest,
     )
@@ -145,6 +155,8 @@ async def test_put_raw_rejects_existing_object_without_matching_hash(
             user_id=fixture_payload["user_id"],
             game_id=fixture_payload["game_id"],
             chunk_id=fixture_payload["chunk_id"],
+            game_type=fixture_payload["game_type"],
+            event_count=fixture_payload["event_count"],
             raw_body=fixture_bytes,
             payload_sha256=digest,
         )
@@ -169,6 +181,8 @@ async def test_put_raw_recovers_conditional_race_when_winner_hash_matches(
         user_id=fixture_payload["user_id"],
         game_id=fixture_payload["game_id"],
         chunk_id=fixture_payload["chunk_id"],
+        game_type=fixture_payload["game_type"],
+        event_count=fixture_payload["event_count"],
         raw_body=fixture_bytes,
         payload_sha256=digest,
     )
@@ -192,6 +206,8 @@ async def test_put_raw_recovers_thrown_conditional_race_when_hash_matches(
         user_id=fixture_payload["user_id"],
         game_id=fixture_payload["game_id"],
         chunk_id=fixture_payload["chunk_id"],
+        game_type=fixture_payload["game_type"],
+        event_count=fixture_payload["event_count"],
         raw_body=fixture_bytes,
         payload_sha256=digest,
     )
@@ -215,6 +231,8 @@ async def test_put_raw_turns_conditional_race_hash_mismatch_into_conflict(
             user_id=fixture_payload["user_id"],
             game_id=fixture_payload["game_id"],
             chunk_id=fixture_payload["chunk_id"],
+            game_type=fixture_payload["game_type"],
+            event_count=fixture_payload["event_count"],
             raw_body=fixture_bytes,
             payload_sha256=digest,
         )
@@ -235,6 +253,8 @@ async def test_put_raw_preserves_transient_put_error_when_no_race_winner_exists(
             user_id=fixture_payload["user_id"],
             game_id=fixture_payload["game_id"],
             chunk_id=fixture_payload["chunk_id"],
+            game_type=fixture_payload["game_type"],
+            event_count=fixture_payload["event_count"],
             raw_body=fixture_bytes,
             payload_sha256=digest,
         )
@@ -273,6 +293,38 @@ async def test_derived_key_allows_1024_bytes_and_rejects_1025_before_binding(
         await store.put_derived("k" * 1025, b"{}")
     assert fake_env.RAW_BUCKET.head_calls == head_calls
     assert fake_env.RAW_BUCKET.put_calls == put_calls
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("game_type", "tetris\nx-amz-meta-injected: 1", "game_type"),
+        ("event_count", 0, "event_count"),
+        ("event_count", True, "event_count"),
+    ],
+)
+async def test_put_raw_rejects_header_unsafe_metadata_before_binding(
+    fake_env: Any,
+    fixture_bytes: bytes,
+    fixture_payload: dict[str, Any],
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    fixture_payload[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        await R2Store(fake_env.RAW_BUCKET).put_raw(
+            user_id=fixture_payload["user_id"],
+            game_id=fixture_payload["game_id"],
+            chunk_id=fixture_payload["chunk_id"],
+            game_type=fixture_payload["game_type"],
+            event_count=fixture_payload["event_count"],
+            raw_body=fixture_bytes,
+            payload_sha256=hashlib.sha256(fixture_bytes).hexdigest(),
+        )
+
+    assert fake_env.RAW_BUCKET.put_calls == []
 
 
 async def test_raw_read_rejects_oversized_key_before_binding(fake_env: Any) -> None:

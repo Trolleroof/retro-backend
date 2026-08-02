@@ -8,7 +8,12 @@ from importlib import import_module
 from typing import cast
 
 from ..bindings import R2Bucket, R2ObjectBody, is_binding_null, value_field
-from ..contracts import CHUNK_ID_PATTERN, GAME_ID_PATTERN, USER_ID_PATTERN
+from ..contracts import (
+    CHUNK_ID_PATTERN,
+    GAME_ID_PATTERN,
+    GAME_TYPE_PATTERN,
+    USER_ID_PATTERN,
+)
 
 R2_MAX_KEY_BYTES = 1_024
 
@@ -67,6 +72,8 @@ class RawObjectIdentity:
     user_id: str
     game_id: str
     chunk_id: str
+    game_type: str
+    event_count: int
 
     @property
     def key(self) -> str:
@@ -77,12 +84,17 @@ class RawObjectIdentity:
         )
 
     def custom_metadata(self, payload_sha256: str) -> dict[str, str]:
+        game_type = _require_identifier("game_type", self.game_type, GAME_TYPE_PATTERN)
+        if isinstance(self.event_count, bool) or self.event_count < 1:
+            raise ValueError("event_count must be an integer >= 1")
         return {
             "payload_sha256": payload_sha256,
             "schema_version": "2",
             "user_id": self.user_id,
             "game_id": self.game_id,
             "chunk_id": self.chunk_id,
+            "game_type": game_type,
+            "event_count": str(self.event_count),
         }
 
 
@@ -195,6 +207,8 @@ class R2Store:
         user_id: str,
         game_id: str,
         chunk_id: str,
+        game_type: str,
+        event_count: int,
         raw_body: bytes,
         payload_sha256: str,
     ) -> str:
@@ -202,6 +216,8 @@ class R2Store:
             user_id=user_id,
             game_id=game_id,
             chunk_id=chunk_id,
+            game_type=game_type,
+            event_count=event_count,
         )
         return await self._put_if_absent(
             key=identity.key,

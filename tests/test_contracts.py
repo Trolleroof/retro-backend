@@ -304,6 +304,8 @@ def test_ingest_acknowledgment_bounds_key_forming_identifiers(
         ("user_id", "user_invalid"),
         ("game_id", "invalid"),
         ("game_type", ""),
+        ("game_type", "tetris\nx-amz-meta-injected: 1"),
+        ("game_type", "t" * 65),
         ("game_version", ""),
         ("chunk_id", "invalid"),
     ],

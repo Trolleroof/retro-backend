@@ -117,6 +117,8 @@ async def ingest_chunk(
             user_id=user_id,
             game_id=envelope.game_id,
             chunk_id=envelope.chunk_id,
+            game_type=envelope.game_type,
+            event_count=envelope.event_count,
             raw_body=raw_body,
             payload_sha256=payload_sha256,
         )

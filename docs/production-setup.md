@@ -103,6 +103,55 @@ dashboard under Notifications. Create one policy:
 - **Worker errors** — on `retro-backend`, alerting on elevated error rate or
   invocation failures.
 
+## 3. Raw chunk staging in R2
+
+Every accepted `/v1/game-event-chunks` chunk is written to the `RAW_BUCKET`
+bucket (`retro-gameplay-raw`) as the exact bytes the client sent, before the
+pointer is published to `retro-gameplay-events`. The key is deterministic:
+
+```
+raw/user={user_id}/game={game_id}/chunk={chunk_id}.json
+```
+
+`chunk_sequence` is deliberately not in the key. `chunk_id` alone identifies the
+chunk, so a re-upload lands on the same key and the conditional write
+(`onlyIf: {etagDoesNotMatch: "*"}`) plus the stored `payload_sha256` make the
+retry a no-op instead of a second object. A same-key upload with *different*
+bytes is rejected as a 409 rather than overwriting the audit trail.
+
+Each object carries `Content-Type: application/json` and this custom metadata:
+
+| key | value |
+| --- | --- |
+| `payload_sha256` | SHA-256 of the exact stored bytes |
+| `schema_version` | `2` |
+| `user_id`, `game_id`, `chunk_id` | envelope identity |
+| `game_type` | envelope `game_type` |
+| `event_count` | envelope `event_count`, as a decimal string |
+
+Custom metadata travels as HTTP header values, so `game_type` is restricted to
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` at envelope validation — tighter than the
+published v2 schema's `minLength: 1`. A chunk that violates it gets a 400, not
+a failed write.
+
+### Lifecycle
+
+`cloudflare/r2-lifecycle.json` is the source of truth and is applied with
+`make apply-r2-lifecycle`; `scripts/deployment_preflight.py` fails the deploy if
+the live bucket configuration drifts from it. The current policy is:
+
+- **30 days → `STANDARD_IA`.** Raw chunks are read constantly for the first few
+  days (episode assembly, re-export after a BC join change) and rarely after
+  that, so infrequent-access storage is the right tier for the long tail.
+
+There is **no expiration rule**: raw chunks are retained indefinitely today.
+Retention is a product/compliance decision, not a technical one — adding a
+delete rule (the 90-day option floated in #28) means losing the ability to
+re-export older gameplay if the join logic changes, so it stays open until
+someone decides. When it is decided, edit `cloudflare/r2-lifecycle.json` and the
+`EXPECTED_LIFECYCLE` constant in `scripts/deployment_preflight.py` together, or
+the preflight will fail the next deploy.
+
 ## What is already done
 
 - Both D1 migrations (`0001_core`, `0002_auth_sessions`) are applied to the

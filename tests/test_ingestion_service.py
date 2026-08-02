@@ -103,6 +103,18 @@ async def test_first_publish_stores_exact_bytes_before_pointer_queue(
         "gate.accept",
     ]
     assert fake_env.RAW_BUCKET.put_calls[0].body is fixture_bytes
+    assert fake_env.RAW_BUCKET.put_calls[0].options["customMetadata"] == {
+        "payload_sha256": digest,
+        "schema_version": "2",
+        "user_id": fixture_payload["user_id"],
+        "game_id": fixture_payload["game_id"],
+        "chunk_id": fixture_payload["chunk_id"],
+        "game_type": fixture_payload["game_type"],
+        "event_count": str(fixture_payload["event_count"]),
+    }
+    assert fake_env.RAW_BUCKET.put_calls[0].options["httpMetadata"] == {
+        "contentType": "application/json"
+    }
     assert fake_env.GAMEPLAY_QUEUE.send_calls == [
         {
             "version": 1,
