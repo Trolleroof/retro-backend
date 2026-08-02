@@ -1,0 +1,337 @@
+{
+  "join_across_chunks": {
+    "input": [
+      {
+        "schema_version": 2,
+        "user_id": "usr_test",
+        "game_id": "game_test",
+        "game_type": "2048",
+        "game_version": "1",
+        "chunk_id": "chk_2",
+        "chunk_sequence": 2,
+        "first_event_sequence": 5,
+        "last_event_sequence": 6,
+        "event_count": 2,
+        "created_at_ms": 10,
+        "client": {
+          "platform": "tui",
+          "application_version": "test",
+          "recording_sdk_version": "2"
+        },
+        "events": [
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_2",
+            "event_id": "evt_5",
+            "event_sequence": 5,
+            "event_version": 1,
+            "event_type": "outcome_changed",
+            "visibility": "policy",
+            "client_time_ms": 5,
+            "monotonic_time_us": 5000,
+            "payload": {
+              "score_before": 0,
+              "score_after": 4,
+              "score_delta": 4,
+              "engine_reward": 4,
+              "reward_spec_id": "engine_v1",
+              "terminal": false,
+              "caused_by_event_id": "evt_4",
+              "progress": {
+                "moved": true,
+                "success": false
+              }
+            }
+          },
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_2",
+            "event_id": "evt_6",
+            "event_sequence": 6,
+            "event_version": 1,
+            "event_type": "control_changed",
+            "visibility": "policy",
+            "client_time_ms": 6,
+            "monotonic_time_us": 6000,
+            "payload": {
+              "based_on_observation_id": "obs_2",
+              "control": "left",
+              "action": "left",
+              "kind": "impulse",
+              "actor": "environment"
+            }
+          }
+        ]
+      },
+      {
+        "schema_version": 2,
+        "user_id": "usr_test",
+        "game_id": "game_test",
+        "game_type": "2048",
+        "game_version": "1",
+        "chunk_id": "chk_1",
+        "chunk_sequence": 1,
+        "first_event_sequence": 1,
+        "last_event_sequence": 4,
+        "event_count": 4,
+        "created_at_ms": 10,
+        "client": {
+          "platform": "tui",
+          "application_version": "test",
+          "recording_sdk_version": "2"
+        },
+        "events": [
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_1",
+            "event_id": "evt_1",
+            "event_sequence": 1,
+            "event_version": 1,
+            "event_type": "episode_started",
+            "visibility": "policy",
+            "client_time_ms": 1,
+            "monotonic_time_us": 1000,
+            "payload": {
+              "game_type": "2048",
+              "game_version": "1",
+              "ruleset_id": "classic",
+              "telemetry_version": 2,
+              "platform": "overlay",
+              "viewport": {
+                "width": 520,
+                "height": 740
+              },
+              "control_schema": [
+                "left",
+                "right"
+              ],
+              "input_semantics": "engine_impulse"
+            }
+          },
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_1",
+            "event_id": "evt_2",
+            "event_sequence": 2,
+            "event_version": 1,
+            "event_type": "observation",
+            "visibility": "policy",
+            "client_time_ms": 2,
+            "monotonic_time_us": 2000,
+            "payload": {
+              "observation_id": "obs_1",
+              "representation": "engine_state_v1",
+              "state": {
+                "board": [
+                  0,
+                  2
+                ]
+              }
+            }
+          },
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_1",
+            "event_id": "evt_3",
+            "event_sequence": 3,
+            "event_version": 1,
+            "event_type": "observation",
+            "visibility": "policy",
+            "client_time_ms": 3,
+            "monotonic_time_us": 3000,
+            "payload": {
+              "observation_id": "obs_2",
+              "representation": "engine_state_v1",
+              "state": {
+                "board": [
+                  2,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_1",
+            "event_id": "evt_4",
+            "event_sequence": 4,
+            "event_version": 1,
+            "event_type": "control_changed",
+            "visibility": "policy",
+            "client_time_ms": 4,
+            "monotonic_time_us": 4000,
+            "payload": {
+              "based_on_observation_id": "obs_2",
+              "control": "right",
+              "action": "right",
+              "kind": "impulse",
+              "actor": "human"
+            }
+          }
+        ]
+      }
+    ],
+    "output_default": [
+      {
+        "schema_version": 1,
+        "user_id": "usr_test",
+        "game_id": "game_test",
+        "game_type": "2048",
+        "game_version": "1",
+        "ruleset_id": "classic",
+        "event_sequence": 4,
+        "control_event_id": "evt_4",
+        "observation_id": "obs_2",
+        "observation": {
+          "representation": "engine_state_v1",
+          "state": {
+            "board": [
+              2,
+              0
+            ]
+          }
+        },
+        "action": "right",
+        "actor": "human",
+        "reward": 4,
+        "score_delta": 4,
+        "terminal": false,
+        "moved": true
+      }
+    ]
+  },
+  "noop_default_dropped": {
+    "input": [
+      {
+        "schema_version": 2,
+        "user_id": "usr_test",
+        "game_id": "game_test",
+        "game_type": "2048",
+        "game_version": "1",
+        "chunk_id": "chk_1",
+        "chunk_sequence": 1,
+        "first_event_sequence": 1,
+        "last_event_sequence": 3,
+        "event_count": 3,
+        "created_at_ms": 10,
+        "client": {
+          "platform": "tui",
+          "application_version": "test",
+          "recording_sdk_version": "2"
+        },
+        "events": [
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_1",
+            "event_id": "evt_1",
+            "event_sequence": 1,
+            "event_version": 1,
+            "event_type": "observation",
+            "visibility": "policy",
+            "client_time_ms": 1,
+            "monotonic_time_us": 1000,
+            "payload": {
+              "observation_id": "obs_1",
+              "representation": "engine_state_v1",
+              "state": {
+                "board": [
+                  2,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_1",
+            "event_id": "evt_2",
+            "event_sequence": 2,
+            "event_version": 1,
+            "event_type": "control_changed",
+            "visibility": "policy",
+            "client_time_ms": 2,
+            "monotonic_time_us": 2000,
+            "payload": {
+              "based_on_observation_id": "obs_1",
+              "control": "left",
+              "action": "left",
+              "kind": "impulse",
+              "actor": "human"
+            }
+          },
+          {
+            "schema_version": 2,
+            "user_id": "usr_test",
+            "game_id": "game_test",
+            "chunk_id": "chk_1",
+            "event_id": "evt_3",
+            "event_sequence": 3,
+            "event_version": 1,
+            "event_type": "outcome_changed",
+            "visibility": "policy",
+            "client_time_ms": 3,
+            "monotonic_time_us": 3000,
+            "payload": {
+              "score_before": 0,
+              "score_after": 0,
+              "score_delta": 0,
+              "engine_reward": 0,
+              "reward_spec_id": "engine_v1",
+              "terminal": false,
+              "caused_by_event_id": "evt_2",
+              "progress": {
+                "moved": false,
+                "success": false
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "output_default": [],
+    "output_include_noops": [
+      {
+        "schema_version": 1,
+        "user_id": "usr_test",
+        "game_id": "game_test",
+        "game_type": "2048",
+        "game_version": "1",
+        "ruleset_id": null,
+        "event_sequence": 2,
+        "control_event_id": "evt_2",
+        "observation_id": "obs_1",
+        "observation": {
+          "representation": "engine_state_v1",
+          "state": {
+            "board": [
+              2,
+              0
+            ]
+          }
+        },
+        "action": "left",
+        "actor": "human",
+        "reward": 0,
+        "score_delta": 0,
+        "terminal": false,
+        "moved": false
+      }
+    ]
+  }
+}
