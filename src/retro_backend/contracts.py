@@ -29,6 +29,9 @@ GameType = Literal[
 ]
 
 ID_SUFFIX_MAX_LENGTH = 120
+# Narrower than the published v2 schema's ``minLength: 1``: game_type is copied
+# verbatim into R2 custom metadata, which travels as an HTTP header value.
+GAME_TYPE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
 USER_ID_PATTERN = rf"^usr_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
 GAME_ID_PATTERN = rf"^game_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
 CHUNK_ID_PATTERN = rf"^chk_[A-Za-z0-9._-]{{1,{ID_SUFFIX_MAX_LENGTH}}}$"
@@ -215,7 +218,7 @@ class ChunkEnvelope(BaseModel):
     schema_version: Literal[2]
     user_id: str = Field(pattern=USER_ID_PATTERN, max_length=_USER_ID_MAX_LENGTH)
     game_id: str = Field(pattern=GAME_ID_PATTERN, max_length=_GAME_ID_MAX_LENGTH)
-    game_type: str = Field(min_length=1)
+    game_type: str = Field(pattern=GAME_TYPE_PATTERN)
     game_version: str = Field(min_length=1)
     chunk_id: str = Field(pattern=CHUNK_ID_PATTERN, max_length=_CHUNK_ID_MAX_LENGTH)
     chunk_sequence: int = Field(ge=1, strict=True)

@@ -29,13 +29,34 @@ def _raw_key(payload: dict[str, Any]) -> str:
     )
 
 
-async def test_ingestion_requires_bearer_token(
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {},
+        {"Authorization": "bearer opaque"},
+        {"Authorization": "Bearer opaque extra"},
+        {"Authorization": "Bearer unknown-session"},
+    ],
+    ids=["missing", "lowercase-scheme", "malformed", "unknown-session"],
+)
+async def test_rejected_auth_returns_401_without_storing_or_enqueueing(
     app_client: AsyncClient,
+    fake_env: Any,
     fixture_bytes: bytes,
+    headers: dict[str, str],
 ) -> None:
-    response = await app_client.post("/v1/game-event-chunks", content=fixture_bytes)
+    response = await app_client.post(
+        "/v1/game-event-chunks",
+        content=fixture_bytes,
+        headers=headers,
+    )
 
     assert response.status_code == 401
+    assert fake_env.operation_order == []
+    assert fake_env.RAW_BUCKET.put_calls == []
+    assert fake_env.GAMEPLAY_QUEUE.send_calls == []
+    assert fake_env.CHUNK_GATE.id_from_name_calls == []
+    assert fake_env.INGEST_RATE_LIMITER.calls == []
 
 
 async def test_chunk_route_returns_ack_matching_json_schema(
@@ -75,6 +96,45 @@ async def test_chunk_route_returns_ack_matching_json_schema(
     assert fake_env.INGEST_RATE_LIMITER.calls == [
         {"key": f"{fixture_payload['user_id']}:game-event-chunks"}
     ]
+
+
+async def test_duplicate_chunk_returns_idempotent_ack_matching_json_schema(
+    app_client: AsyncClient,
+    fake_d1: Any,
+    fake_env: Any,
+    fixture_bytes: bytes,
+    fixture_payload: dict[str, Any],
+) -> None:
+    _authorize(fake_d1, fixture_payload)
+    cached_ack = {
+        "accepted": True,
+        "duplicate": False,
+        "game_id": fixture_payload["game_id"],
+        "chunk_id": fixture_payload["chunk_id"],
+        "chunk_sequence": fixture_payload["chunk_sequence"],
+        "accepted_event_range": {
+            "first": fixture_payload["first_event_sequence"],
+            "last": fixture_payload["last_event_sequence"],
+        },
+        "queued": True,
+        "server_received_at_ms": 1_784_241_600_000,
+    }
+    fake_env.CHUNK_GATE.reserve_result = {"status": "duplicate", "ack": cached_ack}
+
+    response = await app_client.post(
+        "/v1/game-event-chunks",
+        content=fixture_bytes,
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 202
+    Draft202012Validator(INGEST_RESPONSE_SCHEMA).validate(response.json())
+    # Same ack the first request returned, with only `duplicate` flipped: the
+    # response contract must not change for clients that already retry.
+    assert response.json() == {**cached_ack, "duplicate": True}
+    assert fake_env.operation_order == ["gate.reserve"]
+    assert fake_env.RAW_BUCKET.put_calls == []
+    assert fake_env.GAMEPLAY_QUEUE.send_calls == []
 
 
 async def test_rate_limit_denial_returns_429_before_gate_or_storage(
