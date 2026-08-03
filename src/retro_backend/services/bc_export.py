@@ -19,6 +19,49 @@ DEFAULT_ACTORS = ("human",)
 
 DatasetSplit = Literal["train", "validation", "test"]
 
+# ``bc-export.ts`` orders events with ``String.prototype.localeCompare``, which
+# is ICU collation, not code-point order. Over the alphabet the contract allows
+# for game ids (``^game_[A-Za-z0-9._-]+$``) that ordering is: ``_`` < ``-`` <
+# ``.`` < digits < letters, where letters compare case-insensitively first and
+# only break ties by case (lowercase before uppercase). Python's native ``str``
+# comparison is code-point order and disagrees: ICU puts ``game__`` before
+# ``game_9`` and ``game_a`` before ``game_A``, code point does the reverse of
+# both. So sorting on the raw string reorders samples and,
+# when an observation_id is reused across games, changes which sample is emitted
+# at all (the observation/outcome/ruleset lookups are last-write-wins over this
+# ordering). Each entry below is one primary-weight class, ordered by primary
+# weight; position within a class is the case (tertiary) weight.
+_COLLATION_CLASSES: tuple[str, ...] = (
+    "_",
+    "-",
+    ".",
+    *"0123456789",
+    *(f"{letter}{letter.upper()}" for letter in "abcdefghijklmnopqrstuvwxyz"),
+)
+
+_COLLATION_WEIGHTS: dict[str, tuple[int, int]] = {
+    char: (primary, tertiary)
+    for primary, klass in enumerate(_COLLATION_CLASSES)
+    for tertiary, char in enumerate(klass)
+}
+
+# Characters outside the contract's game-id alphabet have no ICU weight here;
+# they sort after every known character in code-point order so the result stays
+# deterministic. Only the contract alphabet is guaranteed to match localeCompare.
+_UNKNOWN_PRIMARY_BASE = len(_COLLATION_CLASSES)
+
+
+def _game_id_sort_key(game_id: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Collation key reproducing ``localeCompare`` for contract game ids.
+
+    Multi-level, like ICU: every character's primary weight is compared across
+    the whole string before any case difference is considered.
+    """
+    weights = [
+        _COLLATION_WEIGHTS.get(char, (_UNKNOWN_PRIMARY_BASE + ord(char), 0)) for char in game_id
+    ]
+    return tuple(primary for primary, _ in weights), tuple(tertiary for _, tertiary in weights)
+
 
 def _ordered_unique_events(
     chunks: Sequence[Mapping[str, Any]],
@@ -31,7 +74,10 @@ def _ordered_unique_events(
             events[event["event_id"]] = event
     return sorted(
         events.values(),
-        key=lambda event: (event["game_id"], event["event_sequence"]),
+        key=lambda event: (
+            _game_id_sort_key(event["game_id"]),
+            event["event_sequence"],
+        ),
     )
 
 
