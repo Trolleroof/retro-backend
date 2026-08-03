@@ -12,17 +12,30 @@ from typing import Protocol, cast
 
 from pydantic import ValidationError
 
-from ..bindings import R2Bucket, is_binding_null, value_field
+from ..bindings import (
+    EpisodeAssemblerNamespace,
+    R2Bucket,
+    is_binding_null,
+    positive_int_field,
+    value_field,
+)
 from ..contracts import (
     CHUNK_ID_PATTERN,
     GAME_ID_PATTERN,
     USER_ID_PATTERN,
+    ChunkEnvelope,
     GameplayPointer,
     GameplayProcessResult,
     PermanentGameplayError,
     TransientGameplayError,
     parse_gameplay_chunk,
     safe_chunk_created_at_ms,
+)
+from ..episode_assembler import (
+    DEFAULT_EPISODE_IDLE_TTL_MS,
+    DEFAULT_EPISODE_MAX_CHUNKS,
+    EpisodeAssemblerClient,
+    EpisodeChunkRecord,
 )
 from ..storage.r2 import (
     DerivedObjectConflict,
@@ -356,6 +369,35 @@ def _quarantine_digest(
     return hashlib.sha256(material).hexdigest()
 
 
+def _build_assembler(environment: object) -> EpisodeAssemblerClient | None:
+    """Build the episode assembler, or ``None`` while it is not bound.
+
+    Episode assembly stays dormant until ``EPISODE_ASSEMBLER`` is declared, so
+    this Worker keeps validating chunks unchanged on a deployment that has not
+    provisioned the Durable Object and ``retro-episode-events`` yet.
+    """
+    namespace = value_field(environment, "EPISODE_ASSEMBLER")
+    if is_binding_null(namespace):
+        return None
+    return EpisodeAssemblerClient(
+        cast(EpisodeAssemblerNamespace, namespace),
+        idle_ttl_ms=positive_int_field(
+            environment,
+            "EPISODE_IDLE_TTL_MS",
+            DEFAULT_EPISODE_IDLE_TTL_MS,
+        ),
+        max_chunks=positive_int_field(
+            environment,
+            "EPISODE_MAX_CHUNKS",
+            DEFAULT_EPISODE_MAX_CHUNKS,
+        ),
+    )
+
+
+def _episode_ended(envelope: ChunkEnvelope) -> bool:
+    return any(event.get("event_type") == "episode_ended" for event in envelope.events)
+
+
 class GameplayConsumer:
     def __init__(
         self,
@@ -381,6 +423,7 @@ class GameplayConsumer:
                 buffer_to_bytes=buffer_to_bytes,
                 to_js=to_js,
             )
+        self.assembler = _build_assembler(environment)
 
     async def process(
         self,
@@ -488,10 +531,43 @@ class GameplayConsumer:
             )
         except Exception as error:
             raise TransientGameplayError("validated artifact unavailable") from error
+
+        await self._assemble_episode(pointer, envelope)
         return GameplayProcessResult(
             status="processed",
             artifact_key=artifact_key,
         )
+
+    async def _assemble_episode(
+        self,
+        pointer: GameplayPointer,
+        envelope: ChunkEnvelope,
+    ) -> None:
+        """Fold this chunk into its episode after its artifact is durable.
+
+        Runs last so a retry always replays a chunk whose validated artifact
+        already exists; the Durable Object drops the duplicate record.
+        """
+        if self.assembler is None:
+            return
+        try:
+            await self.assembler.record(
+                EpisodeChunkRecord(
+                    chunk_id=envelope.chunk_id,
+                    chunk_sequence=envelope.chunk_sequence,
+                    first_event_sequence=envelope.first_event_sequence,
+                    last_event_sequence=envelope.last_event_sequence,
+                    created_at_ms=envelope.created_at_ms,
+                    episode_ended=_episode_ended(envelope),
+                ),
+                user_id=pointer.user_id,
+                game_id=pointer.game_id,
+                game_type=envelope.game_type,
+                game_version=envelope.game_version,
+                now_ms=self._clock_ms(),
+            )
+        except Exception as error:
+            raise TransientGameplayError("episode assembly unavailable") from error
 
     @staticmethod
     def _validated_key(

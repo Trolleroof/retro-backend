@@ -92,10 +92,26 @@ class ChunkGateStub(Protocol):
     async def release(self, payload_sha256: str, lease_token: str) -> object: ...
 
 
+class EpisodeAssemblerStub(Protocol):
+    async def record(
+        self,
+        chunk: object,
+        now_ms: int,
+        idle_ttl_ms: int,
+        max_chunks: int,
+    ) -> object: ...
+
+
 class DurableObjectNamespace(Protocol):
     def idFromName(self, name: str) -> object: ...
 
     def get(self, object_id: object) -> ChunkGateStub: ...
+
+
+class EpisodeAssemblerNamespace(Protocol):
+    def idFromName(self, name: str) -> object: ...
+
+    def get(self, object_id: object) -> EpisodeAssemblerStub: ...
 
 
 class DurableObjectStorage(Protocol):

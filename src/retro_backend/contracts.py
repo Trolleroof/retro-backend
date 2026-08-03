@@ -106,6 +106,56 @@ class GameplayPointer(BaseModel):
         return self
 
 
+EpisodeStatus = Literal["complete", "abandoned", "incomplete"]
+
+
+class EpisodeChunkRef(BaseModel):
+    """One chunk's position in an assembled episode.
+
+    Only identity and ordering travel on the wire; both the raw and the
+    validated R2 keys are derivable from these fields, so the message stays
+    small enough to clear the Queue size guard for long episodes.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    chunk_id: str = Field(pattern=CHUNK_ID_PATTERN, max_length=_CHUNK_ID_MAX_LENGTH)
+    chunk_sequence: int = Field(ge=1, strict=True)
+    created_at_ms: int = Field(ge=0, strict=True)
+
+
+class EpisodeReady(BaseModel):
+    """Terminal assembly result for one ``(user_id, game_id)`` episode."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: Literal[1] = 1
+    status: EpisodeStatus
+    user_id: str = Field(pattern=USER_ID_PATTERN, max_length=_USER_ID_MAX_LENGTH)
+    game_id: str = Field(pattern=GAME_ID_PATTERN, max_length=_GAME_ID_MAX_LENGTH)
+    game_type: str = Field(min_length=1)
+    game_version: str = Field(min_length=1)
+    chunk_count: int = Field(ge=1, strict=True)
+    first_event_sequence: int = Field(ge=1, strict=True)
+    last_event_sequence: int = Field(ge=1, strict=True)
+    chunks: list[EpisodeChunkRef] = Field(min_length=1)
+    completed_at_ms: int = Field(ge=0, strict=True)
+
+    @model_validator(mode="after")
+    def validate_chunk_ordering(self) -> "EpisodeReady":
+        if self.chunk_count != len(self.chunks):
+            raise ValueError("chunk_count must equal chunks length")
+        sequences = [chunk.chunk_sequence for chunk in self.chunks]
+        if any(
+            current <= previous
+            for previous, current in zip(sequences, sequences[1:], strict=False)
+        ):
+            raise ValueError("chunks must be ordered by strictly increasing sequence")
+        if self.last_event_sequence < self.first_event_sequence:
+            raise ValueError("last_event_sequence must not precede first_event_sequence")
+        return self
+
+
 class IngestAcknowledgment(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
