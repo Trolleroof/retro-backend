@@ -1365,6 +1365,10 @@ def test_wrangler_binds_d1_r2_and_gameplay_dlq_archiver() -> None:
                 "binding": "GAMEPLAY_ARCHIVE_DLQ",
                 "queue": "retro-gameplay-events-archive-dlq",
             },
+            {
+                "binding": "EPISODE_QUEUE",
+                "queue": "retro-episode-events",
+            },
         ],
         "consumers": [
             {
@@ -1392,11 +1396,13 @@ def test_wrangler_uses_exact_sqlite_durable_object_exports() -> None:
         "bindings": [
             {"name": "CHUNK_GATE", "class_name": "ChunkGate"},
             {"name": "GAME_ROOMS", "class_name": "GameRoom"},
+            {"name": "EPISODE_ASSEMBLER", "class_name": "EpisodeAssembler"},
         ]
     }
     assert config["exports"] == {
         "ChunkGate": {"type": "durable-object", "storage": "sqlite"},
         "GameRoom": {"type": "durable-object", "storage": "sqlite"},
+        "EpisodeAssembler": {"type": "durable-object", "storage": "sqlite"},
     }
     assert "migrations" not in config
 
