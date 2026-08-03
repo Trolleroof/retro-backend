@@ -322,6 +322,10 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
         "dispatch_queue",
     ) in imported_names
     assert ("retro_backend.chunk_gate", "ChunkGate") in imported_names
+    assert (
+        "retro_backend.episode_assembler",
+        "EpisodeAssembler",
+    ) in imported_names
     assert ("retro_backend.multiplayer.room", "GameRoom") in imported_names
     assert (
         "retro_backend.worker_websocket",
@@ -342,7 +346,12 @@ def test_entry_exposes_fastapi_fetch_queue_and_chunk_gate() -> None:
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets)
     )
-    assert ast.literal_eval(exports.value) == ["ChunkGate", "GameRoom", "Default"]
+    assert ast.literal_eval(exports.value) == [
+        "ChunkGate",
+        "EpisodeAssembler",
+        "GameRoom",
+        "Default",
+    ]
 
     default = _class(tree, "Default")
     assert [base.id for base in default.bases if isinstance(base, ast.Name)] == [

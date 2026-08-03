@@ -77,6 +77,14 @@ Ten failed archival attempts move the message to
 `retro-gameplay-events-archive-dlq`, which is intentionally unconsumed and must
 be monitored as the operator intervention queue.
 
+Episode assembly is implemented but dormant. When the `EPISODE_ASSEMBLER`
+Durable Object is bound, the gameplay consumer folds each validated chunk into
+one object per `(user_id, game_id)`, which groups chunks until `episode_ended`
+and publishes a single `episode.ready` message per episode — `complete`,
+`incomplete`, or `abandoned`. Without that binding the consumer behaves exactly
+as described above. See [docs/episode-assembly.md](docs/episode-assembly.md) for
+the design and the activation checklist.
+
 For `POST /v1/game-results` and any other body-bearing path, the fetch boundary
 permits at most 16 KiB. The authenticated result route then validates the JSON
 contract and conditionally updates the D1 high score. Rejected bodies never

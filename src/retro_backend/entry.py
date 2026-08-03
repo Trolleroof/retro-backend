@@ -20,6 +20,7 @@ from retro_backend.auth_cache import (
 from retro_backend.bindings import value_field
 from retro_backend.chunk_gate import ChunkGate
 from retro_backend.consumers.dispatch import dispatch_queue
+from retro_backend.episode_assembler import EpisodeAssembler
 from retro_backend.multiplayer.errors import RoomFault
 from retro_backend.multiplayer.protocol import canonical_http_origin, parse_room_id
 from retro_backend.multiplayer.room import GameRoom
@@ -36,7 +37,7 @@ if sys.platform == "emscripten":
 else:
     caches = None
 
-__all__ = ["ChunkGate", "GameRoom", "Default"]
+__all__ = ["ChunkGate", "EpisodeAssembler", "GameRoom", "Default"]
 
 
 class _WorkerJsRequest(Protocol):
