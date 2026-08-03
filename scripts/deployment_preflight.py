@@ -40,13 +40,42 @@ PUBLIC_GAME_URL_RESERVED_HOST_ERROR = (
 ALLOWED_GAME_ORIGINS_RESERVED_HOST_ERROR = (
     "ALLOWED_GAME_ORIGINS must not use an inert or reserved hostname"
 )
+LIFECYCLE_ERROR = (
+    "R2 lifecycle must expire derived artifacts at 7 days and raw chunks at 90"
+)
+DAY_SECONDS = 86_400
+
+
+def _age(days: int) -> dict[str, object]:
+    return {"maxAge": days * DAY_SECONDS, "type": "Age"}
+
+
+def _expire_after(rule_id: str, prefix: str, days: int) -> dict[str, object]:
+    return {
+        "id": rule_id,
+        "enabled": True,
+        "conditions": {"prefix": prefix},
+        "deleteObjectsTransition": {"condition": _age(days)},
+    }
+
+
+# Wrangler's `r2 bucket lifecycle set --file` requires the Cloudflare-native
+# shape: a lowercase "rules" array whose conditions are ages in seconds. The
+# S3-style {"Rules": [{"Days": ...}]} spelling is rejected outright.
 EXPECTED_LIFECYCLE = {
-    "Rules": [
+    "rules": [
         {
-            "ID": "transition-retro-artifacts-to-infrequent-access",
-            "Status": "Enabled",
-            "Transitions": [{"Days": 30, "StorageClass": "STANDARD_IA"}],
-        }
+            "id": "raw-chunks-infrequent-access-then-expire",
+            "enabled": True,
+            "conditions": {"prefix": "raw/"},
+            "storageClassTransitions": [
+                {"condition": _age(30), "storageClass": "InfrequentAccess"}
+            ],
+            "deleteObjectsTransition": {"condition": _age(90)},
+        },
+        _expire_after("validated-artifacts-expire", "validated/", 7),
+        _expire_after("rejected-artifacts-expire", "rejected/", 7),
+        _expire_after("dlq-archives-expire", "dlq/", 7),
     ]
 }
 
@@ -413,9 +442,7 @@ def deployment_errors(
         )
 
     if lifecycle != EXPECTED_LIFECYCLE:
-        errors.append(
-            "R2 lifecycle must transition retained artifacts to STANDARD_IA after 30 days"
-        )
+        errors.append(LIFECYCLE_ERROR)
     return errors
 
 

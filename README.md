@@ -252,9 +252,26 @@ Apply the lifecycle rule after creating the bucket:
 make apply-r2-lifecycle DEPLOY_CONFIG=wrangler.production.toml
 ```
 
-The policy retains every raw, validated, rejected, and DLQ artifact while
-transitioning objects to R2 Infrequent Access after 30 days. It does not delete
-training data.
+The policy bounds storage growth by expiring derived artifacts and retaining raw
+chunks for longer:
+
+| Prefix | Transition | Expiry |
+| --- | --- | --- |
+| `raw/` | Infrequent Access at 30 days | 90 days |
+| `validated/` | — | 7 days |
+| `rejected/` | — | 7 days |
+| `dlq/` | — | 7 days |
+
+`validated/`, `rejected/`, and `dlq/` are all reconstructible by replaying
+`raw/`, so they expire quickly. `raw/` is the immutable audit trail that makes
+lossless replay and re-export possible after a join-logic change, so it outlives
+them — but it is no longer retained forever. **Export any behavior-cloning
+dataset you intend to keep before its source chunks reach 90 days.**
+
+The configuration in `cloudflare/r2-lifecycle.json` uses Cloudflare's native
+schema: a lowercase `rules` array whose conditions are ages in **seconds**.
+Wrangler rejects the S3-style `{"Rules": [{"Days": 30}]}` spelling outright, so
+a rule that reads correctly in S3 terms will never apply.
 
 ## Local Development
 

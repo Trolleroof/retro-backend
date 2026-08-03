@@ -1817,23 +1817,57 @@ def test_manual_production_workflow_is_guarded_and_smoke_tests_the_custom_domain
         previous_index = commands.index(expected, previous_index + 1)
 
 
-def test_r2_lifecycle_preserves_artifacts_and_transitions_them_after_30_days() -> None:
+def test_r2_lifecycle_uses_the_shape_wrangler_accepts() -> None:
+    """Wrangler rejects the S3-style {"Rules": [{"Days": ...}]} spelling.
+
+    `r2 bucket lifecycle set --file` requires a lowercase "rules" array and
+    reads every condition as an age in seconds, so a rule that looks correct
+    in S3 terms silently never applies.
+    """
     lifecycle = __import__("json").loads(_read(R2_LIFECYCLE_PATH))
 
-    assert lifecycle == {
-        "Rules": [
-            {
-                "ID": "transition-retro-artifacts-to-infrequent-access",
-                "Status": "Enabled",
-                "Transitions": [
-                    {
-                        "Days": 30,
-                        "StorageClass": "STANDARD_IA",
-                    }
-                ],
-            }
-        ]
+    assert set(lifecycle) == {"rules"}
+    for rule in lifecycle["rules"]:
+        assert set(rule) <= {
+            "id",
+            "enabled",
+            "conditions",
+            "storageClassTransitions",
+            "deleteObjectsTransition",
+        }
+        assert rule["enabled"] is True
+        assert rule["conditions"]["prefix"]
+        for transition in rule.get("storageClassTransitions", []):
+            assert transition["storageClass"] == "InfrequentAccess"
+            assert transition["condition"]["type"] == "Age"
+            assert transition["condition"]["maxAge"] % 86_400 == 0
+
+
+def test_r2_lifecycle_bounds_derived_artifacts_and_retains_raw_chunks() -> None:
+    lifecycle = __import__("json").loads(_read(R2_LIFECYCLE_PATH))
+    expiry_days = {
+        rule["conditions"]["prefix"]: (
+            rule["deleteObjectsTransition"]["condition"]["maxAge"] // 86_400
+        )
+        for rule in lifecycle["rules"]
     }
+
+    # Derived artifacts are all reconstructible by replaying raw/.
+    assert expiry_days["validated/"] == 7
+    assert expiry_days["rejected/"] == 7
+    assert expiry_days["dlq/"] == 7
+
+    # raw/ is the immutable audit trail that makes re-export possible, so it
+    # outlives the derived artifacts and cools to Infrequent Access first.
+    assert expiry_days["raw/"] == 90
+    (raw_rule,) = [
+        rule for rule in lifecycle["rules"] if rule["conditions"]["prefix"] == "raw/"
+    ]
+    (transition,) = raw_rule["storageClassTransitions"]
+    assert transition["condition"]["maxAge"] // 86_400 == 30
+    assert transition["condition"]["maxAge"] < (
+        raw_rule["deleteObjectsTransition"]["condition"]["maxAge"]
+    )
 
 
 def test_readme_lists_the_implemented_high_scores_route() -> None:

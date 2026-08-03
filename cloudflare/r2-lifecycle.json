@@ -1,14 +1,65 @@
 {
-  "Rules": [
+  "rules": [
     {
-      "ID": "transition-retro-artifacts-to-infrequent-access",
-      "Status": "Enabled",
-      "Transitions": [
+      "id": "raw-chunks-infrequent-access-then-expire",
+      "enabled": true,
+      "conditions": {
+        "prefix": "raw/"
+      },
+      "storageClassTransitions": [
         {
-          "Days": 30,
-          "StorageClass": "STANDARD_IA"
+          "condition": {
+            "maxAge": 2592000,
+            "type": "Age"
+          },
+          "storageClass": "InfrequentAccess"
         }
-      ]
+      ],
+      "deleteObjectsTransition": {
+        "condition": {
+          "maxAge": 7776000,
+          "type": "Age"
+        }
+      }
+    },
+    {
+      "id": "validated-artifacts-expire",
+      "enabled": true,
+      "conditions": {
+        "prefix": "validated/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "maxAge": 604800,
+          "type": "Age"
+        }
+      }
+    },
+    {
+      "id": "rejected-artifacts-expire",
+      "enabled": true,
+      "conditions": {
+        "prefix": "rejected/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "maxAge": 604800,
+          "type": "Age"
+        }
+      }
+    },
+    {
+      "id": "dlq-archives-expire",
+      "enabled": true,
+      "conditions": {
+        "prefix": "dlq/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "maxAge": 604800,
+          "type": "Age"
+        }
+      }
     }
   ]
 }
