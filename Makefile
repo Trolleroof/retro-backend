@@ -67,4 +67,4 @@ migrate-remote: node-preflight deployment-preflight
 	$(WRANGLER) d1 migrations apply $(D1_DATABASE) --remote --config $(DEPLOY_CONFIG)
 
 apply-r2-lifecycle: node-preflight deployment-preflight
-	$(WRANGLER) r2 bucket lifecycle set $(R2_BUCKET) --file $(R2_LIFECYCLE)
+	$(WRANGLER) r2 bucket lifecycle set $(R2_BUCKET) --file $(R2_LIFECYCLE) --force

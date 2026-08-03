@@ -109,6 +109,11 @@ dashboard under Notifications. Create one policy:
   production database.
 - The Worker is deployed to `api.runretroarcade.com` with its D1, R2, Queue,
   Durable Object, and rate-limiter bindings, plus the queue and DLQ consumers.
-- The R2 lifecycle rule is applied.
+- The R2 lifecycle rule needs re-applying. The previously checked-in
+  `cloudflare/r2-lifecycle.json` used the S3-style `{"Rules": [...]}` spelling,
+  which `wrangler r2 bucket lifecycle set --file` rejects, so no rule can have
+  taken effect. Verify the live policy with
+  `wrangler r2 bucket lifecycle list retro-gameplay-raw` and re-run
+  `make apply-r2-lifecycle DEPLOY_CONFIG=wrangler.production.toml`.
 - `make e2e-remote DEPLOY_CONFIG=wrangler.production.toml` passes against the
   deployment and is now a gate inside the deploy workflow.
