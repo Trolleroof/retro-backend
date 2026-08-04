@@ -42,28 +42,27 @@ as definition level 0 with no value byte, never as `0.0` / `false`.
 | 5 | `game_version` | BYTE_ARRAY / UTF8 | required | chunk envelope (last chunk wins) |
 | 6 | `ruleset_id` | BYTE_ARRAY / UTF8 | **nullable** | `episode_started.payload.ruleset_id`; null when that event is not in the episode's chunks |
 | 7 | `event_sequence` | INT64 | required | control event |
-| 8 | `control_event_id` | BYTE_ARRAY / UTF8 | required | control event `event_id` |
-| 9 | `observation_id` | BYTE_ARRAY / UTF8 | required | resolved observation |
-| 10 | `observation_json` | BYTE_ARRAY / UTF8 | required | canonical JSON of the observation payload minus `observation_id` / `caused_by_event_id` |
-| 11 | `action` | BYTE_ARRAY / UTF8 | required | `control_changed.payload.action` |
-| 12 | `actor` | BYTE_ARRAY / UTF8 | required | `control_changed.payload.actor` |
-| 13 | `reward` | DOUBLE | **nullable** | `outcome_changed.payload.engine_reward`; null when the control has no outcome |
-| 14 | `score_delta` | INT64 | **nullable** | `outcome_changed.payload.score_delta` |
-| 15 | `terminal` | BOOLEAN | **nullable** | `outcome_changed.payload.terminal` |
-| 16 | `moved` | BOOLEAN | **nullable** | `outcome_changed.payload.progress.moved` |
+| 8 | `client_time_ms` | INT64 | required | control event envelope `client_time_ms` |
+| 9 | `control_event_id` | BYTE_ARRAY / UTF8 | required | control event `event_id` |
+| 10 | `observation_id` | BYTE_ARRAY / UTF8 | required | resolved observation |
+| 11 | `observation_json` | BYTE_ARRAY / UTF8 | required | canonical JSON of the observation payload minus `observation_id` / `caused_by_event_id` |
+| 12 | `action` | BYTE_ARRAY / UTF8 | required | `control_changed.payload.action` |
+| 13 | `actor` | BYTE_ARRAY / UTF8 | required | `control_changed.payload.actor` |
+| 14 | `reward` | DOUBLE | **nullable** | `outcome_changed.payload.engine_reward`; null when the control has no outcome |
+| 15 | `score_delta` | INT64 | **nullable** | `outcome_changed.payload.score_delta` |
+| 16 | `terminal` | BOOLEAN | **nullable** | `outcome_changed.payload.terminal` |
+| 17 | `moved` | BOOLEAN | **nullable** | `outcome_changed.payload.progress.moved` |
 
 `observation_json` is a nested object flattened to text because Parquet groups are out of scope for
 the writer. Canonical JSON is `json.dumps(..., sort_keys=True, separators=(",", ":"))`, so it
 round-trips to the same structure the client export produces.
 
-### Not emitted: `client_time_ms`
-
-Issue #30 lists a `client_time_ms` column. `extract_behavior_cloning_samples()` does not return it,
-and it is **not** in the `control_changed` *payload* — it is a field of the v2 event envelope
-(`event["client_time_ms"]`, see `ChunkEnvelope` in [contracts.py](../src/retro_backend/contracts.py)).
-Emitting it would mean either re-deriving the control-event ordering outside the ported join, or
-changing `bc_export.py`, whose output is frozen by the golden fixture. It is deliberately omitted
-rather than faked; adding it belongs upstream in `bc-export.ts` and then in the port.
+`client_time_ms` is the control event's v2 envelope timestamp
+(`event["client_time_ms"]`, see `ChunkEnvelope` in [contracts.py](../src/retro_backend/contracts.py)),
+not part of the `control_changed` payload. It became available once tui-gamepigeon's
+`extractBehaviorCloningSamples()` started returning it
+([Trolleroof/tui-gamepigeon#180](https://github.com/Trolleroof/tui-gamepigeon/issues/180)), and the
+port here follows suit.
 
 ## File format
 
