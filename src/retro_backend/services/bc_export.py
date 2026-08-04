@@ -152,6 +152,7 @@ def extract_behavior_cloning_samples(
                 "game_version": chunk["game_version"],
                 "ruleset_id": rulesets.get(event["game_id"]),
                 "event_sequence": event["event_sequence"],
+                "client_time_ms": event["client_time_ms"],
                 "control_event_id": event["event_id"],
                 "observation_id": observation["payload"]["observation_id"],
                 "observation": _policy_observation(observation["payload"]),
