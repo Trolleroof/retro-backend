@@ -80,9 +80,22 @@ pyarrow and a Python Worker cannot import npm packages.
 Partitioned by the UTC date of `EpisodeReady.completed_at_ms`, zero-padded:
 
 ```
-episodes/parquet/v1/{game_type}/{YYYY}/{MM}/{DD}/{game_id}.parquet
-episodes/parquet/v1/{game_type}/{YYYY}/{MM}/{DD}/{game_id}.manifest.json
+episodes/parquet/v1/{game_type}/{YYYY}/{MM}/{DD}/user={user_id}/{game_id}.parquet
+episodes/parquet/v1/{game_type}/{YYYY}/{MM}/{DD}/user={user_id}/{game_id}.manifest.json
 ```
+
+**The `user=` segment is a deliberate departure from the path sketched in #30.**
+`game_id` is chosen by the client — `GAME_ID_PATTERN` accepts any `game_<suffix>` — and is
+assigned by the server nowhere, so it is unique only within a user. That is the same reason
+`raw/` and `validated/` are scoped by `user=`. Without it, two players who both pick `game_1`
+and finish on the same UTC day resolve to one key, and the second episode silently overwrites
+the first while the first player's `episodes` row still points at it.
+
+For the same reason `episodes_game_id_idx` is **not** a unique index: `episode_id`
+(`sha256(user_id:game_id)`) is the primary key and already enforces one row per
+`(user, game)`. A unique index on `game_id` alone would turn a second user's identical
+`game_id` into a constraint violation that `ON CONFLICT(episode_id)` cannot absorb, failing
+the write and retrying the message into a dead-letter queue that has no consumer.
 
 Bucket binding `RAW_BUCKET` (`retro-gameplay-raw`), the same bucket the raw and validated artifacts
 use. Note that `cloudflare/r2-lifecycle.json` has **no** expiry rule for `episodes/` — unlike
@@ -99,7 +112,7 @@ use. Note that `cloudflare/r2-lifecycle.json` has **no** expiry rule for `episod
   "chunk_count": 3, "row_count": 5,
   "first_event_sequence": 1, "last_event_sequence": 17,
   "completed_at_ms": 1784289600000,
-  "parquet_key": "episodes/parquet/v1/…/game_….parquet",
+  "parquet_key": "episodes/parquet/v1/…/user=usr_…/game_….parquet",
   "parquet_bytes": 2048,
   "parquet_sha256": "…64 hex…",
   "source_chunk_ids": ["chk_…", "chk_…", "chk_…"],

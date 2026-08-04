@@ -14,7 +14,7 @@ COMPLETED_AT_MS = int(datetime(2026, 7, 17, 12, tzinfo=UTC).timestamp() * 1000)
 WRITTEN_AT_MS = COMPLETED_AT_MS + 123
 CHUNK_DATE = "2026-07-16"
 PARQUET_KEY = (
-    f"episodes/parquet/v1/{GAME_TYPE}/2026/07/17/{GAME_ID}.parquet"
+    f"episodes/parquet/v1/{GAME_TYPE}/2026/07/17/user={USER_ID}/{GAME_ID}.parquet"
 )
 MANIFEST_KEY = PARQUET_KEY.removesuffix(".parquet") + ".manifest.json"
 

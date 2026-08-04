@@ -15,6 +15,7 @@ the chunk never arrived) is skipped rather than raised on, and the join simply
 emits fewer samples.
 """
 
+import hashlib
 import json
 import re
 from collections.abc import Mapping, Sequence
@@ -187,6 +188,15 @@ class EpisodeRowSet:
         return list(self.rows)
 
 
+def _log_chunk_skipped(chunk_id: str, reason: str) -> None:
+    """Record a dropped chunk without echoing any part of the artifact."""
+    print(json.dumps({
+        "event": "episode_chunk_skipped",
+        "chunk_id_sha256": hashlib.sha256(chunk_id.encode("utf-8")).hexdigest(),
+        "reason": reason,
+    }, separators=(",", ":")))
+
+
 def _chunk_envelope(artifact_body: bytes) -> dict[str, Any] | None:
     """Read the v2 envelope out of one ``validated/...`` artifact.
 
@@ -242,6 +252,14 @@ async def load_episode_rows(store: R2Store, episode: EpisodeReady) -> EpisodeRow
         stored = await store.get_raw(key)
         envelope = None if stored is None else _chunk_envelope(stored.body)
         if envelope is None:
+            # Both cases drop the chunk, but they are different incidents: absent
+            # is expected (lifecycle expiry, chunk never arrived), whereas present
+            # and unparseable means a durable artifact is corrupt. Logging them
+            # identically sends an operator hunting for an object that is there.
+            _log_chunk_skipped(
+                reference.chunk_id,
+                "artifact_absent" if stored is None else "artifact_unreadable",
+            )
             missing_chunk_ids.append(reference.chunk_id)
             continue
         source_chunk_ids.append(reference.chunk_id)

@@ -43,6 +43,7 @@ def _put(fake_env: Any, key: str) -> Any:
 def test_keys_are_utc_partitioned_and_zero_padded() -> None:
     assert episode_parquet_key(
         game_type=GAME_TYPE,
+        user_id=USER_ID,
         game_id=GAME_ID,
         completed_at_ms=COMPLETED_AT_MS,
     ) == PARQUET_KEY
@@ -53,6 +54,7 @@ def test_unroutable_game_type_never_escapes_the_key_prefix() -> None:
     with pytest.raises(ValueError, match="invalid format"):
         episode_parquet_key(
             game_type="../../etc",
+            user_id=USER_ID,
             game_id=GAME_ID,
             completed_at_ms=COMPLETED_AT_MS,
         )
@@ -330,3 +332,33 @@ async def test_dispatch_retries_the_episode_message_when_r2_is_unavailable(
 
     assert queue_message.retried is True
     assert queue_message.acked is False
+
+
+def test_two_users_sharing_a_game_id_do_not_collide() -> None:
+    """game_id is client-chosen, so it namespaces only within a user.
+
+    Both players can legitimately pick ``game_1``. Before the ``user=`` segment
+    existed, the second episode overwrote the first at an identical key while the
+    first player's index row kept pointing at it — one player's D1 row resolving
+    to another player's gameplay.
+    """
+    other_user = "usr_018f0000-0000-7000-8000-0000000000ff"
+    assert other_user != USER_ID
+
+    mine = episode_parquet_key(
+        game_type=GAME_TYPE,
+        user_id=USER_ID,
+        game_id=GAME_ID,
+        completed_at_ms=COMPLETED_AT_MS,
+    )
+    theirs = episode_parquet_key(
+        game_type=GAME_TYPE,
+        user_id=other_user,
+        game_id=GAME_ID,
+        completed_at_ms=COMPLETED_AT_MS,
+    )
+
+    assert mine != theirs
+    assert episode_manifest_key(mine) != episode_manifest_key(theirs)
+    assert f"user={USER_ID}" in mine
+    assert f"user={other_user}" in theirs

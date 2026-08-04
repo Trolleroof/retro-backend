@@ -125,10 +125,28 @@ def _decode_json(encoded: bytes) -> object:
         return None
 
 
-def episode_parquet_key(*, game_type: str, game_id: str, completed_at_ms: int) -> str:
+def episode_parquet_key(
+    *,
+    game_type: str,
+    user_id: str,
+    game_id: str,
+    completed_at_ms: int,
+) -> str:
+    """Deterministic key for one episode's Parquet object.
+
+    The ``user=`` segment is load-bearing and deliberately departs from the path
+    sketched in #30. ``game_id`` is chosen by the client (``GAME_ID_PATTERN``
+    accepts any ``game_<suffix>``), not assigned by the server, so it is unique
+    only within a user — exactly why ``raw/`` and ``validated/`` are both scoped
+    by ``user=`` too. Without this segment two players who both pick
+    ``game_1`` on the same day write to one key, and the second episode silently
+    overwrites the first while that user's index row still points at it.
+    """
     year, month, day = utc_date_parts(completed_at_ms)
     partition = f"{require_game_type(game_type)}/{year}/{month}/{day}"
-    return require_r2_key(f"{EPISODE_PARQUET_PREFIX}/{partition}/{game_id}.parquet")
+    return require_r2_key(
+        f"{EPISODE_PARQUET_PREFIX}/{partition}/user={user_id}/{game_id}.parquet"
+    )
 
 
 def episode_manifest_key(parquet_key: str) -> str:
@@ -216,6 +234,7 @@ class EpisodeConsumer:
         try:
             parquet_key = episode_parquet_key(
                 game_type=episode.game_type,
+                user_id=episode.user_id,
                 game_id=episode.game_id,
                 completed_at_ms=episode.completed_at_ms,
             )
