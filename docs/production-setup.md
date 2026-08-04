@@ -140,15 +140,19 @@ a failed write.
 `make apply-r2-lifecycle`; `scripts/deployment_preflight.py` fails the deploy if
 the live bucket configuration drifts from it. The current policy is:
 
-- **30 days → `STANDARD_IA`.** Raw chunks are read constantly for the first few
-  days (episode assembly, re-export after a BC join change) and rarely after
-  that, so infrequent-access storage is the right tier for the long tail.
+- **`raw/`: 30 days → `STANDARD_IA`, deleted at 90 days.** Raw chunks are read
+  constantly for the first few days (episode assembly, re-export after a BC join
+  change) and rarely after that, so infrequent-access storage is the right tier
+  for the long tail. The 90-day option discussed in #28 was adopted.
+- **`validated/`, `rejected/`, `dlq/`: deleted at 7 days.** These are derived or
+  diagnostic artifacts, reconstructible from `raw/` while it survives.
 
-There is **no expiration rule**: raw chunks are retained indefinitely today.
-Retention is a product/compliance decision, not a technical one — adding a
-delete rule (the 90-day option floated in #28) means losing the ability to
-re-export older gameplay if the join logic changes, so it stays open until
-someone decides. When it is decided, edit `cloudflare/r2-lifecycle.json` and the
+**Raw gameplay is not retained indefinitely — it is deleted at 90 days.** Past
+that point an episode can no longer be re-exported if the BC join logic changes,
+so a join-logic revision that needs older gameplay has a 90-day window to run in.
+See [trace-storage.md](trace-storage.md) for the operator view of these prefixes.
+
+To change any of it, edit `cloudflare/r2-lifecycle.json` and the
 `EXPECTED_LIFECYCLE` constant in `scripts/deployment_preflight.py` together, or
 the preflight will fail the next deploy.
 
