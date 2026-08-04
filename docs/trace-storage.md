@@ -92,7 +92,7 @@ listing a bucket.
 | `game_version` | Game version string as reported by the client. |
 | `status` | `complete`, `incomplete`, or `abandoned` — see [episode-assembly.md](episode-assembly.md#terminal-statuses). |
 | `chunk_count` | Number of source chunks folded into the episode. |
-| `row_count` | Parquet rows written, one per gameplay step. |
+| `row_count` | Parquet rows written — one per human control that survived the behavior-cloning join, not one per raw event. No-op controls (`moved == false`) are dropped, so this is normally well below the episode's event count. See [parquet-v1.md](parquet-v1.md). |
 | `first_event_sequence` / `last_event_sequence` | Event range covered. For a `complete` episode these chain without gaps; for `incomplete` they bound a range with holes. |
 | `completed_at_ms` | UTC ms the episode became terminal. Drives the `{YYYY}/{MM}/{DD}` path segments. |
 | `parquet_key` | Full R2 key of the Parquet object. |
