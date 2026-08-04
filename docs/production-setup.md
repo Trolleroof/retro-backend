@@ -138,19 +138,26 @@ a failed write.
 
 `cloudflare/r2-lifecycle.json` is the source of truth and is applied with
 `make apply-r2-lifecycle`; `scripts/deployment_preflight.py` fails the deploy if
-the live bucket configuration drifts from it. The current policy is:
+the live bucket configuration drifts from it. The per-rule ages are tabulated in
+[trace-storage.md](trace-storage.md); this section covers only why they are what
+they are.
 
-- **`raw/`: 30 days → `STANDARD_IA`, deleted at 90 days.** Raw chunks are read
+- **`raw/` transitions to `InfrequentAccess`, then expires.** Raw chunks are read
   constantly for the first few days (episode assembly, re-export after a BC join
   change) and rarely after that, so infrequent-access storage is the right tier
-  for the long tail. The 90-day option discussed in #28 was adopted.
-- **`validated/`, `rejected/`, `dlq/`: deleted at 7 days.** These are derived or
-  diagnostic artifacts, reconstructible from `raw/` while it survives.
+  for the long tail. The bounded-retention option discussed in #28 was adopted.
+- **`validated/`, `rejected/`, `dlq/` expire.** These are derived or diagnostic
+  artifacts, reconstructible from `raw/` while it survives.
 
-**Raw gameplay is not retained indefinitely — it is deleted at 90 days.** Past
-that point an episode can no longer be re-exported if the BC join logic changes,
-so a join-logic revision that needs older gameplay has a 90-day window to run in.
-See [trace-storage.md](trace-storage.md) for the operator view of these prefixes.
+**Raw gameplay is not retained indefinitely.** Once a chunk's `raw/` retention
+window closes, an episode can no longer be re-exported if the BC join logic
+changes, so a join-logic revision that needs older gameplay has a bounded window
+to run in.
+
+**No rule covers `episodes/parquet/v1/`, so Parquet objects and their manifests
+are retained indefinitely.** They are the training corpus and deliberately
+outlive the inputs they were built from. See
+[trace-storage.md](trace-storage.md) for the operator view of these prefixes.
 
 To change any of it, edit `cloudflare/r2-lifecycle.json` and the
 `EXPECTED_LIFECYCLE` constant in `scripts/deployment_preflight.py` together, or
