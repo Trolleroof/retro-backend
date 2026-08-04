@@ -83,7 +83,9 @@ one object per `(user_id, game_id)`, which groups chunks until `episode_ended`
 and publishes a single `episode.ready` message per episode — `complete`,
 `incomplete`, or `abandoned`. Without that binding the consumer behaves exactly
 as described above. See [docs/episode-assembly.md](docs/episode-assembly.md) for
-the design and the activation checklist.
+the design and the activation checklist, and
+[docs/trace-storage.md](docs/trace-storage.md) for the R2 prefix map, the
+`episodes` D1 index, and the read-only commands for inspecting both.
 
 For `POST /v1/game-results` and any other body-bearing path, the fetch boundary
 permits at most 16 KiB. The authenticated result route then validates the JSON
