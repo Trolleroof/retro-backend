@@ -41,5 +41,8 @@ chunk omits `game_type` or an `episode_started` payload omits `ruleset_id`. Both
 
 ## Next steps
 
-- [ ] Wire `extract_behavior_cloning_samples()` into the actual Parquet writer once that pipeline exists
+- [x] Wire `extract_behavior_cloning_samples()` into the actual Parquet writer — done in
+  [`src/retro_backend/episode_rows.py`](../src/retro_backend/episode_rows.py); the writer only flattens the samples
+  this module returns, so the Parquet row count is the golden fixture's row count by construction. Schema documented
+  in [parquet-v1.md](parquet-v1.md).
 - [ ] If `bc-export.ts` changes upstream, regenerate `tests/fixtures/bc_export_golden.json` via `bun` and re-diff
