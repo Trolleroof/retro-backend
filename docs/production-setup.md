@@ -150,7 +150,12 @@ the live bucket configuration drifts from it. The current policy is:
 **Raw gameplay is not retained indefinitely — it is deleted at 90 days.** Past
 that point an episode can no longer be re-exported if the BC join logic changes,
 so a join-logic revision that needs older gameplay has a 90-day window to run in.
-See [trace-storage.md](trace-storage.md) for the operator view of these prefixes.
+
+**No rule covers `episodes/parquet/v1/`, so Parquet objects and their manifests
+are retained indefinitely.** They are the training corpus and deliberately
+outlive the inputs they were built from. See
+[trace-storage.md](trace-storage.md) for the per-rule table and the operator
+view of these prefixes.
 
 To change any of it, edit `cloudflare/r2-lifecycle.json` and the
 `EXPECTED_LIFECYCLE` constant in `scripts/deployment_preflight.py` together, or
