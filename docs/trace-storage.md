@@ -15,7 +15,7 @@ recipe below is a read.
 | `raw/`, `validated/`, `rejected/`, `dlq/` prefixes | Live — written by the deployed Worker today. |
 | `episodes/parquet/v1/…` prefix | Lands with the Parquet writer ([#30](https://github.com/adavyas/retro-backend/issues/30)). |
 | `episodes` D1 table | Lands with the episode index ([#31](https://github.com/adavyas/retro-backend/issues/31)); no migration file exists yet. |
-| `retro-episode-events` queue | **Does not exist in the Cloudflare account.** Every command that names it fails with a "queue not found" style error until someone runs step 1 of the [activation checklist](episode-assembly.md#activation-checklist). Tracked in [#39](https://github.com/adavyas/retro-backend/issues/39). |
+| `retro-episode-events` queue | **Created, but not yet bound.** Step 1 of the [activation checklist](episode-assembly.md#activation-checklist) has been run — the queue and `retro-episode-events-dlq` both exist in the production account. Neither has a registered producer or consumer until the Worker is redeployed. |
 
 Read the sections about the Parquet prefix and the `episodes` table as the contract
 those branches are being built against, not as a description of production.
@@ -292,23 +292,41 @@ pointer — escalate, do not delete the row until you understand how it got ther
 
 ### Queue backlog
 
-The scheduled health check in
-[`src/retro_backend/queue_health.py`](../src/retro_backend/queue_health.py) watches
-`retro-gameplay-events`, `retro-gameplay-events-dlq`, and
-`retro-gameplay-events-archive-dlq` every five minutes. **It does not watch
-`retro-episode-events`** — that queue has no automated alerting, so its backlog has
-to be checked by hand.
+`QUEUE_CHECKS` in
+[`src/retro_backend/queue_health.py`](../src/retro_backend/queue_health.py) lists
+exactly three queues, and the scheduled handler checks their backlog and oldest
+message every five minutes:
+
+| Queue | In `QUEUE_CHECKS`? |
+| --- | --- |
+| `retro-gameplay-events` | Yes — alerts on a message older than ten minutes. |
+| `retro-gameplay-events-dlq` | Yes — same age rule. |
+| `retro-gameplay-events-archive-dlq` | Yes — alerts on *any* message. |
+| `retro-episode-events` | **No.** |
+| `retro-episode-events-dlq` | **No.** |
+
+**Nothing alerts on either episode queue.** They have no entry in `QUEUE_CHECKS`, no
+Cloudflare notification, and no consumer, so a backlog there is silent — it will not
+appear in `queue_health_failed` logs and will not page anyone. Until that changes,
+checking them is a manual operator step:
 
 ```bash
 npx --yes wrangler@4.112.0 queues info retro-episode-events
 ```
 
-**This command fails today.** The queue has not been created in the Cloudflare
-account, so `queues info` reports it as not found. That is the expected result until
-[#39](https://github.com/adavyas/retro-backend/issues/39) is done — it is not an
-outage.
+```bash
+npx --yes wrangler@4.112.0 queues info retro-episode-events-dlq
+```
 
-To see which queues do exist:
+Both queues now exist in the production account, so these commands succeed. Expect
+zeroes across the board: the Worker has not been redeployed since they were created,
+so neither queue has a registered producer or consumer, backlog reads 0, and the
+binding-registration columns read 0 as well. That is the correct current state, not a
+fault. `wrangler.toml` declares an `EPISODE_QUEUE` producer binding for
+`retro-episode-events`; `retro-episode-events-dlq` has no binding in the config at
+all yet.
+
+To see every queue in the account:
 
 ```bash
 npx --yes wrangler@4.112.0 queues list
@@ -321,12 +339,15 @@ npx --yes wrangler@4.112.0 queues list
 An `episode.ready` message was emitted but no object appeared. Work down the chain,
 stopping at the first thing that is not true:
 
-1. **Does the queue exist?** `wrangler queues list`. If `retro-episode-events` is
-   absent, nothing has ever been delivered and the whole pipeline is dormant — this
-   is the current state of production, not a fault.
+1. **Is anything bound to the queue?** `queues info retro-episode-events`. The queue
+   exists, but until the Worker is redeployed it has no registered producer, so
+   nothing has ever been *published* to it — the pipeline is dormant end to end.
+   That is the current state of production, not a fault.
 2. **Does a consumer exist?** Until [#30](https://github.com/adavyas/retro-backend/issues/30)
    is deployed, the queue accumulates without a reader. `queues info` shows the
-   consumer list. Backlog with no consumer is expected, not stuck.
+   consumer list. Backlog with no consumer is expected, not stuck — and because
+   neither episode queue is in `QUEUE_CHECKS`, you will only ever learn about that
+   backlog by looking.
 3. **Is the episode terminal at all?** An episode only emits when it completes or its
    idle TTL expires — `EPISODE_IDLE_TTL_MS` defaults to six hours. An episode whose
    last chunk arrived an hour ago is not stuck, it is waiting.
@@ -351,9 +372,18 @@ reports it. The forensic trail is in R2 under `dlq/date=…/message={sha256}.jso
 allowlisted, token-free archive records with `message_body_sha256` and the reason.
 Those expire after 7 days, so triage inside that window or the evidence is gone.
 
-An `retro-episode-events` backlog is a different thing: it has no dead-letter
-consumer wired up in `wrangler.toml` (only a producer binding), so growth there means
-"no consumer yet", not "messages are failing".
+A `retro-episode-events` backlog is a different thing. `retro-episode-events-dlq`
+exists in the account but is not referenced by `wrangler.toml` at all — the config
+declares only the `EPISODE_QUEUE` producer binding, no consumer and no
+`dead_letter_queue` pointing at it. So growth on `retro-episode-events` means "no
+consumer yet", not "messages are failing", and a message can never reach the episode
+DLQ until a consumer is deployed with that binding.
+
+**Check both by hand.** Unlike the three gameplay queues, neither episode queue is in
+`QUEUE_CHECKS`, so no scheduled check and no notification covers them. Add
+`queues info retro-episode-events` and `queues info retro-episode-events-dlq` to
+whatever routine you already run against the archive DLQ, and treat wiring them into
+`QUEUE_CHECKS` as the real fix.
 
 ### Checksum mismatch
 
