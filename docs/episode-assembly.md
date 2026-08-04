@@ -4,11 +4,15 @@ Tracking [retro-backend#29](https://github.com/adavyas/retro-backend/issues/29):
 `game_id` until the episode is terminal, then emit one `episode.ready` message for the Parquet writer
 ([#30](https://github.com/adavyas/retro-backend/issues/30)) to consume.
 
-## Status: implemented, dormant until bound
+## Status: configured, pending queue creation
 
-The code is merged and inert. `GameplayConsumer` only assembles episodes when the `EPISODE_ASSEMBLER` Durable Object
-binding exists; on a deployment without it, chunk validation behaves exactly as it did before. Activating the feature is
-the infrastructure checklist at the bottom of this file.
+The code is merged, and `wrangler.toml` now declares `EPISODE_QUEUE`, the `EPISODE_ASSEMBLER` Durable Object binding,
+and its sqlite export, so `make deployment-preflight` enforces all three. `GameplayConsumer` only assembles episodes
+when the `EPISODE_ASSEMBLER` binding exists; on a deployment without it, chunk validation behaves exactly as it did
+before.
+
+**The `retro-episode-events` queue does not exist in the Cloudflare account yet, so `wrangler deploy` will fail until
+step 1 of the checklist below has been run.** Tracked in [#39](https://github.com/adavyas/retro-backend/issues/39).
 
 ## Why a Durable Object
 
@@ -82,9 +86,9 @@ episode comfortably inside the 120 KiB Queue size guard:
 
 ## Activation checklist
 
-None of this is applied yet. Deploying the current code without it is safe — assembly simply stays off.
+Step 2 is done in the repo; step 1 needs Cloudflare account access and has not been run.
 
-1. Create the queue and its dead-letter queue:
+1. **Not done — required before the next deploy.** Create the queue and its dead-letter queue:
 
 ```bash
 npx wrangler queues create retro-episode-events
@@ -94,21 +98,10 @@ npx wrangler queues create retro-episode-events
 npx wrangler queues create retro-episode-events-dlq
 ```
 
-2. Add to `wrangler.toml`:
-
-```toml
-[[queues.producers]]
-binding = "EPISODE_QUEUE"
-queue = "retro-episode-events"
-
-[[durable_objects.bindings]]
-name = "EPISODE_ASSEMBLER"
-class_name = "EpisodeAssembler"
-
-[exports.EpisodeAssembler]
-type = "durable-object"
-storage = "sqlite"
-```
+2. ~~Declare the bindings in `wrangler.toml`~~ — done. `EPISODE_QUEUE`, the `EPISODE_ASSEMBLER` binding, and
+   `[exports.EpisodeAssembler]` are committed, and `scripts/deployment_preflight.py` fails the deploy if any of them
+   goes missing. Regenerate the deploy config with `make prepare-deployment-config` so
+   `wrangler.production.toml` picks them up.
 
 3. Optionally override the defaults under `[vars]`:
 

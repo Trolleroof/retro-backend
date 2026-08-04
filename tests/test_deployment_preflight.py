@@ -33,6 +33,21 @@ GAME_ROOM_EXPORT = """[exports.GameRoom]
 type = "durable-object"
 storage = "sqlite"
 """
+EPISODE_ASSEMBLER_BINDING = """[[durable_objects.bindings]]
+name = "EPISODE_ASSEMBLER"
+class_name = "EpisodeAssembler"
+"""
+EPISODE_ASSEMBLER_EXPORT = """[exports.EpisodeAssembler]
+type = "durable-object"
+storage = "sqlite"
+"""
+EPISODE_QUEUE_PRODUCER = """[[queues.producers]]
+binding = "EPISODE_QUEUE"
+queue = "retro-episode-events"
+"""
+EPISODE_ASSEMBLER_BINDING_ERROR = (
+    "EPISODE_ASSEMBLER must bind Durable Object class EpisodeAssembler exactly once"
+)
 
 
 def _run_preflight(
@@ -630,6 +645,66 @@ def test_preflight_requires_exact_sqlite_game_room_export(tmp_path: Path) -> Non
         assert (
             "exports.GameRoom must declare a sqlite durable-object"
             in result.stderr
+        )
+
+
+def test_preflight_requires_exact_episode_assembler_binding(tmp_path: Path) -> None:
+    missing = _run_preflight(
+        _production_config(tmp_path, (EPISODE_ASSEMBLER_BINDING, ""))
+    )
+    wrong_class = _run_preflight(
+        _production_config(
+            tmp_path,
+            ('class_name = "EpisodeAssembler"', 'class_name = "WrongAssembler"'),
+        )
+    )
+
+    for result in (missing, wrong_class):
+        assert result.returncode == 1
+        assert EPISODE_ASSEMBLER_BINDING_ERROR in result.stderr
+
+
+def test_preflight_requires_exact_sqlite_episode_assembler_export(
+    tmp_path: Path,
+) -> None:
+    missing = _run_preflight(
+        _production_config(tmp_path, (EPISODE_ASSEMBLER_EXPORT, ""))
+    )
+    wrong_storage = _run_preflight(
+        _production_config(
+            tmp_path,
+            (
+                EPISODE_ASSEMBLER_EXPORT,
+                EPISODE_ASSEMBLER_EXPORT.replace(
+                    'storage = "sqlite"', 'storage = "kv"'
+                ),
+            ),
+        )
+    )
+
+    for result in (missing, wrong_storage):
+        assert result.returncode == 1
+        assert (
+            "exports.EpisodeAssembler must declare a sqlite durable-object"
+            in result.stderr
+        )
+
+
+def test_preflight_requires_the_episode_queue_producer(tmp_path: Path) -> None:
+    missing = _run_preflight(
+        _production_config(tmp_path, (EPISODE_QUEUE_PRODUCER, ""))
+    )
+    wrong_queue = _run_preflight(
+        _production_config(
+            tmp_path,
+            ('queue = "retro-episode-events"', 'queue = "retro-wrong-events"'),
+        )
+    )
+
+    for result in (missing, wrong_queue):
+        assert result.returncode == 1
+        assert (
+            "EPISODE_QUEUE must produce to retro-episode-events" in result.stderr
         )
 
 

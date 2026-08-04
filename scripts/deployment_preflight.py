@@ -43,6 +43,13 @@ ALLOWED_GAME_ORIGINS_RESERVED_HOST_ERROR = (
 LIFECYCLE_ERROR = (
     "R2 lifecycle must expire derived artifacts at 7 days and raw chunks at 90"
 )
+# Durable Objects whose binding name and sqlite export the deploy config must
+# declare exactly. EPISODE_ASSEMBLER gates episode assembly (#29): without it
+# GameplayConsumer silently skips assembly instead of failing.
+REQUIRED_DURABLE_OBJECTS = (
+    ("GAME_ROOMS", "GameRoom"),
+    ("EPISODE_ASSEMBLER", "EpisodeAssembler"),
+)
 DAY_SECONDS = 86_400
 
 
@@ -392,12 +399,16 @@ def deployment_errors(
 
     queues = _mapping(config.get("queues"))
     producers = _mapping_list(queues.get("producers"))
-    if not any(
-        producer.get("binding") == "GAMEPLAY_QUEUE"
-        and producer.get("queue") == "retro-gameplay-events"
-        for producer in producers
+    for binding_name, queue_name in (
+        ("GAMEPLAY_QUEUE", "retro-gameplay-events"),
+        ("EPISODE_QUEUE", "retro-episode-events"),
     ):
-        errors.append("GAMEPLAY_QUEUE must produce to retro-gameplay-events")
+        if not any(
+            producer.get("binding") == binding_name
+            and producer.get("queue") == queue_name
+            for producer in producers
+        ):
+            errors.append(f"{binding_name} must produce to {queue_name}")
 
     consumers = _mapping_list(queues.get("consumers"))
     gameplay_consumer = _consumer_for(consumers, "retro-gameplay-events")
@@ -420,22 +431,24 @@ def deployment_errors(
 
     durable_objects = _mapping(config.get("durable_objects"))
     durable_object_bindings = _mapping_list(durable_objects.get("bindings"))
-    game_room_bindings = [
-        binding
-        for binding in durable_object_bindings
-        if binding.get("name") == "GAME_ROOMS"
-    ]
-    if game_room_bindings != [{"name": "GAME_ROOMS", "class_name": "GameRoom"}]:
-        errors.append(
-            "GAME_ROOMS must bind Durable Object class GameRoom exactly once"
-        )
-
     exports = _mapping(config.get("exports"))
-    if _mapping(exports.get("GameRoom")) != {
-        "type": "durable-object",
-        "storage": "sqlite",
-    }:
-        errors.append("exports.GameRoom must declare a sqlite durable-object")
+    for name, class_name in REQUIRED_DURABLE_OBJECTS:
+        declared = [
+            binding
+            for binding in durable_object_bindings
+            if binding.get("name") == name
+        ]
+        if declared != [{"name": name, "class_name": class_name}]:
+            errors.append(
+                f"{name} must bind Durable Object class {class_name} exactly once"
+            )
+        if _mapping(exports.get(class_name)) != {
+            "type": "durable-object",
+            "storage": "sqlite",
+        }:
+            errors.append(
+                f"exports.{class_name} must declare a sqlite durable-object"
+            )
     if "migrations" in config:
         errors.append(
             "top-level migrations must be absent for the undeployed GameRoom export"

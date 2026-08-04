@@ -47,6 +47,12 @@ queue = "retro-gameplay-events-dlq"
 binding = "GAMEPLAY_ARCHIVE_DLQ"
 queue = "retro-gameplay-events-archive-dlq"
 
+# Episode assembly (#29). The consumer arrives with the Parquet writer (#30);
+# until then this queue accumulates and must be watched like the archive DLQ.
+[[queues.producers]]
+binding = "EPISODE_QUEUE"
+queue = "retro-episode-events"
+
 [[queues.consumers]]
 queue = "retro-gameplay-events"
 max_batch_size = 10
@@ -69,11 +75,19 @@ class_name = "ChunkGate"
 name = "GAME_ROOMS"
 class_name = "GameRoom"
 
+[[durable_objects.bindings]]
+name = "EPISODE_ASSEMBLER"
+class_name = "EpisodeAssembler"
+
 [exports.ChunkGate]
 type = "durable-object"
 storage = "sqlite"
 
 [exports.GameRoom]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.EpisodeAssembler]
 type = "durable-object"
 storage = "sqlite"
 
