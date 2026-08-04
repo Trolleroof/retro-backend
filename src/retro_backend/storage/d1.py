@@ -65,6 +65,32 @@ ORDER BY high_scores.score DESC, achieved_at ASC, user_id ASC
 LIMIT ?2
 """.strip()
 
+_UPSERT_EPISODE_SQL = """
+INSERT INTO episodes (
+    episode_id, user_id, game_id, game_type, game_version, status,
+    chunk_count, row_count, first_event_sequence, last_event_sequence,
+    completed_at_ms, parquet_key, parquet_bytes, parquet_sha256,
+    manifest_key, written_at_ms
+)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+ON CONFLICT(episode_id) DO UPDATE SET
+    user_id = excluded.user_id,
+    game_id = excluded.game_id,
+    game_type = excluded.game_type,
+    game_version = excluded.game_version,
+    status = excluded.status,
+    chunk_count = excluded.chunk_count,
+    row_count = excluded.row_count,
+    first_event_sequence = excluded.first_event_sequence,
+    last_event_sequence = excluded.last_event_sequence,
+    completed_at_ms = excluded.completed_at_ms,
+    parquet_key = excluded.parquet_key,
+    parquet_bytes = excluded.parquet_bytes,
+    parquet_sha256 = excluded.parquet_sha256,
+    manifest_key = excluded.manifest_key,
+    written_at_ms = excluded.written_at_ms
+""".strip()
+
 _MAX_SCORE = 2**63 - 1
 
 
@@ -72,6 +98,48 @@ _MAX_SCORE = 2**63 - 1
 class ScoreUpsertResult:
     personal_best: int
     updated: bool
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeIndexRow:
+    """One queryable projection of an episode's Parquet artifacts."""
+
+    episode_id: str
+    user_id: str
+    game_id: str
+    game_type: str
+    game_version: str
+    status: str
+    chunk_count: int
+    row_count: int
+    first_event_sequence: int
+    last_event_sequence: int
+    completed_at_ms: int
+    parquet_key: str
+    parquet_bytes: int
+    parquet_sha256: str
+    manifest_key: str
+    written_at_ms: int
+
+    def bind_values(self) -> tuple[object, ...]:
+        return (
+            self.episode_id,
+            self.user_id,
+            self.game_id,
+            self.game_type,
+            self.game_version,
+            self.status,
+            self.chunk_count,
+            self.row_count,
+            self.first_event_sequence,
+            self.last_event_sequence,
+            self.completed_at_ms,
+            self.parquet_key,
+            self.parquet_bytes,
+            self.parquet_sha256,
+            self.manifest_key,
+            self.written_at_ms,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +241,14 @@ class D1Repository:
         await (
             self.database.prepare(_PRUNE_REVOCATIONS_SQL)
             .bind(REVOCATION_RETENTION_MODIFIER)
+            .run()
+        )
+
+    async def upsert_episode(self, row: EpisodeIndexRow) -> None:
+        """Index one episode, converging when a Queue retry rewrites the same R2 keys."""
+        await (
+            self.database.prepare(_UPSERT_EPISODE_SQL)
+            .bind(*row.bind_values())
             .run()
         )
 

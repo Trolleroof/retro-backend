@@ -7,11 +7,13 @@ from datetime import UTC, datetime
 from typing import cast
 
 from ..bindings import QueueBatch, QueueMessage, iter_binding_values, value_field
+from .episodes import EpisodeConsumer as EpisodeConsumer
 from .gameplay import GameplayConsumer as GameplayConsumer
 from .gameplay import GameplayDeadLetterConsumer as GameplayDeadLetterConsumer
 
 GAMEPLAY_QUEUE_NAME = "retro-gameplay-events"
 GAMEPLAY_DLQ_NAME = "retro-gameplay-events-dlq"
+EPISODE_QUEUE_NAME = "retro-episode-events"
 
 
 def _log_retry(queue_name: object, message_id: object, error: Exception) -> None:
@@ -56,10 +58,13 @@ def _normalize_message_timestamp_ms(value: object | None) -> int | None:
 async def dispatch_queue(batch: object, environment: object) -> None:
     queue_batch = cast(QueueBatch, batch)
     queue_name = value_field(queue_batch, "queue")
+    consumer_type: type[GameplayConsumer | GameplayDeadLetterConsumer | EpisodeConsumer]
     if queue_name == GAMEPLAY_QUEUE_NAME:
         consumer_type = GameplayConsumer
     elif queue_name == GAMEPLAY_DLQ_NAME:
         consumer_type = GameplayDeadLetterConsumer
+    elif queue_name == EPISODE_QUEUE_NAME:
+        consumer_type = EpisodeConsumer
     else:
         raise RuntimeError(f"unsupported Queue: {queue_name}")
 

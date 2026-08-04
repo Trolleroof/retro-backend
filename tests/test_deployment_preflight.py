@@ -45,6 +45,17 @@ EPISODE_QUEUE_PRODUCER = """[[queues.producers]]
 binding = "EPISODE_QUEUE"
 queue = "retro-episode-events"
 """
+EPISODE_DLQ_PRODUCER = """[[queues.producers]]
+binding = "EPISODE_DLQ"
+queue = "retro-episode-events-dlq"
+"""
+EPISODE_CONSUMER = """[[queues.consumers]]
+queue = "retro-episode-events"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "retro-episode-events-dlq"
+"""
 EPISODE_ASSEMBLER_BINDING_ERROR = (
     "EPISODE_ASSEMBLER must bind Durable Object class EpisodeAssembler exactly once"
 )
@@ -705,6 +716,48 @@ def test_preflight_requires_the_episode_queue_producer(tmp_path: Path) -> None:
         assert result.returncode == 1
         assert (
             "EPISODE_QUEUE must produce to retro-episode-events" in result.stderr
+        )
+
+
+def test_preflight_requires_the_episode_dead_letter_producer(tmp_path: Path) -> None:
+    missing = _run_preflight(_production_config(tmp_path, (EPISODE_DLQ_PRODUCER, "")))
+    wrong_queue = _run_preflight(
+        _production_config(
+            tmp_path,
+            (
+                EPISODE_DLQ_PRODUCER,
+                EPISODE_DLQ_PRODUCER.replace(
+                    'queue = "retro-episode-events-dlq"', 'queue = "retro-wrong-dlq"'
+                ),
+            ),
+        )
+    )
+
+    for result in (missing, wrong_queue):
+        assert result.returncode == 1
+        assert "EPISODE_DLQ must produce to retro-episode-events-dlq" in result.stderr
+
+
+def test_preflight_requires_the_episode_consumer_to_dead_letter(tmp_path: Path) -> None:
+    missing = _run_preflight(_production_config(tmp_path, (EPISODE_CONSUMER, "")))
+    wrong_dlq = _run_preflight(
+        _production_config(
+            tmp_path,
+            (
+                EPISODE_CONSUMER,
+                EPISODE_CONSUMER.replace(
+                    'dead_letter_queue = "retro-episode-events-dlq"',
+                    'dead_letter_queue = "retro-wrong-dlq"',
+                ),
+            ),
+        )
+    )
+
+    for result in (missing, wrong_dlq):
+        assert result.returncode == 1
+        assert (
+            "episode consumer must dead-letter to retro-episode-events-dlq"
+            in result.stderr
         )
 
 

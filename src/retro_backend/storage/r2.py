@@ -227,6 +227,38 @@ class R2Store:
             require_matching_hash=self._require_matching_hash,
         )
 
+    async def put_object(
+        self,
+        key: str,
+        body: bytes,
+        *,
+        content_type: str,
+    ) -> str:
+        """Write a derived object unconditionally, overwriting any prior bytes.
+
+        Unlike ``put_derived`` this converges instead of conflicting. The episode
+        Parquet/manifest pair is keyed deterministically but its bytes are not:
+        assembly publishes ``episode.ready`` at least once, and a republished
+        episode carries a fresh ``written_at_ms`` (and may see a chunk artifact
+        that has since expired), so a conditional write would wedge the message
+        into a permanent conflict loop.
+        """
+        key = require_r2_key(key)
+        payload_sha256 = hashlib.sha256(body).hexdigest()
+        options = {
+            "sha256": payload_sha256,
+            "httpMetadata": {"contentType": content_type},
+            "customMetadata": {"payload_sha256": payload_sha256},
+        }
+        result = await self.bucket.put(
+            key,
+            self._to_js(body),
+            self._to_js(options),
+        )
+        if is_binding_null(result):
+            raise RuntimeError("R2 object write failed")
+        return key
+
     async def put_derived(self, key: str, body: bytes) -> str:
         payload_sha256 = hashlib.sha256(body).hexdigest()
         return await self._put_if_absent(

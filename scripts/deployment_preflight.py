@@ -402,6 +402,7 @@ def deployment_errors(
     for binding_name, queue_name in (
         ("GAMEPLAY_QUEUE", "retro-gameplay-events"),
         ("EPISODE_QUEUE", "retro-episode-events"),
+        ("EPISODE_DLQ", "retro-episode-events-dlq"),
     ):
         if not any(
             producer.get("binding") == binding_name
@@ -428,6 +429,12 @@ def deployment_errors(
         errors.append(
             "DLQ archival failures must dead-letter to retro-gameplay-events-archive-dlq"
         )
+    episode_consumer = _consumer_for(consumers, "retro-episode-events")
+    if (
+        episode_consumer is None
+        or episode_consumer.get("dead_letter_queue") != "retro-episode-events-dlq"
+    ):
+        errors.append("episode consumer must dead-letter to retro-episode-events-dlq")
 
     durable_objects = _mapping(config.get("durable_objects"))
     durable_object_bindings = _mapping_list(durable_objects.get("bindings"))

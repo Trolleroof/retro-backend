@@ -110,6 +110,6 @@ npx wrangler queues create retro-episode-events-dlq
 | `EPISODE_IDLE_TTL_MS` | `21600000` (6h) | Idle time after the last chunk before an episode is flushed. |
 | `EPISODE_MAX_CHUNKS` | `512` | Hard cap on chunks per episode. |
 
-4. Deploy per [production-setup.md](production-setup.md), then add the `retro-episode-events` consumer with
-   [#30](https://github.com/adavyas/retro-backend/issues/30). Until that consumer exists the queue accumulates
-   messages — treat its backlog the same way as `retro-gameplay-events-archive-dlq` and watch it.
+4. Deploy per [production-setup.md](production-setup.md). The `retro-episode-events` consumer landed with
+   [#30](https://github.com/adavyas/retro-backend/issues/30) and is declared in `wrangler.toml`; it binds on the next
+   deploy. See [parquet-v1.md](parquet-v1.md) for what it writes.

@@ -1369,6 +1369,10 @@ def test_wrangler_binds_d1_r2_and_gameplay_dlq_archiver() -> None:
                 "binding": "EPISODE_QUEUE",
                 "queue": "retro-episode-events",
             },
+            {
+                "binding": "EPISODE_DLQ",
+                "queue": "retro-episode-events-dlq",
+            },
         ],
         "consumers": [
             {
@@ -1384,6 +1388,13 @@ def test_wrangler_binds_d1_r2_and_gameplay_dlq_archiver() -> None:
                 "max_batch_timeout": 5,
                 "max_retries": 10,
                 "dead_letter_queue": "retro-gameplay-events-archive-dlq",
+            },
+            {
+                "queue": "retro-episode-events",
+                "max_batch_size": 10,
+                "max_batch_timeout": 5,
+                "max_retries": 5,
+                "dead_letter_queue": "retro-episode-events-dlq",
             },
         ],
     }
