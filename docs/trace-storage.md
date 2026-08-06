@@ -290,6 +290,44 @@ npx --yes wrangler@4.112.0 d1 execute retro-backend --remote --config wrangler.p
 Then, per key, the `r2 object get … --pipe` above. A non-zero exit is a dangling
 pointer — escalate, do not delete the row until you understand how it got there.
 
+### Backfilling chunks that never became an episode
+
+Assembly only sees chunks that arrive live on the queue, so anything uploaded before
+it was deployed sits in `raw/` with no episode. `scripts/backfill-episodes.py` walks
+`raw/`, replays assembly for each stranded game in-process, and writes the same
+Parquet, manifest and D1 row the consumer writes.
+
+It reads `raw/`, not `validated/`. `validated/` is a seven-day cache that
+[`load_episode_rows`](../src/retro_backend/episode_rows.py) treats an absent object as
+a silent gap in, so re-deriving history from it would produce short files that look
+whole. `raw/` is the copy of record.
+
+`wrangler` has no object-listing command, so the inventory comes from the REST API and
+both `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` must be exported. Always look
+before you write:
+
+```bash
+uv run --frozen python scripts/backfill-episodes.py --game-type all --dry-run
+```
+
+Then convert, optionally narrowing by type, upload date, or explicit ids:
+
+```bash
+uv run --frozen python scripts/backfill-episodes.py --game-type all
+uv run --frozen python scripts/backfill-episodes.py --game-type 2048 --until 2026-08-03
+```
+
+The D1 upsert needs `migrations/0003_episodes_index.sql`. If it is not applied yet,
+`make migrate-remote` first, or pass `--skip-index` and index later. Re-running is
+safe: a game that already has Parquet is skipped, and `--state-file` keeps an
+interrupted run from re-reading what it finished.
+
+`--force` is the separate repair mode, for episodes that were converted but recorded
+wrongly. It re-derives them and compares each artifact before writing: Parquet whose
+bytes have not changed keeps its `parquet_sha256`, and only a manifest whose contents
+actually differ is rewritten. The corrected values come from replaying the chunks, so
+whatever fixed the classification must be merged before the run means anything.
+
 ### Queue backlog
 
 `QUEUE_CHECKS` in
