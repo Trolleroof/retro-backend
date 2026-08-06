@@ -14,7 +14,7 @@ projection of this state, not a replacement for it.
 import hashlib
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -83,6 +83,14 @@ class EpisodeChunkRecord(BaseModel):
     last_event_sequence: int = Field(ge=1, strict=True)
     created_at_ms: int = Field(ge=0, strict=True)
     episode_ended: bool
+    episode_completed: bool | None = None
+    """The ``completed`` flag from this chunk's ``episode_ended`` payload.
+
+    ``None`` when the chunk carries no ``episode_ended`` event, or carries one
+    that omits the flag — the classification then falls back to the pre-existing
+    behaviour of trusting the event's arrival. Defaulted so state persisted
+    before this field existed still deserializes.
+    """
 
     @model_validator(mode="after")
     def validate_event_range(self) -> "EpisodeChunkRecord":
@@ -169,14 +177,21 @@ class EpisodeState(BaseModel):
         """Classify the episode, or ``None`` while it may still be completed."""
         if not self.chunks:
             return None
-        if self.chunks[-1].episode_ended and self._is_contiguous():
-            return "complete"
-        return None
+        last = self.chunks[-1]
+        if not (last.episode_ended and self._is_contiguous()):
+            return None
+        if last.episode_completed is False:
+            # The episode ended, but its own episode_ended event says the run
+            # was not played to a conclusion — a session the player closed out
+            # of. Same outcome as walking away, so it classifies the same way.
+            return "abandoned"
+        return "complete"
 
     def _flush_status(self) -> EpisodeStatus:
         """Classify an episode that ran out of time or space to complete."""
-        if self._terminal_status() == "complete":
-            return "complete"
+        terminal = self._terminal_status()
+        if terminal is not None:
+            return terminal
         # Seeing episode_ended without a clean chain means chunks are missing;
         # never seeing it at all means the player walked away mid-game.
         if any(chunk.episode_ended for chunk in self.chunks):
@@ -271,6 +286,23 @@ class EpisodeState(BaseModel):
         self.emitted_at_ms = now_ms
         self.emitted_status = status
         self.idle_deadline_ms = None
+
+
+def episode_end_completed(events: Iterable[Mapping[str, object]]) -> bool | None:
+    """Read the ``completed`` flag off a chunk's last ``episode_ended`` event.
+
+    ``None`` when there is no such event, or it omits the flag, or the flag is
+    not a boolean — an unreadable flag must not be mistaken for ``False``.
+    """
+    for event in reversed(list(events)):
+        if event.get("event_type") != "episode_ended":
+            continue
+        payload = event.get("payload")
+        if not isinstance(payload, Mapping):
+            return None
+        completed = payload.get("completed")
+        return completed if isinstance(completed, bool) else None
+    return None
 
 
 def episode_object_name(user_id: str, game_id: str) -> str:
@@ -392,5 +424,6 @@ __all__ = [
     "EpisodeAssemblerClient",
     "EpisodeChunkRecord",
     "EpisodeState",
+    "episode_end_completed",
     "episode_object_name",
 ]

@@ -30,7 +30,7 @@ One object per logical `(user_id, game_id)`, addressed by `sha256(f"{user_id}:{g
 
 1. `GameplayConsumer` validates a chunk and writes its `validated/...` artifact to R2, exactly as before.
 2. Only after that artifact is durable, it calls `EpisodeAssembler.record()` with the chunk's identity, its
-   `chunk_sequence`, its event range, and whether it carried an `episode_ended` event.
+   `chunk_sequence`, its event range, whether it carried an `episode_ended` event, and that event's `completed` flag.
 3. The Durable Object folds the chunk into its episode and decides whether the episode is terminal.
 4. On a terminal episode the object publishes one `episode.ready` message to `retro-episode-events`, then records the
    emission. Publishing before recording means a failed send is retried rather than silently swallowed.
@@ -44,9 +44,15 @@ Every episode emits exactly one message. `status` tells the Parquet writer what 
 
 | Status | Meaning |
 | --- | --- |
-| `complete` | Chunk sequences form an unbroken `1..N` chain, event sequences chain across them, and the last chunk carries `episode_ended`. |
+| `complete` | Chunk sequences form an unbroken `1..N` chain, event sequences chain across them, and the last chunk carries an `episode_ended` that does not say `completed: false`. |
 | `incomplete` | The idle TTL expired and some chunk carried `episode_ended`, but the chain has gaps — chunks are missing. |
-| `abandoned` | The idle TTL expired and `episode_ended` never arrived — the player quit mid-game. |
+| `abandoned` | The player did not play the episode to a conclusion: either the last chunk's `episode_ended` says `completed: false` (the client closed the session), or the idle TTL expired and `episode_ended` never arrived at all. |
+
+`complete` is the field a training job filters on, so it has to mean "a run that was actually played out". An
+`episode_ended` whose payload says `completed: false` — the overlay opened and closed again without a move, say — is a
+terminal episode but not a completed one, and classifying it `complete` would let zero-row Parquet files through that
+filter. An `episode_ended` that omits `completed`, or carries a non-boolean there, is treated as completed: the flag is
+client-supplied, and an unreadable one must not silently downgrade a real run.
 
 An episode that reaches `EPISODE_MAX_CHUNKS` without completing is flushed immediately under the same classification,
 which bounds both Durable Object storage and the emitted message size.

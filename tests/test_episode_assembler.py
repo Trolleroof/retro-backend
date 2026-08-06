@@ -18,6 +18,7 @@ from retro_backend.episode_assembler import (
     EpisodeAssemblerClient,
     EpisodeChunkRecord,
     EpisodeState,
+    episode_end_completed,
     episode_object_name,
 )
 
@@ -40,6 +41,7 @@ def _chunk(
     first: int,
     last: int,
     episode_ended: bool = False,
+    episode_completed: bool | None = None,
     chunk_id: str | None = None,
 ) -> EpisodeChunkRecord:
     return EpisodeChunkRecord(
@@ -49,6 +51,7 @@ def _chunk(
         last_event_sequence=last,
         created_at_ms=NOW_MS + sequence,
         episode_ended=episode_ended,
+        episode_completed=episode_completed,
     )
 
 
@@ -83,6 +86,107 @@ def test_single_chunk_episode_completes_on_episode_ended() -> None:
     assert episode.last_event_sequence == 5
     assert episode.user_id == USER_ID
     assert episode.game_id == GAME_ID
+
+
+def test_episode_ended_saying_not_completed_is_abandoned_not_complete() -> None:
+    state = EpisodeState()
+
+    episode = _record(
+        state,
+        _chunk(1, first=1, last=4, episode_ended=True, episode_completed=False),
+    )
+
+    assert episode is not None
+    assert episode.status == "abandoned"
+
+
+def test_episode_ended_without_a_completed_flag_still_completes() -> None:
+    state = EpisodeState()
+
+    episode = _record(
+        state,
+        _chunk(1, first=1, last=5, episode_ended=True, episode_completed=None),
+    )
+
+    assert episode is not None
+    assert episode.status == "complete"
+
+
+def test_only_the_last_chunks_completed_flag_classifies_the_episode() -> None:
+    state = EpisodeState()
+
+    # Chunk 2 lands first, so nothing is terminal until chunk 1 closes the gap.
+    assert (
+        _record(
+            state,
+            _chunk(2, first=6, last=9, episode_ended=True, episode_completed=True),
+        )
+        is None
+    )
+    episode = _record(
+        state,
+        _chunk(1, first=1, last=5, episode_ended=True, episode_completed=False),
+    )
+
+    assert episode is not None
+    assert episode.status == "complete"
+
+
+def test_not_completed_beats_the_chunk_cap_flush() -> None:
+    state = EpisodeState()
+
+    _record(state, _chunk(1, first=1, last=1), max_chunks=2)
+    episode = _record(
+        state,
+        _chunk(2, first=2, last=2, episode_ended=True, episode_completed=False),
+        max_chunks=2,
+    )
+
+    assert episode is not None
+    assert episode.status == "abandoned"
+
+
+def test_not_completed_with_a_gap_is_still_incomplete_after_the_ttl() -> None:
+    state = EpisodeState()
+    _record(state, _chunk(1, first=1, last=5))
+    _record(
+        state,
+        _chunk(3, first=8, last=9, episode_ended=True, episode_completed=False),
+    )
+
+    episode = state.flush(now_ms=NOW_MS + IDLE_TTL_MS)
+
+    assert episode is not None
+    assert episode.status == "incomplete"
+
+
+def test_state_without_the_completed_flag_deserializes_as_unknown() -> None:
+    """State persisted before ``episode_completed`` existed still loads."""
+    legacy = json.dumps(
+        {
+            **IDENTITY,
+            "chunks": [
+                {
+                    "chunk_id": "chk_000000000001",
+                    "chunk_sequence": 1,
+                    "first_event_sequence": 1,
+                    "last_event_sequence": 5,
+                    "created_at_ms": NOW_MS,
+                    "episode_ended": False,
+                }
+            ],
+            "idle_deadline_ms": NOW_MS + IDLE_TTL_MS,
+            "emitted_at_ms": None,
+            "emitted_status": None,
+        }
+    )
+
+    restored = EpisodeState.model_validate_json(legacy)
+
+    assert restored.chunks[0].episode_completed is None
+    episode = _record(restored, _chunk(2, first=6, last=7, episode_ended=True))
+    assert episode is not None
+    assert episode.status == "complete"
 
 
 def test_multi_chunk_episode_emits_once_with_ordered_chunks() -> None:
@@ -383,6 +487,101 @@ async def test_durable_object_publishes_one_message_on_completion() -> None:
     assert storage.delete_alarm_calls == 1
 
 
+# --- regression: instantly-closed connect4 session ---------------------------
+
+# The four events of a real production chunk (2026-08-05): a user opened the
+# connect4 overlay and closed it 169ms later without making a single move. No
+# control_changed event, and an episode_ended that says so. This produced a
+# `status: "complete"` manifest over a 361-byte, zero-row Parquet file.
+CLIENT_CLOSED_EVENTS: list[dict[str, Any]] = [
+    {
+        "event_sequence": 1,
+        "event_type": "episode_started",
+        "payload": {"game_type": "connect4", "game_version": "1"},
+    },
+    {
+        "event_sequence": 2,
+        "event_type": "engine_checkpoint",
+        "payload": {"reason": "episode_start", "seed": 2316524485},
+    },
+    {
+        "event_sequence": 3,
+        "event_type": "observation",
+        "payload": {"observation_id": "obs_0", "representation": "engine_state_v1"},
+    },
+    {
+        "event_sequence": 4,
+        "event_type": "episode_ended",
+        "payload": {
+            "completed": False,
+            "duration_us": 169000,
+            "final_event_sequence": 4,
+            "final_score": 0,
+            "reason": "client_closed",
+        },
+    },
+]
+
+
+def test_episode_end_completed_reads_the_real_client_closed_chunk() -> None:
+    assert episode_end_completed(CLIENT_CLOSED_EVENTS) is False
+
+
+@pytest.mark.parametrize(
+    "events",
+    [
+        pytest.param([], id="no_events"),
+        pytest.param(
+            [{"event_type": "observation", "payload": {}}],
+            id="no_episode_ended",
+        ),
+        pytest.param(
+            [{"event_type": "episode_ended", "payload": {"reason": "game_over"}}],
+            id="flag_absent",
+        ),
+        pytest.param(
+            [{"event_type": "episode_ended", "payload": {"completed": "false"}}],
+            id="flag_not_a_boolean",
+        ),
+        pytest.param(
+            [{"event_type": "episode_ended", "payload": None}],
+            id="payload_not_a_mapping",
+        ),
+    ],
+)
+def test_episode_end_completed_is_unknown_when_unreadable(
+    events: list[dict[str, Any]],
+) -> None:
+    assert episode_end_completed(events) is None
+
+
+async def test_instantly_closed_connect4_session_publishes_abandoned() -> None:
+    assembler, _storage, episode_queue = _durable_object()
+    ended = CLIENT_CLOSED_EVENTS[-1]
+
+    result = await assembler.record(
+        _request(
+            _chunk(
+                1,
+                first=CLIENT_CLOSED_EVENTS[0]["event_sequence"],
+                last=ended["event_sequence"],
+                episode_ended=True,
+                episode_completed=episode_end_completed(CLIENT_CLOSED_EVENTS),
+            )
+        ),
+        NOW_MS,
+        IDLE_TTL_MS,
+        512,
+    )
+
+    assert result == {"emitted_status": "abandoned"}
+    assert len(episode_queue.send_calls) == 1
+    message = cast(dict[str, Any], episode_queue.send_calls[0])
+    assert message["status"] == "abandoned"
+    assert message["chunk_count"] == 1
+    assert message["last_event_sequence"] == 4
+
+
 async def test_durable_object_does_not_republish_a_redelivered_chunk() -> None:
     assembler, _storage, episode_queue = _durable_object()
     terminal = _request(_chunk(1, first=1, last=5, episode_ended=True))
@@ -612,6 +811,28 @@ async def test_consumer_records_each_validated_chunk_against_its_episode(
     assert second["chunk"]["episode_ended"] is True
     assert second["chunk"]["first_event_sequence"] == 6
     assert second["chunk"]["last_event_sequence"] == 7
+
+
+async def test_consumer_forwards_the_episode_ended_completed_flag(
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+) -> None:
+    namespace = _episode_env(fake_env)
+    payload = copy.deepcopy(fixture_payload)
+    payload["events"][-1]["event_type"] = "episode_ended"
+    payload["events"][-1]["payload"] = {
+        "completed": False,
+        "duration_us": 169000,
+        "final_event_sequence": payload["events"][-1]["event_sequence"],
+        "final_score": 0,
+        "reason": "client_closed",
+    }
+
+    assert (await _process_payload(fake_env, payload)).status == "processed"
+
+    chunk = cast(dict[str, Any], namespace.stub.record_calls[0][0])["chunk"]
+    assert chunk["episode_ended"] is True
+    assert chunk["episode_completed"] is False
 
 
 async def test_consumer_skips_assembly_when_the_binding_is_absent(

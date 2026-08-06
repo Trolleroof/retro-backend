@@ -36,6 +36,7 @@ from ..episode_assembler import (
     DEFAULT_EPISODE_MAX_CHUNKS,
     EpisodeAssemblerClient,
     EpisodeChunkRecord,
+    episode_end_completed,
 )
 from ..storage.r2 import (
     DerivedObjectConflict,
@@ -559,6 +560,7 @@ class GameplayConsumer:
                     last_event_sequence=envelope.last_event_sequence,
                     created_at_ms=envelope.created_at_ms,
                     episode_ended=_episode_ended(envelope),
+                    episode_completed=episode_end_completed(envelope.events),
                 ),
                 user_id=pointer.user_id,
                 game_id=pointer.game_id,
