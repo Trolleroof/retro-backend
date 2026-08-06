@@ -182,9 +182,11 @@ class FakeQueueMessage:
         message_id: str = "msg_01",
         timestamp: object | None = None,
         operation_order: list[str] | None = None,
+        attempts: object = 1,
     ) -> None:
         self.body = body
         self.id = message_id
+        self.attempts = attempts
         self.timestamp = (
             timestamp if timestamp is not None else datetime(2026, 7, 17, tzinfo=UTC)
         )

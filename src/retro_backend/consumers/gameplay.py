@@ -63,6 +63,34 @@ _POINTER_DIGEST_MAX_DEPTH = 2_048
 _POINTER_DIGEST_MAX_NODES = 16_384
 _MISSING = object()
 
+# Failure notes share the ``dlq/`` prefix so they inherit its 7-day lifecycle
+# rule, and they are keyed by the message body digest rather than by date or
+# message id because that digest is the one identifier that survives the hop
+# from ``retro-gameplay-events`` onto its dead-letter queue.
+GAMEPLAY_ERROR_NOTE_PREFIX = "dlq/error="
+ERROR_MESSAGE_MAX_LENGTH = 256
+
+
+def gameplay_error_note_key(message_body_sha256: str) -> str:
+    return require_r2_key(f"{GAMEPLAY_ERROR_NOTE_PREFIX}{message_body_sha256}.json")
+
+
+def describe_gameplay_error(error: BaseException) -> dict[str, str]:
+    """Summarize an exception for logs and the DLQ archive.
+
+    Only the type name and the truncated ``str()`` travel: every exception this
+    consumer raises carries a fixed, hand-written message, so no chunk payload
+    or bearer token can reach a diagnostic surface through here.
+    """
+    try:
+        message = str(error)
+    except Exception:
+        message = ""
+    return {
+        "error_type": type(error).__name__,
+        "error_message": message[:ERROR_MESSAGE_MAX_LENGTH],
+    }
+
 
 class _ObjectKeysProxy(Protocol):
     def object_keys(self) -> Iterable[object]: ...
@@ -538,6 +566,39 @@ class GameplayConsumer:
             artifact_key=artifact_key,
         )
 
+    async def record_processing_failure(
+        self,
+        pointer_body: object,
+        error: BaseException,
+        *,
+        attempts: int | None = None,
+    ) -> str:
+        """Persist why this message failed, keyed so the DLQ archive can find it.
+
+        ``GameplayDeadLetterConsumer`` only ever sees the pointer, never the
+        exception that exhausted the retries, which is why every archived record
+        used to read ``gameplay processing retries exhausted`` and nothing more.
+        The note is written unconditionally so a later attempt with a different
+        error overwrites the earlier one.
+        """
+        _pointer_data, pointer_body_digest = _normalize_pointer_body(
+            pointer_body,
+            self._buffer_to_bytes,
+        )
+        note: dict[str, object] = {
+            "artifact_version": 1,
+            "message_body_sha256": pointer_body_digest,
+            "recorded_at_ms": self._clock_ms(),
+        }
+        note.update(describe_gameplay_error(error))
+        if attempts is not None:
+            note["attempts"] = attempts
+        return await self.store.put_object(
+            gameplay_error_note_key(pointer_body_digest),
+            _canonical_json(note),
+            content_type="application/json",
+        )
+
     async def _assemble_episode(
         self,
         pointer: GameplayPointer,
@@ -748,6 +809,7 @@ class GameplayDeadLetterConsumer:
             "reason": "gameplay processing retries exhausted",
             "source_queue": "retro-gameplay-events",
         }
+        artifact.update(await self._recover_failure_note(pointer_body_digest))
         artifact.update(_safe_pointer_fields(pointer_data))
         if stable_message_id is not None:
             artifact["message_id_sha256"] = hashlib.sha256(
@@ -759,10 +821,49 @@ class GameplayDeadLetterConsumer:
             raise TransientGameplayError("DLQ archive unavailable") from error
         return artifact_key
 
+    async def _recover_failure_note(
+        self,
+        pointer_body_digest: str,
+    ) -> dict[str, object]:
+        """Fold the gameplay consumer's last recorded error into the archive.
+
+        ``error_type`` is always present so an archived record never leaves a
+        reader guessing whether the error was unrecorded or simply unknown; the
+        note is missing whenever the final attempt died too hard to write one
+        (an exhausted Python Worker CPU budget, for instance).
+        """
+        recovered: dict[str, object] = {"error_type": "unrecorded"}
+        try:
+            stored = await self.store.get_raw(
+                gameplay_error_note_key(pointer_body_digest)
+            )
+        except Exception:
+            return recovered
+        if stored is None:
+            return recovered
+        try:
+            note = json.loads(stored.body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError):
+            return recovered
+        if not isinstance(note, Mapping):
+            return recovered
+        for field in ("error_type", "error_message"):
+            value = note.get(field)
+            if isinstance(value, str) and value:
+                recovered[field] = value[:ERROR_MESSAGE_MAX_LENGTH]
+        attempts = note.get("attempts")
+        if not isinstance(attempts, bool) and isinstance(attempts, int) and attempts >= 1:
+            recovered["failed_attempts"] = attempts
+        return recovered
+
 
 __all__ = [
+    "ERROR_MESSAGE_MAX_LENGTH",
+    "GAMEPLAY_ERROR_NOTE_PREFIX",
     "GameplayConsumer",
     "GameplayDeadLetterConsumer",
     "PermanentGameplayError",
     "TransientGameplayError",
+    "describe_gameplay_error",
+    "gameplay_error_note_key",
 ]

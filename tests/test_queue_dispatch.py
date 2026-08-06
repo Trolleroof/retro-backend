@@ -2,6 +2,7 @@ import hashlib
 import json
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, override
 
@@ -646,13 +647,14 @@ async def test_dlq_message_is_archived_to_r2_before_acknowledgment(
 
     assert message.acked is True
     assert message.retried is False
-    assert fake_env.operation_order == ["r2.put", "ack:exhausted-message"]
+    assert fake_env.operation_order == ["r2.get", "r2.put", "ack:exhausted-message"]
     [put_call] = fake_env.RAW_BUCKET.put_calls
     assert put_call.key.startswith("dlq/date=2026-07-17/message=")
     artifact = json.loads(put_call.body)
     assert artifact == {
         "artifact_version": 1,
         "chunk_id": "chk_01",
+        "error_type": "unrecorded",
         "game_id": "game_01",
         "message_body_sha256": hashlib.sha256(_canonical(pointer)).hexdigest(),
         "message_id_sha256": hashlib.sha256(b"exhausted-message").hexdigest(),
@@ -708,3 +710,229 @@ async def test_dlq_archive_replay_is_idempotent(
 
     assert all(message.acked and not message.retried for message in messages)
     assert len(fake_env.RAW_BUCKET.put_calls) == 1
+
+
+DLQ_CHUNK_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures/dlq-gameplay-chunk-2026-08-05.json"
+)
+
+
+def _dlq_fixture_pointer() -> tuple[bytes, dict[str, object]]:
+    """The exact bytes of a chunk production dead-lettered on 2026-08-05.
+
+    ``raw/user=usr_47bf8fbb…/game=game_01482d1e…/chunk=chk_01482d1e…_2.json``,
+    still in R2 and still perfectly valid: replaying it through
+    ``GameplayConsumer`` validates and writes cleanly. Nothing about the payload
+    caused the loss, which is why the regression below is about how a failed
+    message is settled rather than about how a chunk is parsed.
+    """
+    raw_body = DLQ_CHUNK_FIXTURE.read_bytes()
+    return raw_body, _pointer(json.loads(raw_body), raw_body)
+
+
+async def test_dlq_fixture_chunk_still_validates_cleanly(
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    raw_body, pointer = _dlq_fixture_pointer()
+    fake_env.RAW_BUCKET.seed_raw(
+        pointer["r2_key"], raw_body, pointer["payload_sha256"]
+    )
+    message = queue_message_factory(pointer, message_id="recovered")
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", [message]),
+        fake_env,
+    )
+
+    assert (message.acked, message.retried) == (True, False)
+    assert any(
+        call.key.startswith("validated/") for call in fake_env.RAW_BUCKET.put_calls
+    )
+
+
+async def test_diagnostic_failure_never_strands_the_rest_of_the_batch(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_env: Any,
+    fixture_payload: dict[str, Any],
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    """Reproduces the production data loss.
+
+    A Python Worker that has spent its CPU budget re-raises on the *next*
+    operation, whatever that is. When the failure diagnostics ran before the
+    message was settled, that re-raise escaped ``dispatch_queue`` with the rest
+    of the batch neither acked nor retried, Cloudflare redelivered the whole
+    batch, and the same wall was hit on all five attempts.
+    """
+
+    def explode(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("cpu budget exhausted while logging")
+
+    monkeypatch.setattr(dispatch_module, "_log_retry", explode)
+    operation_order: list[str] = []
+    failed = queue_message_factory(
+        {"not": "a pointer body proxy"},
+        message_id="cpu-exhausted",
+        operation_order=operation_order,
+    )
+    monkeypatch.setattr(
+        dispatch_module.GameplayConsumer,
+        "process",
+        _failing_process(failed.body),
+    )
+    later = _seed_later_message(
+        fake_env,
+        fixture_payload,
+        queue_message_factory,
+        operation_order,
+        "after-cpu",
+    )
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", [failed, later]),
+        fake_env,
+    )
+
+    assert (failed.acked, failed.retried) == (False, True)
+    assert (later.acked, later.retried) == (True, False)
+    assert operation_order == ["retry:cpu-exhausted", "ack:later-after-cpu"]
+
+
+def _failing_process(failing_body: object) -> Any:
+    original_process = dispatch_module.GameplayConsumer.process
+
+    async def process(
+        self: Any,
+        pointer_body: object,
+        *,
+        message_id: object | None = None,
+        message_timestamp_ms: object | None = None,
+    ) -> Any:
+        if pointer_body is failing_body:
+            raise RuntimeError("Python Worker exceeded CPU time limit")
+        return await original_process(
+            self,
+            pointer_body,
+            message_id=message_id,
+            message_timestamp_ms=message_timestamp_ms,
+        )
+
+    return process
+
+
+async def test_batch_abort_still_settles_every_remaining_message(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    async def abort(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("Python Worker exceeded CPU time limit")
+
+    monkeypatch.setattr(dispatch_module.GameplayConsumer, "process", abort)
+    monkeypatch.setattr(
+        dispatch_module,
+        "_report_failure",
+        _raising_report_failure(),
+    )
+    messages = [
+        queue_message_factory({"invalid": index}, message_id=f"aborted-{index}")
+        for index in range(3)
+    ]
+
+    with pytest.raises(RuntimeError):
+        await dispatch_queue(
+            queue_batch_factory("retro-gameplay-events", messages),
+            fake_env,
+        )
+
+    assert [(message.acked, message.retried) for message in messages] == [
+        (False, True),
+        (False, True),
+        (False, True),
+    ]
+
+
+def _raising_report_failure() -> Any:
+    async def report(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("cpu budget exhausted while reporting")
+
+    return report
+
+
+async def test_final_attempt_records_the_error_into_the_dlq_archive(
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    _raw_body, pointer = _dlq_fixture_pointer()
+    body_sha256 = hashlib.sha256(_canonical(pointer)).hexdigest()
+    # The raw object is deliberately absent, so processing raises the same
+    # TransientGameplayError the consumer raises when R2 is unreachable.
+    failing = queue_message_factory(
+        pointer,
+        message_id="final-attempt",
+        attempts=dispatch_module.GAMEPLAY_MAX_DELIVERY_ATTEMPTS,
+    )
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", [failing]),
+        fake_env,
+    )
+
+    assert (failing.acked, failing.retried) == (False, True)
+    note_call = next(
+        call
+        for call in fake_env.RAW_BUCKET.put_calls
+        if call.key == f"dlq/error={body_sha256}.json"
+    )
+    note = json.loads(note_call.body)
+    assert note["error_type"] == "TransientGameplayError"
+    assert note["error_message"] == "raw object unavailable"
+    assert note["attempts"] == dispatch_module.GAMEPLAY_MAX_DELIVERY_ATTEMPTS
+
+    exhausted = queue_message_factory(
+        pointer,
+        message_id="final-attempt",
+        timestamp=datetime(2026, 8, 5, 15, 50, tzinfo=UTC),
+    )
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events-dlq", [exhausted]),
+        fake_env,
+    )
+
+    archive_call = next(
+        call
+        for call in fake_env.RAW_BUCKET.put_calls
+        if call.key.startswith("dlq/date=")
+    )
+    archive = json.loads(archive_call.body)
+    assert archive["error_type"] == "TransientGameplayError"
+    assert archive["error_message"] == "raw object unavailable"
+    assert archive["failed_attempts"] == dispatch_module.GAMEPLAY_MAX_DELIVERY_ATTEMPTS
+    assert archive["reason"] == "gameplay processing retries exhausted"
+    assert archive["chunk_id"] == pointer["chunk_id"]
+
+
+async def test_early_attempt_does_not_write_a_failure_note(
+    fake_env: Any,
+    queue_batch_factory: Any,
+    queue_message_factory: Any,
+) -> None:
+    _raw_body, pointer = _dlq_fixture_pointer()
+    message = queue_message_factory(pointer, message_id="first-attempt", attempts=1)
+
+    await dispatch_queue(
+        queue_batch_factory("retro-gameplay-events", [message]),
+        fake_env,
+    )
+
+    assert (message.acked, message.retried) == (False, True)
+    assert not [
+        call
+        for call in fake_env.RAW_BUCKET.put_calls
+        if call.key.startswith("dlq/error=")
+    ]
