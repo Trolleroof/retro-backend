@@ -19,7 +19,7 @@ lint:
 	$(UV_RUN) ruff check src tests scripts
 
 typecheck:
-	$(UV_RUN) basedpyright src tests scripts/node_preflight.py scripts/deployment_preflight.py scripts/e2e_local.py scripts/download-r2-dataset.py
+	$(UV_RUN) basedpyright src tests scripts/node_preflight.py scripts/deployment_preflight.py scripts/e2e_local.py scripts/download-r2-dataset.py scripts/backfill-episodes.py
 
 verify: test lint typecheck
 	git diff --check
