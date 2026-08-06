@@ -33,6 +33,7 @@ concerns.
 | `rejected/` | `rejected/date={YYYY-MM-DD}/user={user_id}/game={game_id}/chunk={chunk_id}.json` | `GameplayConsumer`, on a permanent rejection of an otherwise well-formed pointer. |
 | `rejected/` (quarantine) | `rejected/date={YYYY-MM-DD}/quarantine={sha256}.json` | `GameplayConsumer`, when the queue message is not a valid pointer at all — there is no `user_id`/`game_id` to partition by, so the digest of the message stands in. |
 | `dlq/` | `dlq/date={YYYY-MM-DD}/message={sha256}.json` | `GameplayDeadLetterConsumer`, archiving a pointer that exhausted its five processing retries. |
+| `dlq/` (failure note) | `dlq/error={message_body_sha256}.json` | `GameplayConsumer`, on the last delivery attempt before a message is dead-lettered. Carries the exception type and truncated message so the archive record above is diagnosable on its own. Overwritten rather than conditionally written, because a later attempt may fail differently. |
 | `episodes/parquet/v1/` | `episodes/parquet/v1/{game_type}/{YYYY}/{MM}/{DD}/{game_id}.parquet` | The Parquet writer, from one `episode.ready` message. `{YYYY}/{MM}/{DD}` are UTC and zero-padded, derived from `completed_at_ms`. |
 | `episodes/parquet/v1/` (sidecar) | `…/{game_id}.manifest.json` | The same writer, alongside each Parquet object. |
 
@@ -407,8 +408,13 @@ npx --yes wrangler@4.112.0 queues info retro-gameplay-events-archive-dlq
 
 Any non-zero backlog is a failure by definition, and the scheduled check already
 reports it. The forensic trail is in R2 under `dlq/date=…/message={sha256}.json` —
-allowlisted, token-free archive records with `message_body_sha256` and the reason.
-Those expire after 7 days, so triage inside that window or the evidence is gone.
+allowlisted, token-free archive records with `message_body_sha256`, the reason, and
+`error_type`/`error_message`/`failed_attempts` recovered from the failure note the
+last processing attempt wrote to `dlq/error={message_body_sha256}.json`. An
+`error_type` of `unrecorded` means the final attempt died too hard to write that
+note — an exhausted Python Worker CPU budget, for instance — and the Workers Logs
+`queue_message_retry` event is then the only record. Both expire after 7 days, so
+triage inside that window or the evidence is gone.
 
 A `retro-episode-events` backlog is a different thing. `retro-episode-events-dlq`
 exists in the account but is not referenced by `wrangler.toml` at all — the config
