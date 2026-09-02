@@ -6,15 +6,16 @@ and safety constraints -- but leaves the per-tool argument shapes and the
 role-to-tool matrix as prose. This module is the enumeration those checks run
 against.
 
-Known gap: ``send_message``'s recipient-visibility promise ("visible to the
-recipient on its next observation") cannot be fully honored by the frozen
-``restaurant-arena-observation/v1`` schema today -- no observation carries an
-inbox field, and only the expediter's observation lists other workers at all
-(without ``lastAction``). This module records the message on the recipient's
-``WorkerState.last_action`` in the full state (visible in checkpoints and to
-the expediter), which is the closest available representation; a dedicated
-inbox field is a contract change for a future version, not something to
-smuggle into ``restaurant-arena/v1`` here.
+``send_message``'s recipient-visibility promise ("visible to the recipient on
+its next observation") is honored by ``restaurant-arena-observation/v2``,
+which adds the ``messages`` inbox v1 had no field for. The simulator queues a
+message on the tick it is sent and projects it into the recipient's
+observation on the following tick, and on that tick alone. v1 could not
+express this at all -- it carried no inbox, and only the expediter's
+observation listed other workers -- so the message used to be written onto the
+recipient's ``WorkerState.last_action``. That workaround is gone; the state
+model stays ``restaurant-arena/v1``, since the inbox lives in the simulator
+alongside prep timers rather than in the published state.
 """
 
 from typing import Literal

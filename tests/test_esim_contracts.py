@@ -33,8 +33,11 @@ FIXTURE_PATH = ROOT / "contracts/fixtures/restaurant-arena-v1.json"
 STATE_SCHEMA = json.loads(
     (ROOT / "contracts/restaurant-arena-state-v1.schema.json").read_text()
 )
-OBSERVATION_SCHEMA = json.loads(
+OBSERVATION_SCHEMA_V1 = json.loads(
     (ROOT / "contracts/restaurant-arena-observation-v1.schema.json").read_text()
+)
+OBSERVATION_SCHEMA = json.loads(
+    (ROOT / "contracts/restaurant-arena-observation-v2.schema.json").read_text()
 )
 ACTION_SCHEMA = json.loads(
     (ROOT / "contracts/restaurant-arena-action-v1.schema.json").read_text()
@@ -46,8 +49,10 @@ FIXTURE = json.loads(FIXTURE_PATH.read_text())
 
 OBSERVATION_ADAPTER: TypeAdapter[Any] = TypeAdapter(Observation)
 
-# docs/restaurant-arena-tools.md, verbatim.
-OBSERVATION_EXAMPLES = {
+# docs/restaurant-arena-tools.md, verbatim. Still spelled v1: the doc
+# predates the inbox, and pinning it here is what proves v2 did not
+# silently change any field v1 already had.
+OBSERVATION_EXAMPLES_V1 = {
     "chef": {
         "version": "restaurant-arena-observation/v1",
         "role": "chef",
@@ -101,6 +106,31 @@ OBSERVATION_EXAMPLES = {
     },
 }
 
+# The same four observations under v2: one version string, one empty inbox,
+# every other field byte-identical. Deriving them rather than retyping them is
+# the point -- if v2 ever alters a v1 field, these stop matching.
+OBSERVATION_EXAMPLES = {
+    role: {
+        **example,
+        "version": "restaurant-arena-observation/v2",
+        "messages": [],
+    }
+    for role, example in OBSERVATION_EXAMPLES_V1.items()
+}
+
+# A delivered message, as the chef sees it on the tick after it was sent.
+OBSERVATION_WITH_MESSAGE = {
+    **OBSERVATION_EXAMPLES["chef"],
+    "messages": [
+        {
+            "from": "worker-expediter",
+            "text": "86 the fish",
+            "priority": "high",
+            "sentAtTick": 5,
+        }
+    ],
+}
+
 # docs/restaurant-arena-tools.md, verbatim.
 ACTION_EXAMPLE = {
     "version": "restaurant-arena-action/v1",
@@ -148,8 +178,14 @@ def numbers_equal(left: object, right: object) -> bool:
 
 @pytest.mark.parametrize(
     "schema",
-    [STATE_SCHEMA, OBSERVATION_SCHEMA, ACTION_SCHEMA, TRACE_SCHEMA],
-    ids=["state", "observation", "action", "trace"],
+    [
+        STATE_SCHEMA,
+        OBSERVATION_SCHEMA_V1,
+        OBSERVATION_SCHEMA,
+        ACTION_SCHEMA,
+        TRACE_SCHEMA,
+    ],
+    ids=["state", "observation-v1", "observation-v2", "action", "trace"],
 )
 def test_published_schemas_are_valid_draft_2020_12(schema: dict[str, Any]) -> None:
     Draft202012Validator.check_schema(schema)
@@ -222,6 +258,65 @@ def test_observations_round_trip_in_camel_case(role: str) -> None:
     dumped = model.model_dump(by_alias=True, mode="json", exclude_none=True)
 
     assert numbers_equal(dumped, OBSERVATION_EXAMPLES[role])
+
+
+@pytest.mark.parametrize("role", sorted(OBSERVATION_EXAMPLES_V1))
+def test_v1_examples_still_validate_against_the_published_v1_schema(
+    role: str,
+) -> None:
+    """v2 supersedes v1; it does not retract it.
+
+    ``contracts/restaurant-arena-observation-v1.schema.json`` stays published
+    and unchanged, so a consumer pinned to v1 -- the Tui client among them --
+    keeps validating exactly what it validated before.
+    """
+    example = OBSERVATION_EXAMPLES_V1[role]
+
+    errors = list(Draft202012Validator(OBSERVATION_SCHEMA_V1).iter_errors(example))
+
+    assert errors == []
+
+
+def test_a_v1_observation_is_a_v2_observation_but_for_its_version() -> None:
+    """The only field v2 adds is the inbox, and it is optional."""
+    v1_without_version = {
+        key: value
+        for key, value in OBSERVATION_EXAMPLES_V1["chef"].items()
+        if key != "version"
+    }
+    candidate = {
+        **v1_without_version,
+        "version": "restaurant-arena-observation/v2",
+    }
+
+    errors = list(Draft202012Validator(OBSERVATION_SCHEMA).iter_errors(candidate))
+
+    assert errors == []
+
+
+def test_a_delivered_message_validates_and_round_trips() -> None:
+    errors = list(
+        Draft202012Validator(OBSERVATION_SCHEMA).iter_errors(OBSERVATION_WITH_MESSAGE)
+    )
+    assert errors == []
+
+    model = ChefObservation.model_validate(OBSERVATION_WITH_MESSAGE)
+
+    assert model.messages[0].from_worker_id == "worker-expediter"
+    assert model.messages[0].sent_at_tick == 5
+    dumped = model.model_dump(by_alias=True, mode="json", exclude_none=True)
+    assert dumped == OBSERVATION_WITH_MESSAGE
+
+
+def test_a_message_is_rejected_when_it_names_no_sender() -> None:
+    broken = {
+        **OBSERVATION_EXAMPLES["chef"],
+        "messages": [{"text": "hi", "priority": "high", "sentAtTick": 5}],
+    }
+
+    errors = list(Draft202012Validator(OBSERVATION_SCHEMA).iter_errors(broken))
+
+    assert errors != []
 
 
 def test_a_role_cannot_carry_another_roles_projection() -> None:

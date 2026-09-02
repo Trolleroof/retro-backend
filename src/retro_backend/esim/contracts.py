@@ -18,7 +18,12 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 STATE_VERSION = "restaurant-arena/v1"
-OBSERVATION_VERSION = "restaurant-arena-observation/v1"
+# v2 adds the message inbox v1 had no field for; see ObservationBase.messages.
+OBSERVATION_VERSION = "restaurant-arena-observation/v2"
+# v1 stays published and readable: contracts/restaurant-arena-observation-v1
+# .schema.json is unchanged, and a v1 observation is a v2 observation with an
+# empty inbox and an older version string.
+OBSERVATION_VERSION_V1 = "restaurant-arena-observation/v1"
 ACTION_VERSION = "restaurant-arena-action/v1"
 
 # Entity identifiers are authored in the frozen case, not generated per run, so
@@ -233,10 +238,31 @@ class ObservedIncident(ArenaModel):
     active: bool
 
 
+class DeliveredMessage(ArenaModel):
+    """One ``send_message`` delivery, as its recipient sees it.
+
+    Carries ``sent_at_tick`` rather than a timestamp: the simulator has no
+    wall clock, and the tick is what a recipient needs to tell a fresh message
+    from a stale one.
+    """
+
+    # ``from`` is the contract's spelling and a Python keyword, so the field is
+    # named ``from_worker_id`` and aliased. Construct with ``model_validate``
+    # and the wire keys: the alias makes ``DeliveredMessage(from_worker_id=...)``
+    # unresolvable for type checkers even though pydantic accepts it.
+    from_worker_id: ArenaId = Field(alias="from")
+    text: str = Field(min_length=1, max_length=256)
+    priority: Literal["normal", "high"] = "normal"
+    sent_at_tick: int = Field(ge=0, strict=True)
+
+
 class ObservationBase(ArenaModel):
-    version: Literal["restaurant-arena-observation/v1"] = OBSERVATION_VERSION
+    version: Literal["restaurant-arena-observation/v2"] = OBSERVATION_VERSION
     tick: int = Field(ge=0, strict=True)
     load: Load
+    # Every role can be messaged, so the inbox lives on the base rather than
+    # on one variant. Empty for all but the tick after a message was sent.
+    messages: tuple[DeliveredMessage, ...] = ()
 
 
 class ChefObservation(ObservationBase):
@@ -340,3 +366,7 @@ class RestaurantCheckpoint(ArenaModel):
     # Records for every consumed idempotency key, so a replayed action after a
     # restore neither applies twice nor loses its conflict detection.
     idempotency_cache: Mapping[str, IdempotencyRecord]
+    # Recipient worker id -> messages still in delivery. Undelivered mail is
+    # episode state like a prep timer: dropping it on restore would change
+    # what the recipient sees on the next tick.
+    inbox: Mapping[str, tuple[DeliveredMessage, ...]] = {}

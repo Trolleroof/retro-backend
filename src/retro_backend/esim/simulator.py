@@ -30,6 +30,7 @@ from retro_backend.esim.contracts import (
     ActionError,
     ActionErrorCode,
     ArenaId,
+    DeliveredMessage,
     Emergency,
     EquipmentItem,
     IdempotencyRecord,
@@ -151,6 +152,10 @@ class RestaurantSim:
         self._rng = Rng(initial_state.seed)
         self._prep_remaining: dict[str, int] = {}
         self._idempotency_cache: dict[str, IdempotencyRecord] = {}
+        # Recipient worker id -> messages awaiting or currently in delivery.
+        # Lives here rather than in RestaurantState because restaurant-arena/v1
+        # state has no field for it; see the class docstring.
+        self._inbox: dict[str, tuple[DeliveredMessage, ...]] = {}
 
     # -- lifecycle -----------------------------------------------------
 
@@ -168,6 +173,7 @@ class RestaurantSim:
         self._rng = Rng(seed)
         self._prep_remaining = {}
         self._idempotency_cache = {}
+        self._inbox = {}
         return self._state
 
     def checkpoint(self) -> RestaurantCheckpoint:
@@ -183,6 +189,7 @@ class RestaurantSim:
             prep_remaining=dict(self._prep_remaining),
             rng_state=self._rng.export_state(),
             idempotency_cache=dict(self._idempotency_cache),
+            inbox=dict(self._inbox),
         )
 
     def restore(self, checkpoint: RestaurantCheckpoint) -> RestaurantState:
@@ -197,10 +204,30 @@ class RestaurantSim:
         self._prep_remaining = dict(checkpoint.prep_remaining)
         self._rng = Rng.from_state(checkpoint.rng_state)
         self._idempotency_cache = dict(checkpoint.idempotency_cache)
+        self._inbox = dict(checkpoint.inbox)
         return self._state
 
     def observe(self, role: Role) -> Observation:
-        return project_observation(self._state, role)
+        return project_observation(self._state, role, self._deliverable(role))
+
+    def _deliverable(self, role: Role) -> tuple[DeliveredMessage, ...]:
+        """The messages ``role`` sees this tick.
+
+        A message is delivered on the observation for the tick *after* it was
+        sent, and on that tick alone -- "visible to the recipient on its next
+        observation" (#57). Sending and seeing therefore cannot happen in the
+        same tick, which is what stops a message from racing the action that
+        prompted it.
+        """
+        worker = next((w for w in self._state.workers if w.role == role), None)
+        if worker is None:
+            return ()
+        tick = self._state.episode.tick
+        return tuple(
+            message
+            for message in self._inbox.get(worker.id, ())
+            if message.sent_at_tick == tick - 1
+        )
 
     # -- actions ---------------------------------------------------------
 
@@ -341,6 +368,7 @@ class RestaurantSim:
         self._apply_scheduled_incidents(next_tick)
         self._advance_order_progress()
         self._decay_reputation()
+        self._expire_messages(next_tick)
 
         clock = self._state.clock.model_copy(
             update={"minute": self._state.clock.minute + self._state.clock.speed}
@@ -398,6 +426,26 @@ class RestaurantSim:
             order = self._find_order(order_id)
             if order is not None and order.status == "preparing":
                 self._replace_order(order.model_copy(update={"status": "ready"}))
+
+    def _expire_messages(self, next_tick: int) -> None:
+        """Drop messages that have had their one tick of visibility.
+
+        A message sent at tick N is delivered at N+1, so once the clock reads
+        N+2 it can never be seen again and is removed rather than accumulating
+        for the rest of the episode.
+        """
+        pruned = {
+            worker_id: kept
+            for worker_id, messages in self._inbox.items()
+            if (
+                kept := tuple(
+                    message
+                    for message in messages
+                    if message.sent_at_tick >= next_tick - 1
+                )
+            )
+        }
+        self._inbox = pruned
 
     def _decay_reputation(self) -> None:
         if self._state.emergency is not None and self._state.emergency.active:
@@ -589,12 +637,22 @@ class RestaurantSim:
         target = self._find_worker(to_worker_id)
         if target is None:
             return _reject("unknown_entity", f"unknown worker {to_worker_id}")
-        self._replace_worker(
-            target.model_copy(
-                update={
-                    "last_action": f"message from {actor.id} ({priority}): {text}"
+        tick = self._state.episode.tick
+        self._inbox[target.id] = self._inbox.get(target.id, ()) + (
+            DeliveredMessage.model_validate(
+                {
+                    "from": actor.id,
+                    "text": text,
+                    "priority": priority,
+                    "sentAtTick": tick,
                 }
-            )
+            ),
+        )
+        # lastAction records what a worker *did*. Writing the message onto the
+        # recipient would overwrite their own record with someone else's words;
+        # the sender is the one who acted.
+        self._replace_worker(
+            actor.model_copy(update={"last_action": f"messaged {target.id}"})
         )
         return self._state
 

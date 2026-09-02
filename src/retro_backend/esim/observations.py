@@ -6,11 +6,13 @@ Field shapes are pinned field-for-field against the four JSON examples in
 that doc, verified in ``tests/test_esim_observations.py``.
 """
 
+from collections.abc import Sequence
 from typing import Literal
 
 from retro_backend.esim.contracts import (
     AvailableTable,
     ChefObservation,
+    DeliveredMessage,
     ExpediterObservation,
     GuestConstraint,
     HandoffOrder,
@@ -57,7 +59,9 @@ def _table_wait_minutes(state: RestaurantState, table: Table) -> int:
     return state.clock.minute
 
 
-def observe_chef(state: RestaurantState) -> ChefObservation:
+def observe_chef(
+    state: RestaurantState, messages: Sequence[DeliveredMessage] = ()
+) -> ChefObservation:
     orders = tuple(
         ObservedOrder(id=o.id, items=o.items, allergy=o.allergy, priority=o.priority)
         for o in state.orders
@@ -69,13 +73,16 @@ def observe_chef(state: RestaurantState) -> ChefObservation:
     return ChefObservation(
         tick=state.episode.tick,
         load=_worker_load(state, "chef"),
+        messages=tuple(messages),
         orders=orders,
         inventory=state.inventory,
         equipment=equipment,
     )
 
 
-def observe_server(state: RestaurantState) -> ServerObservation:
+def observe_server(
+    state: RestaurantState, messages: Sequence[DeliveredMessage] = ()
+) -> ServerObservation:
     tables = tuple(
         ObservedTable(
             id=t.id,
@@ -94,6 +101,7 @@ def observe_server(state: RestaurantState) -> ServerObservation:
     return ServerObservation(
         tick=state.episode.tick,
         load=_worker_load(state, "server"),
+        messages=tuple(messages),
         tables=tables,
         guest_constraints=constraints,
     )
@@ -109,7 +117,9 @@ def _order_status_for_table(state: RestaurantState, table: Table) -> OrderStatus
     return order.status
 
 
-def observe_host(state: RestaurantState) -> HostObservation:
+def observe_host(
+    state: RestaurantState, messages: Sequence[DeliveredMessage] = ()
+) -> HostObservation:
     # The MVP has no separate waiting-party queue yet: every table not yet
     # seated is empty capacity, not a queued party. wait_estimate_minutes is
     # 0 with no queue and rises with occupied-table pressure otherwise.
@@ -119,6 +129,7 @@ def observe_host(state: RestaurantState) -> HostObservation:
     return HostObservation(
         tick=state.episode.tick,
         load=_worker_load(state, "host"),
+        messages=tuple(messages),
         queue=(),
         tables=tuple(
             _available_table(t) for t in state.tables if t.status == "empty"
@@ -142,7 +153,9 @@ _HANDOFF_BY_ORDER_STATUS: dict[OrderStatus, _Handoff] = {
 }
 
 
-def observe_expediter(state: RestaurantState) -> ExpediterObservation:
+def observe_expediter(
+    state: RestaurantState, messages: Sequence[DeliveredMessage] = ()
+) -> ExpediterObservation:
     orders = tuple(
         HandoffOrder(
             id=o.id,
@@ -160,6 +173,7 @@ def observe_expediter(state: RestaurantState) -> ExpediterObservation:
     return ExpediterObservation(
         tick=state.episode.tick,
         load=_worker_load(state, "expediter"),
+        messages=tuple(messages),
         orders=orders,
         workers=workers,
         incidents=incidents,
@@ -188,6 +202,17 @@ _OBSERVERS = {
 }
 
 
-def observe(state: RestaurantState, role: Role) -> Observation:
-    """Project ``state`` into the observation ``role`` is allowed to see."""
-    return _OBSERVERS[role](state)
+def observe(
+    state: RestaurantState,
+    role: Role,
+    messages: Sequence[DeliveredMessage] = (),
+) -> Observation:
+    """Project ``state`` into the observation ``role`` is allowed to see.
+
+    ``messages`` is the role's inbox for this tick. It is passed in rather
+    than read from ``state`` because ``restaurant-arena/v1`` state has nowhere
+    to put it -- the simulator owns the inbox, the same way it owns prep
+    timers. Passing it keeps this module a pure projection: same arguments,
+    same observation, no mutation and no draining as a side effect of looking.
+    """
+    return _OBSERVERS[role](state, messages)

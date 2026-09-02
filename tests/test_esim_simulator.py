@@ -298,6 +298,117 @@ class TestDuplicateRequest:
         assert resumed.checkpoint() == before
 
 
+class TestMessageDelivery:
+    """``send_message`` reaches the recipient on its *next* observation (#57).
+
+    v1 had nowhere to put a message, so the simulator wrote it onto the
+    recipient's ``lastAction``. ``restaurant-arena-observation/v2`` adds the
+    inbox, and these pin the timing the contract promises.
+    """
+
+    @staticmethod
+    def _send(to: str, text: str, tick: int, request_id: str = "msg"):
+        return _envelope(
+            actor_id="worker-expediter",
+            role="expediter",
+            tool="send_message",
+            arguments={"toWorkerId": to, "text": text, "priority": "high"},
+            tick=tick,
+            request_id=request_id,
+        )
+
+    def test_a_message_is_not_visible_on_the_tick_it_was_sent(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        sent = sim.act(self._send("worker-chef", "86 the fish", tick=0))
+        assert isinstance(sent, RestaurantState)
+
+        # Same tick: sending and seeing must not race.
+        assert sim.observe("chef").messages == ()
+
+    def test_a_message_arrives_on_the_next_observation(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(self._send("worker-chef", "86 the fish", tick=0))
+        sim.advance_time()
+
+        messages = sim.observe("chef").messages
+
+        assert len(messages) == 1
+        assert messages[0].from_worker_id == "worker-expediter"
+        assert messages[0].text == "86 the fish"
+        assert messages[0].priority == "high"
+        assert messages[0].sent_at_tick == 0
+
+    def test_a_message_is_gone_the_tick_after_delivery(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(self._send("worker-chef", "86 the fish", tick=0))
+        sim.advance_time()
+        assert sim.observe("chef").messages != ()
+
+        sim.advance_time()
+
+        assert sim.observe("chef").messages == ()
+
+    def test_only_the_addressed_role_sees_it(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(self._send("worker-chef", "86 the fish", tick=0))
+        sim.advance_time()
+
+        assert sim.observe("chef").messages != ()
+        assert sim.observe("server").messages == ()
+        assert sim.observe("host").messages == ()
+
+    def test_sending_records_the_sender_not_the_recipient(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(self._send("worker-chef", "86 the fish", tick=0))
+
+        workers = {w.id: w for w in sim.checkpoint().state.workers}
+
+        # lastAction is what a worker did. The recipient did not do anything.
+        assert workers["worker-expediter"].last_action == "messaged worker-chef"
+        assert workers["worker-chef"].last_action != "86 the fish"
+
+    def test_an_unknown_recipient_is_rejected_and_delivers_nothing(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        before = sim.checkpoint()
+
+        rejected = sim.act(self._send("worker-nobody", "hello", tick=0))
+
+        assert isinstance(rejected, ActionError)
+        assert rejected.code == "unknown_entity"
+        # The rejection is cached against its key, so compare the state and the
+        # inbox rather than the whole envelope.
+        assert sim.checkpoint().state == before.state
+        assert sim.checkpoint().inbox == {}
+
+    def test_an_in_flight_message_survives_a_checkpoint_restore(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(self._send("worker-chef", "86 the fish", tick=0))
+
+        resumed = _sim()
+        resumed.restore(sim.checkpoint())
+        resumed.advance_time()
+
+        # Undelivered mail is episode state; a restore that dropped it would
+        # change what the chef sees next tick.
+        assert [m.text for m in resumed.observe("chef").messages] == ["86 the fish"]
+
+    def test_observing_twice_delivers_the_same_message_both_times(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(self._send("worker-chef", "86 the fish", tick=0))
+        sim.advance_time()
+
+        # observe() is a projection, not a queue read: looking must not consume.
+        assert sim.observe("chef") == sim.observe("chef")
+
+
 class TestSafety:
     def test_serving_an_unverified_allergy_order_is_unsafe(self):
         sim = _sim()
