@@ -11,11 +11,6 @@ Tick order is fixed and not negotiable (see class docstring on
 
 Known scope limits, tracked rather than silently patched:
 
-- ``checkpoint()`` returns the wire :class:`RestaurantState` only. Internal
-  scheduling state (in-flight prep timers) does not survive a checkpoint, so
-  resuming a *new* ``RestaurantSim`` from a checkpoint mid-episode is not yet
-  supported -- only replaying the full action sequence from ``reset()`` is.
-  Full resumability is case-loading territory (#58), not this issue.
 - Player corrections are not part of ``act()``. ``ActionEnvelope`` only
   models worker-issued, tool-shaped actions; the docs' player-correction
   trace shape (free text, ``targetRole``, no ``tool``) is a different event
@@ -35,10 +30,13 @@ from retro_backend.esim.contracts import (
     ActionError,
     ActionErrorCode,
     ArenaId,
+    DeliveredMessage,
     Emergency,
     EquipmentItem,
+    IdempotencyRecord,
     Observation,
     Order,
+    RestaurantCheckpoint,
     RestaurantState,
     Role,
     Table,
@@ -46,6 +44,7 @@ from retro_backend.esim.contracts import (
 )
 from retro_backend.esim.observations import observe as project_observation
 from retro_backend.esim.rng import Rng
+from retro_backend.esim.state_hash import state_hash
 from retro_backend.esim.tools import (
     TOOL_ARGS,
     CoordinateArgs,
@@ -107,6 +106,33 @@ def _reject(code: ActionErrorCode, message: str) -> ActionError:
     return ActionError(code=code, message=message, retryable=code == "stale_tick")
 
 
+def request_fingerprint(envelope: ActionEnvelope) -> str:
+    """Identify *what an envelope asks for*, ignoring how it was delivered.
+
+    Two envelopes share a fingerprint when they request the same thing, so an
+    honest retry replays and a key reused for different work is rejected.
+
+    ``timestamp`` is deliberately excluded: a retry legitimately carries a
+    fresh clock reading, and including it would turn every honest retry into a
+    ``duplicate_request``. ``version`` is a constant, and ``idempotencyKey`` is
+    the lookup key rather than part of the payload. Everything else is
+    included, ``requestId`` among it -- one key standing for two request ids is
+    exactly the reuse this is meant to catch.
+    """
+    return state_hash(
+        {
+            "episodeId": envelope.episode_id,
+            "actorId": envelope.actor_id,
+            "actorType": envelope.actor_type,
+            "role": envelope.role,
+            "tool": envelope.tool,
+            "arguments": dict(envelope.arguments),
+            "tick": envelope.tick,
+            "requestId": envelope.request_id,
+        }
+    )
+
+
 class RestaurantSim:
     """One episode of the frozen Restaurant E-Sim.
 
@@ -125,7 +151,11 @@ class RestaurantSim:
         self._state = initial_state
         self._rng = Rng(initial_state.seed)
         self._prep_remaining: dict[str, int] = {}
-        self._idempotency_cache: dict[str, RestaurantState | ActionError] = {}
+        self._idempotency_cache: dict[str, IdempotencyRecord] = {}
+        # Recipient worker id -> messages awaiting or currently in delivery.
+        # Lives here rather than in RestaurantState because restaurant-arena/v1
+        # state has no field for it; see the class docstring.
+        self._inbox: dict[str, tuple[DeliveredMessage, ...]] = {}
 
     # -- lifecycle -----------------------------------------------------
 
@@ -143,14 +173,61 @@ class RestaurantSim:
         self._rng = Rng(seed)
         self._prep_remaining = {}
         self._idempotency_cache = {}
+        self._inbox = {}
         return self._state
 
-    def checkpoint(self) -> RestaurantState:
-        """The full state, seed, version, and tick -- see module docstring."""
+    def checkpoint(self) -> RestaurantCheckpoint:
+        """The full resumable state: wire state plus simulator bookkeeping.
+
+        ``version``, ``seed``, and ``episode.tick`` come along inside
+        ``state``; the prep timers, PRNG position, and consumed idempotency
+        keys live outside :class:`RestaurantState` and would otherwise be
+        lost, so :meth:`restore` can rebuild this sim exactly.
+        """
+        return RestaurantCheckpoint(
+            state=self._state,
+            prep_remaining=dict(self._prep_remaining),
+            rng_state=self._rng.export_state(),
+            idempotency_cache=dict(self._idempotency_cache),
+            inbox=dict(self._inbox),
+        )
+
+    def restore(self, checkpoint: RestaurantCheckpoint) -> RestaurantState:
+        """Resume from ``checkpoint``, discarding whatever this sim held.
+
+        The frozen case (initial layout and event schedule) is constructor
+        state, not episode state, so it is not carried in the checkpoint:
+        restore into a sim built from the same case and the rest of the
+        episode replays byte-identically.
+        """
+        self._state = checkpoint.state
+        self._prep_remaining = dict(checkpoint.prep_remaining)
+        self._rng = Rng.from_state(checkpoint.rng_state)
+        self._idempotency_cache = dict(checkpoint.idempotency_cache)
+        self._inbox = dict(checkpoint.inbox)
         return self._state
 
     def observe(self, role: Role) -> Observation:
-        return project_observation(self._state, role)
+        return project_observation(self._state, role, self._deliverable(role))
+
+    def _deliverable(self, role: Role) -> tuple[DeliveredMessage, ...]:
+        """The messages ``role`` sees this tick.
+
+        A message is delivered on the observation for the tick *after* it was
+        sent, and on that tick alone -- "visible to the recipient on its next
+        observation" (#57). Sending and seeing therefore cannot happen in the
+        same tick, which is what stops a message from racing the action that
+        prompted it.
+        """
+        worker = next((w for w in self._state.workers if w.role == role), None)
+        if worker is None:
+            return ()
+        tick = self._state.episode.tick
+        return tuple(
+            message
+            for message in self._inbox.get(worker.id, ())
+            if message.sent_at_tick == tick - 1
+        )
 
     # -- actions ---------------------------------------------------------
 
@@ -160,13 +237,34 @@ class RestaurantSim:
         Validation order is fixed: idempotency replay, staleness, episode
         completion, role permission, argument shape, entity existence,
         current state, safety constraints.
+
+        A repeated ``idempotencyKey`` resolves one of two ways, and which one
+        depends on whether the request behind it is the same request:
+
+        *Same request.* The original result is returned and nothing is applied
+        a second time (#56). This is the retry path -- a caller that did not
+        hear the first answer asks again and gets the first answer.
+
+        *Different request.* The key is being reused for work it was not
+        issued for, which no replay can honour, so it is rejected with
+        ``duplicate_request`` and nothing is mutated (#57). The rejection is
+        not itself cached: the key keeps standing for its original request, so
+        an honest retry arriving afterwards still replays correctly.
         """
+        fingerprint = request_fingerprint(envelope)
         cached = self._idempotency_cache.get(envelope.idempotency_key)
         if cached is not None:
-            return cached
+            if cached.fingerprint == fingerprint:
+                return cached.result
+            return _reject(
+                "duplicate_request",
+                f"key {envelope.idempotency_key} stands for another request",
+            )
 
         result = self._validate_and_apply(envelope)
-        self._idempotency_cache[envelope.idempotency_key] = result
+        self._idempotency_cache[envelope.idempotency_key] = IdempotencyRecord(
+            fingerprint=fingerprint, result=result
+        )
         return result
 
     def _validate_and_apply(
@@ -270,6 +368,7 @@ class RestaurantSim:
         self._apply_scheduled_incidents(next_tick)
         self._advance_order_progress()
         self._decay_reputation()
+        self._expire_messages(next_tick)
 
         clock = self._state.clock.model_copy(
             update={"minute": self._state.clock.minute + self._state.clock.speed}
@@ -327,6 +426,26 @@ class RestaurantSim:
             order = self._find_order(order_id)
             if order is not None and order.status == "preparing":
                 self._replace_order(order.model_copy(update={"status": "ready"}))
+
+    def _expire_messages(self, next_tick: int) -> None:
+        """Drop messages that have had their one tick of visibility.
+
+        A message sent at tick N is delivered at N+1, so once the clock reads
+        N+2 it can never be seen again and is removed rather than accumulating
+        for the rest of the episode.
+        """
+        pruned = {
+            worker_id: kept
+            for worker_id, messages in self._inbox.items()
+            if (
+                kept := tuple(
+                    message
+                    for message in messages
+                    if message.sent_at_tick >= next_tick - 1
+                )
+            )
+        }
+        self._inbox = pruned
 
     def _decay_reputation(self) -> None:
         if self._state.emergency is not None and self._state.emergency.active:
@@ -518,12 +637,22 @@ class RestaurantSim:
         target = self._find_worker(to_worker_id)
         if target is None:
             return _reject("unknown_entity", f"unknown worker {to_worker_id}")
-        self._replace_worker(
-            target.model_copy(
-                update={
-                    "last_action": f"message from {actor.id} ({priority}): {text}"
+        tick = self._state.episode.tick
+        self._inbox[target.id] = self._inbox.get(target.id, ()) + (
+            DeliveredMessage.model_validate(
+                {
+                    "from": actor.id,
+                    "text": text,
+                    "priority": priority,
+                    "sentAtTick": tick,
                 }
-            )
+            ),
+        )
+        # lastAction records what a worker *did*. Writing the message onto the
+        # recipient would overwrite their own record with someone else's words;
+        # the sender is the one who acted.
+        self._replace_worker(
+            actor.model_copy(update={"last_action": f"messaged {target.id}"})
         )
         return self._state
 
