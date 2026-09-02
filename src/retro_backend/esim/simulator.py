@@ -32,6 +32,7 @@ from retro_backend.esim.contracts import (
     ArenaId,
     Emergency,
     EquipmentItem,
+    IdempotencyRecord,
     Observation,
     Order,
     RestaurantCheckpoint,
@@ -42,6 +43,7 @@ from retro_backend.esim.contracts import (
 )
 from retro_backend.esim.observations import observe as project_observation
 from retro_backend.esim.rng import Rng
+from retro_backend.esim.state_hash import state_hash
 from retro_backend.esim.tools import (
     TOOL_ARGS,
     CoordinateArgs,
@@ -103,6 +105,33 @@ def _reject(code: ActionErrorCode, message: str) -> ActionError:
     return ActionError(code=code, message=message, retryable=code == "stale_tick")
 
 
+def request_fingerprint(envelope: ActionEnvelope) -> str:
+    """Identify *what an envelope asks for*, ignoring how it was delivered.
+
+    Two envelopes share a fingerprint when they request the same thing, so an
+    honest retry replays and a key reused for different work is rejected.
+
+    ``timestamp`` is deliberately excluded: a retry legitimately carries a
+    fresh clock reading, and including it would turn every honest retry into a
+    ``duplicate_request``. ``version`` is a constant, and ``idempotencyKey`` is
+    the lookup key rather than part of the payload. Everything else is
+    included, ``requestId`` among it -- one key standing for two request ids is
+    exactly the reuse this is meant to catch.
+    """
+    return state_hash(
+        {
+            "episodeId": envelope.episode_id,
+            "actorId": envelope.actor_id,
+            "actorType": envelope.actor_type,
+            "role": envelope.role,
+            "tool": envelope.tool,
+            "arguments": dict(envelope.arguments),
+            "tick": envelope.tick,
+            "requestId": envelope.request_id,
+        }
+    )
+
+
 class RestaurantSim:
     """One episode of the frozen Restaurant E-Sim.
 
@@ -121,7 +150,7 @@ class RestaurantSim:
         self._state = initial_state
         self._rng = Rng(initial_state.seed)
         self._prep_remaining: dict[str, int] = {}
-        self._idempotency_cache: dict[str, RestaurantState | ActionError] = {}
+        self._idempotency_cache: dict[str, IdempotencyRecord] = {}
 
     # -- lifecycle -----------------------------------------------------
 
@@ -181,13 +210,34 @@ class RestaurantSim:
         Validation order is fixed: idempotency replay, staleness, episode
         completion, role permission, argument shape, entity existence,
         current state, safety constraints.
+
+        A repeated ``idempotencyKey`` resolves one of two ways, and which one
+        depends on whether the request behind it is the same request:
+
+        *Same request.* The original result is returned and nothing is applied
+        a second time (#56). This is the retry path -- a caller that did not
+        hear the first answer asks again and gets the first answer.
+
+        *Different request.* The key is being reused for work it was not
+        issued for, which no replay can honour, so it is rejected with
+        ``duplicate_request`` and nothing is mutated (#57). The rejection is
+        not itself cached: the key keeps standing for its original request, so
+        an honest retry arriving afterwards still replays correctly.
         """
+        fingerprint = request_fingerprint(envelope)
         cached = self._idempotency_cache.get(envelope.idempotency_key)
         if cached is not None:
-            return cached
+            if cached.fingerprint == fingerprint:
+                return cached.result
+            return _reject(
+                "duplicate_request",
+                f"key {envelope.idempotency_key} stands for another request",
+            )
 
         result = self._validate_and_apply(envelope)
-        self._idempotency_cache[envelope.idempotency_key] = result
+        self._idempotency_cache[envelope.idempotency_key] = IdempotencyRecord(
+            fingerprint=fingerprint, result=result
+        )
         return result
 
     def _validate_and_apply(

@@ -210,6 +210,94 @@ class TestValidationOrder:
         assert result.code == "episode_complete"
 
 
+class TestDuplicateRequest:
+    """The two ways a repeated idempotency key can resolve.
+
+    #56 wants an identical replay to return the original result; #57 wants a
+    ``duplicate_request`` code that something actually provokes. Both hold
+    because the simulator stores what the key was issued for, not just what it
+    returned.
+    """
+
+    def test_key_reused_for_different_arguments_is_rejected(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        accepted = sim.act(_prepare("order-1", tick=0, request_id="dup"))
+        assert isinstance(accepted, RestaurantState)
+        before = sim.checkpoint()
+
+        # Same key, different order: no replay can honour this.
+        conflict = sim.act(_prepare("order-2", tick=0, request_id="dup"))
+        assert isinstance(conflict, ActionError)
+        assert conflict.code == "duplicate_request"
+        assert sim.checkpoint() == before
+
+    def test_key_reused_for_a_different_tool_is_rejected(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(_prepare("order-1", tick=0, request_id="shared"))
+        before = sim.checkpoint()
+
+        conflict = sim.act(
+            _envelope(
+                actor_id="worker-chef",
+                role="chef",
+                tool="inspect",
+                arguments={"targetId": "order-1"},
+                tick=0,
+                request_id="shared",
+            )
+        )
+        assert isinstance(conflict, ActionError)
+        assert conflict.code == "duplicate_request"
+        assert sim.checkpoint() == before
+
+    def test_a_conflict_is_not_retryable(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(_prepare("order-1", tick=0, request_id="dup"))
+        conflict = sim.act(_prepare("order-2", tick=0, request_id="dup"))
+        assert isinstance(conflict, ActionError)
+        # Retrying cannot help: the key stays bound to its first request.
+        assert conflict.retryable is False
+
+    def test_a_conflict_does_not_displace_the_original_result(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        first = sim.act(_prepare("order-1", tick=0, request_id="dup"))
+        conflict = sim.act(_prepare("order-2", tick=0, request_id="dup"))
+        assert isinstance(conflict, ActionError)
+
+        # The honest retry arrives late, after the conflict. It must still see
+        # the original answer rather than the rejection.
+        replay = sim.act(_prepare("order-1", tick=0, request_id="dup"))
+        assert replay == first
+
+    def test_a_differing_timestamp_alone_still_replays(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        # ``_envelope`` stamps ``datetime.now(UTC)``, so these two envelopes
+        # already differ in timestamp and in nothing else. A retry legitimately
+        # carries a fresh clock reading, so it must not read as a conflict.
+        first = sim.act(_prepare("order-1", tick=0, request_id="dup"))
+        second = sim.act(_prepare("order-1", tick=0, request_id="dup"))
+        assert second == first
+        assert isinstance(second, RestaurantState)
+
+    def test_conflict_detection_survives_a_checkpoint_restore(self):
+        sim = _sim()
+        sim.reset(seed=1)
+        _ = sim.act(_prepare("order-1", tick=0, request_id="dup"))
+
+        resumed = _sim()
+        resumed.restore(sim.checkpoint())
+        before = resumed.checkpoint()
+        conflict = resumed.act(_prepare("order-2", tick=0, request_id="dup"))
+        assert isinstance(conflict, ActionError)
+        assert conflict.code == "duplicate_request"
+        assert resumed.checkpoint() == before
+
+
 class TestSafety:
     def test_serving_an_unverified_allergy_order_is_unsafe(self):
         sim = _sim()
@@ -381,7 +469,7 @@ class TestCheckpointRestore:
         sim = _sim()
         self._first_half(sim)
         checkpoint = sim.checkpoint()
-        original = checkpoint.idempotency_cache["dinner-rush-001:p1"]
+        original = checkpoint.idempotency_cache["dinner-rush-001:p1"].result
 
         resumed = _sim()
         resumed.restore(checkpoint)

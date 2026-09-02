@@ -304,6 +304,22 @@ class ActionError(ArenaModel):
     retryable: bool
 
 
+class IdempotencyRecord(ArenaModel):
+    """One consumed idempotency key: what was asked, and what came back.
+
+    The key alone is not enough to decide what a repeat means. #56 requires a
+    replayed *identical* request to return its original result without
+    applying twice; #57 requires a ``duplicate_request`` rejection for a key
+    that comes back carrying a *different* request. Storing the fingerprint of
+    the original envelope alongside its result is what lets the simulator tell
+    those two cases apart -- see :func:`retro_backend.esim.simulator.
+    request_fingerprint` for what the fingerprint covers.
+    """
+
+    fingerprint: str
+    result: RestaurantState | ActionError
+
+
 class RestaurantCheckpoint(ArenaModel):
     """Everything needed to resume an episode in a fresh ``RestaurantSim``.
 
@@ -321,6 +337,6 @@ class RestaurantCheckpoint(ArenaModel):
     prep_remaining: Mapping[str, int]
     # ``Rng.export_state()``; ``Rng.from_state()`` resumes the same stream.
     rng_state: int = Field(ge=0, le=0xFFFFFFFF, strict=True)
-    # Results already returned for a consumed idempotency key, so a replayed
-    # action after a restore does not apply twice.
-    idempotency_cache: Mapping[str, RestaurantState | ActionError]
+    # Records for every consumed idempotency key, so a replayed action after a
+    # restore neither applies twice nor loses its conflict detection.
+    idempotency_cache: Mapping[str, IdempotencyRecord]
