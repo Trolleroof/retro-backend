@@ -29,6 +29,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic.alias_generators import to_camel
 
 from retro_backend.esim.contracts import (
     ActionEnvelope,
@@ -74,7 +75,12 @@ _MAX_ERROR_MESSAGE_LENGTH = 256
 class ScheduledIncident(BaseModel):
     """One frozen-case event: happens once, at exactly this tick."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        populate_by_name=True,
+        alias_generator=to_camel,
+    )
 
     tick: int = Field(ge=1, strict=True)
     kind: Literal["oven_failure", "warming_shelf_overheat"]
