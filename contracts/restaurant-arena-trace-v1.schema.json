@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tui-gamepigeon.dev/contracts/restaurant-arena-trace-v1.schema.json",
+  "title": "Restaurant Arena trace v1",
+  "$comment": "One episode's reviewable record. Events carry exactly one populated payload field; the others are null. Consent and deletion are explicit fields and are never inferred from missing data. The correction-linkage and model/version fields come from Trolleroof/tui-gamepigeon#226 and are pinned here; the writer and the replay path are implemented separately.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "episodeId",
+    "seed",
+    "envVersion",
+    "contractVersion",
+    "runKind",
+    "events",
+    "consent",
+    "deletion"
+  ],
+  "properties": {
+    "version": { "const": "restaurant-arena-trace/v1" },
+    "episodeId": { "$ref": "#/$defs/arenaId" },
+    "seed": { "type": "integer", "minimum": 0 },
+    "envVersion": { "type": "string", "minLength": 1 },
+    "contractVersion": { "const": "restaurant-arena/v1" },
+    "runKind": {
+      "$comment": "Live gameplay, synthetic episodes, and benchmark episodes must stay distinguishable.",
+      "enum": ["live", "synthetic", "benchmark"]
+    },
+    "initialState": {
+      "$ref": "https://tui-gamepigeon.dev/contracts/restaurant-arena-state-v1.schema.json"
+    },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/traceEvent" } },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "capturedAt", "scope"],
+      "properties": {
+        "status": { "enum": ["granted", "withheld", "withdrawn"] },
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "scope": {
+          "type": "array",
+          "items": { "enum": ["trace", "replay", "training", "publication"] }
+        }
+      }
+    },
+    "deletion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestId", "status"],
+      "properties": {
+        "requestId": { "oneOf": [{ "$ref": "#/$defs/arenaId" }, { "type": "null" }] },
+        "status": { "enum": ["retained", "requested", "deleted"] }
+      }
+    }
+  },
+  "$defs": {
+    "arenaId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "maxLength": 64
+    },
+    "traceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tick", "kind", "timestamp", "stateHash"],
+      "properties": {
+        "tick": { "type": "integer", "minimum": 0 },
+        "kind": {
+          "enum": ["observation", "action", "player_correction", "message", "outcome"]
+        },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "actorId": { "$ref": "#/$defs/arenaId" },
+        "role": { "enum": ["chef", "server", "host", "expediter"] },
+        "targetRole": { "enum": ["chef", "server", "host", "expediter"] },
+        "checkpointId": { "$ref": "#/$defs/arenaId" },
+        "stateHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "model": {
+          "$comment": "Absent for human and environment events.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "name"],
+          "properties": {
+            "provider": { "type": "string", "minLength": 1 },
+            "name": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        },
+        "requestId": { "$ref": "#/$defs/arenaId" },
+        "idempotencyKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,129}$",
+          "maxLength": 130
+        },
+        "text": { "type": ["string", "null"] },
+        "observation": { "type": ["object", "null"] },
+        "action": { "type": ["object", "null"] },
+        "toolResult": { "type": ["object", "null"] },
+        "outcome": { "type": ["object", "null"] },
+        "correctionRationale": { "type": ["string", "null"] },
+        "correctionCategory": {
+          "type": ["string", "null"],
+          "enum": ["safety", "priority", "quality", "pace", null]
+        },
+        "changedDecisionEventId": {
+          "$comment": "The decision this correction changed.",
+          "oneOf": [{ "$ref": "#/$defs/arenaId" }, { "type": "null" }]
+        },
+        "probeEventId": {
+          "$comment": "The later related decision this correction is meant to test.",
+          "oneOf": [{ "$ref": "#/$defs/arenaId" }, { "type": "null" }]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tui-gamepigeon.dev/contracts/restaurant-arena-state-v1.schema.json",
+  "title": "Restaurant Arena state v1",
+  "$comment": "The simulator owns one authoritative state. UI, workers, replay, and graders read snapshots; none maintain a second source of truth. Draft 2020-12 treats integral JSON numbers such as 2.0 as integers; the Python runtime requires actual decoded int values (excluding bool) wherever this schema says \"integer\".",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "seed",
+    "episode",
+    "clock",
+    "tables",
+    "orders",
+    "inventory",
+    "equipment",
+    "workers",
+    "reputation",
+    "outcomes"
+  ],
+  "properties": {
+    "version": { "const": "restaurant-arena/v1" },
+    "seed": { "type": "integer", "minimum": 0 },
+    "episode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "phase", "tick", "maxTicks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/arenaId" },
+        "phase": { "enum": ["active", "complete"] },
+        "tick": { "type": "integer", "minimum": 0 },
+        "maxTicks": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minute", "speed"],
+      "properties": {
+        "minute": { "type": "integer", "minimum": 0 },
+        "speed": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "seats", "status"],
+        "properties": {
+          "id": { "$ref": "#/$defs/arenaId" },
+          "seats": { "type": "integer", "minimum": 1 },
+          "status": { "enum": ["empty", "occupied"] },
+          "orderId": { "$ref": "#/$defs/arenaId" }
+        }
+      }
+    },
+    "orders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "items", "status", "priority"],
+        "properties": {
+          "id": { "$ref": "#/$defs/arenaId" },
+          "tableId": { "$ref": "#/$defs/arenaId" },
+          "items": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "status": { "$ref": "#/$defs/orderStatus" },
+          "allergy": { "type": "string", "minLength": 1 },
+          "priority": { "$ref": "#/$defs/priority" }
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "equipment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "status"],
+        "properties": {
+          "id": { "$ref": "#/$defs/arenaId" },
+          "kind": { "enum": ["oven", "warming_shelf"] },
+          "status": { "$ref": "#/$defs/equipmentStatus" },
+          "safetyThreshold": { "type": "number" },
+          "reading": { "type": "number" }
+        }
+      }
+    },
+    "workers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "role", "load", "location"],
+        "properties": {
+          "id": { "$ref": "#/$defs/arenaId" },
+          "role": { "$ref": "#/$defs/role" },
+          "load": { "$ref": "#/$defs/load" },
+          "location": { "enum": ["floor", "kitchen", "pass", "queue"] },
+          "lastAction": { "type": "string" }
+        }
+      }
+    },
+    "emergency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "active", "startedAt"],
+      "properties": {
+        "kind": { "const": "oven_failure" },
+        "active": { "type": "boolean" },
+        "startedAt": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "reputation": { "type": "number", "minimum": 0, "maximum": 100 },
+    "outcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cash",
+        "satisfaction",
+        "waste",
+        "waitTime",
+        "completed",
+        "safeOrders",
+        "coordination",
+        "correctionUptake"
+      ],
+      "properties": {
+        "cash": { "type": "number", "minimum": 0 },
+        "satisfaction": { "$ref": "#/$defs/rate" },
+        "waste": { "type": "number", "minimum": 0 },
+        "waitTime": { "type": "number", "minimum": 0 },
+        "completed": { "type": "integer", "minimum": 0 },
+        "safeOrders": { "type": "integer", "minimum": 0 },
+        "coordination": { "$ref": "#/$defs/rate" },
+        "correctionUptake": { "$ref": "#/$defs/rate" }
+      }
+    }
+  },
+  "$defs": {
+    "arenaId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "maxLength": 64
+    },
+    "role": { "enum": ["chef", "server", "host", "expediter"] },
+    "orderStatus": {
+      "enum": ["queued", "seated", "preparing", "ready", "served", "cancelled"]
+    },
+    "priority": { "enum": ["normal", "high"] },
+    "equipmentStatus": { "enum": ["working", "failed", "degraded"] },
+    "load": { "type": "number", "minimum": 0, "maximum": 1 },
+    "rate": { "type": "number", "minimum": 0, "maximum": 1 }
+  }
+}

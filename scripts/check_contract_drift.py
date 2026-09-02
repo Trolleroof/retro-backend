@@ -5,6 +5,10 @@ must be byte-identical: both sides parse the same wire format, and a schema
 that's stricter on only one side lets invalid payloads slip past client-side
 validation and 400 once they reach the backend (see issue #15).
 
+The ``restaurant-arena/v1`` schemas are the exception: they are authored here
+for tui-gamepigeon to back-port (issue #54), so until that lands they are
+reported as pending rather than failing the run.
+
 There is no CI checkout of the client repo here, so this only runs when a
 local checkout is available. Point it at one explicitly:
 
@@ -25,6 +29,27 @@ CONTRACT_FILES = (
     "contracts/game-event-chunk-v1.schema.json",
     "contracts/interaction-trace-chunk-v2.schema.json",
 )
+# Authored in this repo first; tui-gamepigeon has no copy yet. A file moves into
+# CONTRACT_FILES once the back-port lands, at which point drift becomes an error.
+PENDING_BACKPORT_FILES = (
+    "contracts/restaurant-arena-state-v1.schema.json",
+    "contracts/restaurant-arena-observation-v1.schema.json",
+    "contracts/restaurant-arena-action-v1.schema.json",
+    "contracts/restaurant-arena-trace-v1.schema.json",
+)
+
+
+def find_pending_backports(peer_repo: Path) -> list[str]:
+    """Return a line per schema this repo owns that the client has not adopted."""
+    pending = []
+    for relative_path in PENDING_BACKPORT_FILES:
+        ours = ROOT / relative_path
+        theirs = peer_repo / relative_path
+        if not theirs.is_file():
+            pending.append(f"{relative_path}: not yet back-ported to {peer_repo}")
+        elif ours.read_bytes() != theirs.read_bytes():
+            pending.append(f"{relative_path}: back-ported copy differs from ours")
+    return pending
 
 
 def find_drift(peer_repo: Path) -> list[str]:
@@ -58,7 +83,15 @@ def main() -> int:
         )
         return 2
 
-    problems = find_drift(args.peer_repo.resolve())
+    peer_repo = args.peer_repo.resolve()
+
+    pending = find_pending_backports(peer_repo)
+    if pending:
+        print("Schemas awaiting back-port to tui-gamepigeon (not a failure):")
+        for item in pending:
+            print(f"  - {item}")
+
+    problems = find_drift(peer_repo)
     if problems:
         print("Contract drift detected between this repo and tui-gamepigeon:")
         for problem in problems:
