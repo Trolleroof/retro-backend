@@ -34,6 +34,7 @@ CONTRACT_FILES = (
 PENDING_BACKPORT_FILES = (
     "contracts/restaurant-arena-state-v1.schema.json",
     "contracts/restaurant-arena-observation-v1.schema.json",
+    "contracts/restaurant-arena-observation-v2.schema.json",
     "contracts/restaurant-arena-action-v1.schema.json",
     "contracts/restaurant-arena-trace-v1.schema.json",
 )
