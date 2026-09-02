@@ -144,6 +144,20 @@ def load_case(case_id: str) -> FrozenCase:
         message = f"case {case_id!r} initialState fails restaurant-arena-state-v1: {_first_error_message(schema_errors[0])}"
         raise CaseSchemaError(message)
 
+    horizon = payload.get("horizon")
+    max_ticks = initial_state.get("episode", {}).get("maxTicks")
+    if horizon != max_ticks:
+        # RestaurantSim reads episode length from initialState.episode.maxTicks
+        # alone (#57); FrozenCase.horizon is never consulted at runtime. A case
+        # whose horizon disagrees would silently run to a different length
+        # than it declares, so reject it here rather than let horizon go
+        # unenforced the way rolePermissions overrides are rejected above.
+        message = (
+            f"case {case_id!r} declares horizon {horizon!r} but "
+            f"initialState.episode.maxTicks is {max_ticks!r}"
+        )
+        raise CaseSchemaError(message)
+
     try:
         return FrozenCase.model_validate(payload)
     except PydanticValidationError as exc:

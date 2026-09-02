@@ -82,6 +82,15 @@ class TestLoadCase:
         with pytest.raises(CaseSchemaError):
             load_case(CASE_ID)
 
+    def test_horizon_disagreeing_with_max_ticks_is_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        payload = _case_payload()
+        payload["horizon"] = 99
+        _write_case(tmp_path, monkeypatch, payload)
+        with pytest.raises(CaseSchemaError):
+            load_case(CASE_ID)
+
 
 class TestReset:
     def test_reset_is_repeatable_across_fresh_calls(self):
