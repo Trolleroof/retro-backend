@@ -88,18 +88,18 @@ class TestReset:
         sim_a = reset(CASE_ID, seed=1)
         sim_b = reset(CASE_ID, seed=1)
         assert isinstance(sim_a, RestaurantSim)
-        hash_a = state_hash(sim_a.checkpoint().model_dump(by_alias=True))
-        hash_b = state_hash(sim_b.checkpoint().model_dump(by_alias=True))
+        hash_a = state_hash(sim_a.checkpoint().state.model_dump(by_alias=True))
+        hash_b = state_hash(sim_b.checkpoint().state.model_dump(by_alias=True))
         assert hash_a == hash_b
 
     def test_reset_returns_a_playable_simulator_at_tick_zero(self):
         sim = reset(CASE_ID, seed=7)
-        state = sim.checkpoint()
+        state = sim.checkpoint().state
         assert state.episode.tick == 0
         assert state.episode.phase == "active"
         assert state.seed == 7
         sim.advance_time()
-        assert sim.checkpoint().episode.tick == 1
+        assert sim.checkpoint().state.episode.tick == 1
 
 
 def _write_case(
