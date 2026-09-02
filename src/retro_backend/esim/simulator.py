@@ -195,6 +195,11 @@ class RestaurantSim:
         actor = self._find_worker(envelope.actor_id)
         if actor is None:
             return _reject("unknown_entity", f"unknown actor {envelope.actor_id}")
+        if actor.role != envelope.role:
+            return _reject(
+                "role_not_permitted",
+                f"actor {envelope.actor_id} has role {actor.role}, not {envelope.role}",
+            )
 
         applier = self._TOOL_APPLIERS[envelope.tool]
         return applier(self, actor, args)
@@ -361,11 +366,17 @@ class RestaurantSim:
                 "invalid_state", f"order {order.id} is {order.status}, not startable"
             )
         inventory = dict(self._state.inventory)
+        # Count total quantity needed for each item
+        required: dict[str, int] = {}
         for item in order.items:
-            if inventory.get(item, 0) < 1:
+            required[item] = required.get(item, 0) + 1
+        # Check availability for all required quantities
+        for item, qty in required.items():
+            if inventory.get(item, 0) < qty:
                 return _reject("invalid_state", f"insufficient inventory for {item}")
-        for item in order.items:
-            inventory[item] -= 1
+        # Decrement by total quantity
+        for item, qty in required.items():
+            inventory[item] -= qty
         self._replace_inventory(inventory)
         self._replace_order(order.model_copy(update={"status": "preparing"}))
         self._replace_worker(
