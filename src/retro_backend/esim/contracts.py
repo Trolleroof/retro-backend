@@ -302,3 +302,25 @@ class ActionError(ArenaModel):
     code: ActionErrorCode
     message: str = Field(min_length=1, max_length=256)
     retryable: bool
+
+
+class RestaurantCheckpoint(ArenaModel):
+    """Everything needed to resume an episode in a fresh ``RestaurantSim``.
+
+    Not a published wire schema: ``restaurant-arena/v1`` pins
+    :class:`RestaurantState`, and this envelope only wraps it with the
+    simulator-internal bookkeeping that lives outside the state model --
+    in-flight prep timers, the PRNG position, and the idempotency keys already
+    consumed. ``version``, ``seed``, and ``episode.tick`` ride along inside
+    ``state`` rather than being duplicated here.
+    """
+
+    state: RestaurantState
+    # Ticks of prep left per order id; an order disappears from the map when
+    # it turns "ready".
+    prep_remaining: Mapping[str, int]
+    # ``Rng.export_state()``; ``Rng.from_state()`` resumes the same stream.
+    rng_state: int = Field(ge=0, le=0xFFFFFFFF, strict=True)
+    # Results already returned for a consumed idempotency key, so a replayed
+    # action after a restore does not apply twice.
+    idempotency_cache: Mapping[str, RestaurantState | ActionError]

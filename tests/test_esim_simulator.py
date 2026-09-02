@@ -8,6 +8,7 @@ from pathlib import Path
 from retro_backend.esim.contracts import (
     ActionEnvelope,
     ActionError,
+    RestaurantCheckpoint,
     RestaurantState,
     Role,
     Tool,
@@ -93,7 +94,7 @@ class TestReset:
             result = sim.act(_serve("order-1", tick=3, verified=True))
             assert isinstance(result, RestaurantState)
             sim.advance_time()
-            return state_hash(sim.checkpoint().model_dump(by_alias=True))
+            return state_hash(sim.checkpoint().state.model_dump(by_alias=True))
 
         assert run(42) == run(42)
 
@@ -125,7 +126,7 @@ class TestValidationOrder:
         )
         assert isinstance(result, ActionError)
         assert result.code == "unknown_entity"
-        assert sim.checkpoint() == before
+        assert sim.checkpoint().state == before.state
 
     def test_role_not_permitted_is_rejected(self):
         sim = _sim()
@@ -142,7 +143,7 @@ class TestValidationOrder:
         )
         assert isinstance(result, ActionError)
         assert result.code == "role_not_permitted"
-        assert sim.checkpoint() == before
+        assert sim.checkpoint().state == before.state
 
     def test_malformed_arguments_are_rejected(self):
         sim = _sim()
@@ -159,7 +160,7 @@ class TestValidationOrder:
         )
         assert isinstance(result, ActionError)
         assert result.code == "invalid_arguments"
-        assert sim.checkpoint() == before
+        assert sim.checkpoint().state == before.state
 
     def test_unknown_entity_is_rejected(self):
         sim = _sim()
@@ -168,7 +169,7 @@ class TestValidationOrder:
         result = sim.act(_prepare("order-does-not-exist", tick=0))
         assert isinstance(result, ActionError)
         assert result.code == "unknown_entity"
-        assert sim.checkpoint() == before
+        assert sim.checkpoint().state == before.state
 
     def test_wrong_current_state_is_rejected(self):
         sim = _sim()
@@ -178,7 +179,7 @@ class TestValidationOrder:
         result = sim.act(_serve("order-1", tick=0, verified=True))
         assert isinstance(result, ActionError)
         assert result.code == "invalid_state"
-        assert sim.checkpoint() == before
+        assert sim.checkpoint().state == before.state
 
     def test_stale_tick_is_rejected(self):
         sim = _sim()
@@ -187,7 +188,7 @@ class TestValidationOrder:
         result = sim.act(_prepare("order-1", tick=5))
         assert isinstance(result, ActionError)
         assert result.code == "stale_tick"
-        assert sim.checkpoint() == before
+        assert sim.checkpoint().state == before.state
 
     def test_duplicate_idempotency_key_replays_the_original_result_once(self):
         sim = _sim()
@@ -201,10 +202,10 @@ class TestValidationOrder:
     def test_episode_complete_rejects_further_actions(self):
         sim = _sim()
         sim.reset(seed=1)
-        for _tick in range(sim.checkpoint().episode.max_ticks):
+        for _tick in range(sim.checkpoint().state.episode.max_ticks):
             sim.advance_time()
-        assert sim.checkpoint().episode.phase == "complete"
-        result = sim.act(_prepare("order-1", tick=sim.checkpoint().episode.tick))
+        assert sim.checkpoint().state.episode.phase == "complete"
+        result = sim.act(_prepare("order-1", tick=sim.checkpoint().state.episode.tick))
         assert isinstance(result, ActionError)
         assert result.code == "episode_complete"
 
@@ -216,13 +217,13 @@ class TestSafety:
         sim.act(_prepare("order-2", tick=0))
         for _ in range(3):
             sim.advance_time()
-        state = sim.checkpoint()
+        state = sim.checkpoint().state
         assert next(o for o in state.orders if o.id == "order-2").status == "ready"
         before = sim.checkpoint()
-        result = sim.act(_serve("order-2", tick=before.episode.tick, verified=False))
+        result = sim.act(_serve("order-2", tick=before.state.episode.tick, verified=False))
         assert isinstance(result, ActionError)
         assert result.code == "unsafe_action"
-        assert sim.checkpoint() == before
+        assert sim.checkpoint().state == before.state
 
     def test_verified_allergy_order_may_be_served_and_counts_as_safe(self):
         sim = _sim()
@@ -230,7 +231,7 @@ class TestSafety:
         sim.act(_prepare("order-2", tick=0))
         for _ in range(3):
             sim.advance_time()
-        tick = sim.checkpoint().episode.tick
+        tick = sim.checkpoint().state.episode.tick
         result = sim.act(_serve("order-2", tick=tick, verified=True))
         assert isinstance(result, RestaurantState)
         served = next(o for o in result.orders if o.id == "order-2")
@@ -245,11 +246,11 @@ class TestScheduledIncidents:
         for _ in range(7):
             sim.advance_time()
         # The fixture starts with an inactive emergency record, not none.
-        emergency = sim.checkpoint().emergency
+        emergency = sim.checkpoint().state.emergency
         assert emergency is not None
         assert emergency.active is False
         sim.advance_time()
-        state = sim.checkpoint()
+        state = sim.checkpoint().state
         assert state.episode.tick == 8
         assert state.emergency is not None
         assert state.emergency.active
@@ -262,13 +263,13 @@ class TestScheduledIncidents:
         for _ in range(15):
             sim.advance_time()
         shelf = next(
-            e for e in sim.checkpoint().equipment if e.id == "warming-shelf-1"
+            e for e in sim.checkpoint().state.equipment if e.id == "warming-shelf-1"
         )
         assert shelf.reading is not None
         assert shelf.safety_threshold is not None
         assert shelf.reading < shelf.safety_threshold
         # Non-safety: no second emergency is raised for it.
-        emergency = sim.checkpoint().emergency
+        emergency = sim.checkpoint().state.emergency
         assert emergency is not None
         assert emergency.kind == "oven_failure"
 
@@ -278,9 +279,132 @@ class TestFinalGrading:
         sim = _sim()
         sim.reset(seed=7)
         sim.act(_prepare("order-1", tick=0))
-        for _ in range(sim.checkpoint().episode.max_ticks):
+        for _ in range(sim.checkpoint().state.episode.max_ticks):
             sim.advance_time()
-        state = sim.checkpoint()
+        state = sim.checkpoint().state
         assert state.episode.phase == "complete"
         assert state.episode.tick == state.episode.max_ticks
         assert state.outcomes.completed >= 0
+
+
+class TestCheckpointRestore:
+    """A checkpoint carries everything a fresh sim needs to finish the run."""
+
+    SEED = 42
+
+    @staticmethod
+    def _first_half(sim: RestaurantSim) -> None:
+        """Reset and run to tick 1, stopping with a prep still in flight."""
+        sim.reset(seed=TestCheckpointRestore.SEED)
+        sim.act(_prepare("order-1", tick=0, request_id="p1"))
+        sim.advance_time()
+        sim.act(_prepare("order-2", tick=1, request_id="p2"))
+
+    @staticmethod
+    def _second_half(sim: RestaurantSim) -> str:
+        """Serve whatever is ready each tick until the episode completes.
+
+        Every decision reads only the current state, so the script is a pure
+        function of it -- a restored sim must take the identical path.
+        """
+        while sim.checkpoint().state.episode.phase == "active":
+            state = sim.checkpoint().state
+            tick = state.episode.tick
+            for order in state.orders:
+                if order.status == "ready":
+                    sim.act(
+                        _serve(
+                            order.id,
+                            tick=tick,
+                            verified=True,
+                            request_id=f"s-{order.id}-{tick}",
+                        )
+                    )
+                elif order.status == "queued":
+                    sim.act(
+                        _prepare(order.id, tick=tick, request_id=f"p-{order.id}-{tick}")
+                    )
+            sim.advance_time()
+        return state_hash(sim.checkpoint().state.model_dump(by_alias=True))
+
+    def test_restored_sim_reproduces_the_uninterrupted_final_state_hash(self):
+        straight_through = _sim()
+        self._first_half(straight_through)
+        expected = self._second_half(straight_through)
+
+        interrupted = _sim()
+        self._first_half(interrupted)
+        checkpoint = interrupted.checkpoint()
+
+        resumed = _sim()
+        resumed.restore(checkpoint)
+        assert self._second_half(resumed) == expected
+
+    def test_in_flight_prep_timers_survive_the_round_trip(self):
+        sim = _sim()
+        self._first_half(sim)
+        checkpoint = sim.checkpoint()
+        # order-2 was started on the tick the checkpoint was taken, so its
+        # timer is necessarily still running and lives only outside the state.
+        assert checkpoint.prep_remaining["order-2"] >= 1
+        assert checkpoint.prep_remaining == sim._prep_remaining  # pyright: ignore[reportPrivateUsage]
+
+        resumed = _sim()
+        resumed.restore(checkpoint)
+        assert (
+            resumed._prep_remaining  # pyright: ignore[reportPrivateUsage]
+            == sim._prep_remaining  # pyright: ignore[reportPrivateUsage]
+        )
+        assert (
+            resumed._rng.export_state()  # pyright: ignore[reportPrivateUsage]
+            == sim._rng.export_state()  # pyright: ignore[reportPrivateUsage]
+        )
+
+    def test_a_prep_started_before_the_checkpoint_still_completes_after_it(self):
+        sim = _sim()
+        sim.reset(seed=self.SEED)
+        result = sim.act(_prepare("order-1", tick=0, request_id="p1"))
+        assert isinstance(result, RestaurantState)
+        checkpoint = sim.checkpoint()
+        assert checkpoint.prep_remaining["order-1"] >= 1
+
+        resumed = _sim()
+        resumed.restore(checkpoint)
+        for _ in range(checkpoint.prep_remaining["order-1"]):
+            resumed.advance_time()
+        order = next(
+            o for o in resumed.checkpoint().state.orders if o.id == "order-1"
+        )
+        assert order.status == "ready"
+
+    def test_an_idempotency_key_consumed_before_the_checkpoint_replays_after_it(self):
+        sim = _sim()
+        self._first_half(sim)
+        checkpoint = sim.checkpoint()
+        original = checkpoint.idempotency_cache["dinner-rush-001:p1"]
+
+        resumed = _sim()
+        resumed.restore(checkpoint)
+        before = resumed.checkpoint().state
+        # Same key, replayed at the wrong tick: the cache must answer first,
+        # exactly as it did in the source sim, without touching the state.
+        replayed = resumed.act(_prepare("order-1", tick=0, request_id="p1"))
+        assert replayed == original
+        assert isinstance(replayed, RestaurantState)
+        assert resumed.checkpoint().state == before
+
+    def test_a_checkpoint_survives_a_canonical_json_round_trip(self):
+        sim = _sim()
+        self._first_half(sim)
+        checkpoint = sim.checkpoint()
+        wire = json.loads(
+            json.dumps(checkpoint.model_dump(by_alias=True, mode="json"))
+        )
+        restored = RestaurantCheckpoint.model_validate(wire)
+        assert restored == checkpoint
+
+        resumed = _sim()
+        resumed.restore(restored)
+        straight_through = _sim()
+        self._first_half(straight_through)
+        assert self._second_half(resumed) == self._second_half(straight_through)

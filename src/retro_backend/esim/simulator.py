@@ -11,11 +11,6 @@ Tick order is fixed and not negotiable (see class docstring on
 
 Known scope limits, tracked rather than silently patched:
 
-- ``checkpoint()`` returns the wire :class:`RestaurantState` only. Internal
-  scheduling state (in-flight prep timers) does not survive a checkpoint, so
-  resuming a *new* ``RestaurantSim`` from a checkpoint mid-episode is not yet
-  supported -- only replaying the full action sequence from ``reset()`` is.
-  Full resumability is case-loading territory (#58), not this issue.
 - Player corrections are not part of ``act()``. ``ActionEnvelope`` only
   models worker-issued, tool-shaped actions; the docs' player-correction
   trace shape (free text, ``targetRole``, no ``tool``) is a different event
@@ -39,6 +34,7 @@ from retro_backend.esim.contracts import (
     EquipmentItem,
     Observation,
     Order,
+    RestaurantCheckpoint,
     RestaurantState,
     Role,
     Table,
@@ -145,8 +141,33 @@ class RestaurantSim:
         self._idempotency_cache = {}
         return self._state
 
-    def checkpoint(self) -> RestaurantState:
-        """The full state, seed, version, and tick -- see module docstring."""
+    def checkpoint(self) -> RestaurantCheckpoint:
+        """The full resumable state: wire state plus simulator bookkeeping.
+
+        ``version``, ``seed``, and ``episode.tick`` come along inside
+        ``state``; the prep timers, PRNG position, and consumed idempotency
+        keys live outside :class:`RestaurantState` and would otherwise be
+        lost, so :meth:`restore` can rebuild this sim exactly.
+        """
+        return RestaurantCheckpoint(
+            state=self._state,
+            prep_remaining=dict(self._prep_remaining),
+            rng_state=self._rng.export_state(),
+            idempotency_cache=dict(self._idempotency_cache),
+        )
+
+    def restore(self, checkpoint: RestaurantCheckpoint) -> RestaurantState:
+        """Resume from ``checkpoint``, discarding whatever this sim held.
+
+        The frozen case (initial layout and event schedule) is constructor
+        state, not episode state, so it is not carried in the checkpoint:
+        restore into a sim built from the same case and the rest of the
+        episode replays byte-identically.
+        """
+        self._state = checkpoint.state
+        self._prep_remaining = dict(checkpoint.prep_remaining)
+        self._rng = Rng.from_state(checkpoint.rng_state)
+        self._idempotency_cache = dict(checkpoint.idempotency_cache)
         return self._state
 
     def observe(self, role: Role) -> Observation:
