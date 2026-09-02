@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tui-gamepigeon.dev/contracts/restaurant-arena-action-v1.schema.json",
+  "title": "Restaurant Arena action v1",
+  "$comment": "Worker actions and typed player suggestions share this envelope. \"actorType\" distinguishes them; the simulator applies role permissions to worker actions and never treats player text as a direct state mutation. No provider, SDK, model name, or prompt format belongs in this contract. Per-tool \"arguments\" schemas are tracked separately.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "episodeId",
+    "actorId",
+    "actorType",
+    "role",
+    "tool",
+    "arguments",
+    "tick",
+    "timestamp",
+    "requestId",
+    "idempotencyKey"
+  ],
+  "properties": {
+    "version": { "const": "restaurant-arena-action/v1" },
+    "episodeId": { "$ref": "#/$defs/arenaId" },
+    "actorId": { "$ref": "#/$defs/arenaId" },
+    "actorType": { "enum": ["worker", "player"] },
+    "role": { "enum": ["chef", "server", "host", "expediter"] },
+    "tool": {
+      "enum": [
+        "inspect",
+        "prepare",
+        "serve",
+        "seat",
+        "update_guest",
+        "coordinate",
+        "request_help",
+        "send_message"
+      ]
+    },
+    "arguments": { "type": "object" },
+    "tick": { "type": "integer", "minimum": 0 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "requestId": { "$ref": "#/$defs/arenaId" },
+    "idempotencyKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,129}$",
+      "maxLength": 130
+    }
+  },
+  "$defs": {
+    "arenaId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "maxLength": 64
+    },
+    "actionError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "enum": [
+            "role_not_permitted",
+            "invalid_arguments",
+            "unknown_entity",
+            "invalid_state",
+            "stale_tick",
+            "duplicate_request",
+            "unsafe_action",
+            "episode_complete"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "retryable": { "type": "boolean" }
+      }
+    }
+  }
+}

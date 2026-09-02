@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tui-gamepigeon.dev/contracts/restaurant-arena-observation-v1.schema.json",
+  "title": "Restaurant Arena role observation v1",
+  "$comment": "Observations are projections of the same state and carry only what the role is allowed to use. Humans and agents receive the same information; only the interface differs. Selection is by the \"role\" discriminator.",
+  "type": "object",
+  "required": ["version", "role", "tick", "load"],
+  "properties": {
+    "version": { "const": "restaurant-arena-observation/v1" },
+    "role": { "$ref": "#/$defs/role" },
+    "tick": { "type": "integer", "minimum": 0 },
+    "load": { "$ref": "#/$defs/load" }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/chefObservation" },
+    { "$ref": "#/$defs/serverObservation" },
+    { "$ref": "#/$defs/hostObservation" },
+    { "$ref": "#/$defs/expediterObservation" }
+  ],
+  "$defs": {
+    "arenaId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "maxLength": 64
+    },
+    "role": { "enum": ["chef", "server", "host", "expediter"] },
+    "orderStatus": {
+      "enum": ["queued", "seated", "preparing", "ready", "served", "cancelled"]
+    },
+    "priority": { "enum": ["normal", "high"] },
+    "load": { "type": "number", "minimum": 0, "maximum": 1 },
+    "chefObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "role", "tick", "load", "orders", "inventory", "equipment"],
+      "properties": {
+        "version": { "const": "restaurant-arena-observation/v1" },
+        "role": { "const": "chef" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "load": { "$ref": "#/$defs/load" },
+        "orders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "items", "priority"],
+            "properties": {
+              "id": { "$ref": "#/$defs/arenaId" },
+              "items": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "allergy": { "type": "string", "minLength": 1 },
+              "priority": { "$ref": "#/$defs/priority" }
+            }
+          }
+        },
+        "inventory": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "equipment": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "status"],
+            "properties": {
+              "id": { "$ref": "#/$defs/arenaId" },
+              "status": { "enum": ["working", "failed", "degraded"] }
+            }
+          }
+        }
+      }
+    },
+    "serverObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "role", "tick", "load", "tables", "guestConstraints"],
+      "properties": {
+        "version": { "const": "restaurant-arena-observation/v1" },
+        "role": { "const": "server" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "load": { "$ref": "#/$defs/load" },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "status", "waitMinutes"],
+            "properties": {
+              "id": { "$ref": "#/$defs/arenaId" },
+              "orderId": { "$ref": "#/$defs/arenaId" },
+              "status": { "$ref": "#/$defs/orderStatus" },
+              "waitMinutes": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "guestConstraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["orderId", "kind", "value"],
+            "properties": {
+              "orderId": { "$ref": "#/$defs/arenaId" },
+              "kind": { "enum": ["allergy", "dietary", "timing"] },
+              "value": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "hostObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "role", "tick", "load", "queue", "tables", "waitEstimateMinutes"],
+      "properties": {
+        "version": { "const": "restaurant-arena-observation/v1" },
+        "role": { "const": "host" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "load": { "$ref": "#/$defs/load" },
+        "queue": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["partyId", "size", "waitMinutes"],
+            "properties": {
+              "partyId": { "$ref": "#/$defs/arenaId" },
+              "size": { "type": "integer", "minimum": 1 },
+              "waitMinutes": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "seats", "status"],
+            "properties": {
+              "id": { "$ref": "#/$defs/arenaId" },
+              "seats": { "type": "integer", "minimum": 1 },
+              "status": { "enum": ["empty", "occupied"] }
+            }
+          }
+        },
+        "waitEstimateMinutes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "expediterObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "role", "tick", "load", "orders", "workers", "incidents"],
+      "properties": {
+        "version": { "const": "restaurant-arena-observation/v1" },
+        "role": { "const": "expediter" },
+        "tick": { "type": "integer", "minimum": 0 },
+        "load": { "$ref": "#/$defs/load" },
+        "orders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "status", "priority", "handoff"],
+            "properties": {
+              "id": { "$ref": "#/$defs/arenaId" },
+              "status": { "$ref": "#/$defs/orderStatus" },
+              "priority": { "$ref": "#/$defs/priority" },
+              "handoff": { "enum": ["kitchen", "pass", "floor"] }
+            }
+          }
+        },
+        "workers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "role", "load"],
+            "properties": {
+              "id": { "$ref": "#/$defs/arenaId" },
+              "role": { "$ref": "#/$defs/role" },
+              "load": { "$ref": "#/$defs/load" }
+            }
+          }
+        },
+        "incidents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "active"],
+            "properties": {
+              "kind": { "enum": ["oven_failure", "warming_shelf_overheat"] },
+              "active": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
