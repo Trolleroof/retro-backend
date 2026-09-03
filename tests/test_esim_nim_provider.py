@@ -57,7 +57,8 @@ def test_validate_https_url_rejects_other_schemes() -> None:
 
 @pytest.mark.asyncio
 async def test_async_rate_limiter_initial_burst() -> None:
-    limiter = AsyncRateLimiter(rate=40.0, capacity=40.0)
+    # 40 requests/sec with burst capacity of 40 requests
+    limiter = AsyncRateLimiter(requests_per_second=40.0, burst_capacity=40.0)
     t0 = time.monotonic()
     for _ in range(10):
         await limiter.acquire()
@@ -67,7 +68,8 @@ async def test_async_rate_limiter_initial_burst() -> None:
 
 @pytest.mark.asyncio
 async def test_async_rate_limiter_throttles_when_exhausted() -> None:
-    limiter = AsyncRateLimiter(rate=10.0, capacity=1.0)
+    # 10 requests/sec with burst capacity of 1 request
+    limiter = AsyncRateLimiter(requests_per_second=10.0, burst_capacity=1.0)
     await limiter.acquire()
 
     t0 = time.monotonic()
@@ -78,9 +80,9 @@ async def test_async_rate_limiter_throttles_when_exhausted() -> None:
 
 def test_async_rate_limiter_invalid_rate() -> None:
     with pytest.raises(ValueError, match="strictly positive"):
-        AsyncRateLimiter(rate=0)
+        AsyncRateLimiter(requests_per_second=0)
     with pytest.raises(ValueError, match="strictly positive"):
-        AsyncRateLimiter(rate=-5)
+        AsyncRateLimiter(requests_per_second=-5)
 
 
 # --- NimAdapter Credentials & Initialization Tests ---
