@@ -4,7 +4,9 @@ Provides a pure httpx.AsyncClient implementation for interacting with NVIDIA NIM
 hosted or self-hosted OpenAI-compatible endpoints (https://integrate.api.nvidia.com/v1).
 
 Key design features:
-- Explicit 40 requests/sec token-bucket rate limiter to avoid 429 Too Many Requests.
+- Explicit 40 requests/sec (40 req/sec) rate limiter to avoid 429 Too Many Requests.
+  Note: This limits HTTP request throughput (req/sec), completely distinct from LLM
+  input/output generation tokens.
 - Strict HTTPS enforcement.
 - Hardcoded temperature 0.0 for deterministic evaluation.
 - Detailed token consumption and latency measurement on success and error paths.
@@ -42,44 +44,65 @@ __all__ = [
 
 DEFAULT_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_NIM_TIMEOUT_SECONDS = 30.0
-DEFAULT_NIM_RATE_LIMIT_RPS = 40.0
+DEFAULT_NIM_RATE_LIMIT_RPS = 40.0  # 40 requests/second
 
 
 class AsyncRateLimiter:
-    """Thread-safe and async-safe token bucket rate limiter.
+    """Thread-safe and async-safe HTTP request rate limiter (req/sec).
 
-    Replenishes tokens smoothly based on elapsed monotonic time up to a maximum
-    burst capacity. Callers await :meth:`acquire` before issuing outbound requests.
+    Enforces an upper bound on HTTP requests per second (req/sec).
+    Replenishes request permits smoothly based on elapsed monotonic time up to a maximum
+    burst capacity. Callers await :meth:`acquire` before issuing each outbound HTTP request.
     """
 
-    def __init__(self, rate: float = 40.0, capacity: float | None = None) -> None:
-        if rate <= 0:
-            raise ValueError(f"Rate must be strictly positive, got: {rate}")
-        self.rate = float(rate)
-        self.capacity = float(capacity if capacity is not None else rate)
-        self._tokens = self.capacity
+    def __init__(
+        self,
+        requests_per_second: float | None = None,
+        burst_capacity: float | None = None,
+        *,
+        rate: float | None = None,
+        capacity: float | None = None,
+    ) -> None:
+        rps = (
+            requests_per_second
+            if requests_per_second is not None
+            else (rate if rate is not None else 40.0)
+        )
+        burst = (
+            burst_capacity
+            if burst_capacity is not None
+            else (capacity if capacity is not None else rps)
+        )
+        if rps <= 0:
+            raise ValueError(f"requests_per_second must be strictly positive, got: {rps}")
+        self.requests_per_second = float(rps)
+        self.burst_capacity = float(burst)
+        self._available_requests = self.burst_capacity
         self._last_updated = time.monotonic()
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
-        """Acquire a single request permit, pausing asynchronously if necessary."""
+        """Acquire permit for 1 HTTP request, pausing asynchronously if rate limit is reached."""
         async with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_updated
             self._last_updated = now
 
-            # Replenish tokens based on elapsed time
-            self._tokens = min(self.capacity, self._tokens + elapsed * self.rate)
+            # Replenish available request permits based on elapsed time (req/sec)
+            self._available_requests = min(
+                self.burst_capacity,
+                self._available_requests + elapsed * self.requests_per_second,
+            )
 
-            if self._tokens < 1.0:
-                needed = 1.0 - self._tokens
-                wait_seconds = needed / self.rate
+            if self._available_requests < 1.0:
+                needed = 1.0 - self._available_requests
+                wait_seconds = needed / self.requests_per_second
                 await asyncio.sleep(wait_seconds)
-                # After sleeping, tokens have reached 1.0
-                self._tokens = 0.0
+                # After sleeping, exactly 1 request permit is consumed
+                self._available_requests = 0.0
                 self._last_updated = time.monotonic()
             else:
-                self._tokens -= 1.0
+                self._available_requests -= 1.0
 
 
 class NimAdapter(ModelAdapter):
@@ -103,7 +126,7 @@ class NimAdapter(ModelAdapter):
             api_key: NVIDIA NIM API key. If omitted, read from NVIDIA_API_KEY or NIM_API_KEY env.
             base_url: Provider base URL. Must start with https://.
             timeout: Explicit request timeout in seconds.
-            rate_limit_rps: Target max requests per second (defaults to 40.0).
+            rate_limit_rps: Max HTTP requests per second (req/sec, defaults to 40.0).
             client: Optional pre-configured httpx.AsyncClient (for testing).
             transport: Optional custom httpx transport (e.g. MockTransport for testing).
         """
@@ -123,9 +146,11 @@ class NimAdapter(ModelAdapter):
             )
         self._api_key = resolved_key.strip()
 
-        # Rate limiter setup
+        # Request rate limiter setup (40 req/sec)
         self._rate_limiter = (
-            AsyncRateLimiter(rate=self.rate_limit_rps) if self.rate_limit_rps > 0 else None
+            AsyncRateLimiter(requests_per_second=self.rate_limit_rps)
+            if self.rate_limit_rps > 0
+            else None
         )
 
         # Client management
@@ -172,7 +197,7 @@ class NimAdapter(ModelAdapter):
             "Accept": "application/json",
         }
 
-        # Apply client-side 40 req/s rate limiting
+        # Apply client-side 40 req/s rate limiting before outbound HTTP request
         if self._rate_limiter is not None:
             await self._rate_limiter.acquire()
 
