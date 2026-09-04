@@ -49,6 +49,7 @@ def test_the_shared_corpus_classifies_as_both_repos_agree(case: dict[str, Any]):
         shelf=shelf,
         probe_tick=CORPUS["probeTick"],
         tick=case["tick"],
+        other_faults_open=case.get("otherFaultsOpen", False),
     )
     if case["expected"] is None:
         assert decision is None

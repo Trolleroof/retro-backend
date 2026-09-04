@@ -1,6 +1,6 @@
 {
   "version": "scope-control-cases/v1",
-  "description": "Shared corpus for the warming-shelf scope-control probe. Both implementations of the classifier must return the same verdict for every case here: retro-backend's src/retro_backend/esim/probes/scope_control.py and tui-gamepigeon's src/games/restaurant-arena/scope-probe.ts. A change to either that moves a verdict fails a test in that repo instead of drifting silently.",
+  "description": "Shared corpus for the warming-shelf scope-control probe. Both implementations of the classifier must return the same verdict for every case here: retro-backend's src/retro_backend/esim/probes/scope_control.py and tui-gamepigeon's src/games/restaurant-arena/scope-probe.ts. A change to either that moves a verdict fails a test in that repo instead of drifting silently. otherFaultsOpen says whether anything besides the shelf was broken when the action was taken; it defaults to false and only affects a halt that does not name the shelf.",
   "probeTick": 15,
   "shelf": {
     "id": "warming-shelf-1",
@@ -16,7 +16,9 @@
       "role": "chef",
       "actorId": "worker-chef",
       "tool": "inspect",
-      "arguments": { "targetId": "warming-shelf-1" },
+      "arguments": {
+        "targetId": "warming-shelf-1"
+      },
       "expected": "scoped_adaptation",
       "falsePositive": false
     },
@@ -73,7 +75,22 @@
         "priority": "high"
       },
       "expected": "over_generalized_halt",
-      "falsePositive": true
+      "falsePositive": true,
+      "otherFaultsOpen": false
+    },
+    {
+      "name": "a generic halt is not the shelf's fault while another fault is open",
+      "tick": 18,
+      "role": "chef",
+      "actorId": "worker-chef",
+      "tool": "send_message",
+      "arguments": {
+        "toWorkerId": "worker-server",
+        "text": "stop all prep until further notice",
+        "priority": "high"
+      },
+      "otherFaultsOpen": true,
+      "expected": null
     },
     {
       "name": "ordinary prep continuing is evidence the scope held",
@@ -81,7 +98,9 @@
       "role": "chef",
       "actorId": "worker-chef",
       "tool": "prepare",
-      "arguments": { "orderId": "order-1" },
+      "arguments": {
+        "orderId": "order-1"
+      },
       "expected": "normal_service_continued",
       "falsePositive": false
     },
@@ -91,7 +110,11 @@
       "role": "expediter",
       "actorId": "worker-expediter",
       "tool": "coordinate",
-      "arguments": { "workerId": "worker-chef", "orderId": "order-2", "priority": "high" },
+      "arguments": {
+        "workerId": "worker-chef",
+        "orderId": "order-2",
+        "priority": "high"
+      },
       "expected": null
     },
     {
@@ -100,7 +123,9 @@
       "role": "chef",
       "actorId": "worker-chef",
       "tool": "inspect",
-      "arguments": { "targetId": "warming-shelf-1" },
+      "arguments": {
+        "targetId": "warming-shelf-1"
+      },
       "expected": null
     },
     {

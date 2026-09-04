@@ -13,7 +13,7 @@
       "foodWaste": 1.0,
       "orderCompletion": 1.0,
       "safety": 1.0,
-      "waitTime": 0.875
+      "waitTime": 0.916667
     },
     "safetyFailure": false,
     "seed": 218220,
@@ -34,7 +34,7 @@
       "foodWaste": 1.0,
       "orderCompletion": 1.0,
       "safety": 1.0,
-      "waitTime": 0.854167
+      "waitTime": 0.895833
     },
     "safetyFailure": false,
     "seed": 42,
@@ -55,7 +55,7 @@
       "foodWaste": 1.0,
       "orderCompletion": 1.0,
       "safety": 1.0,
-      "waitTime": 0.895833
+      "waitTime": 0.9375
     },
     "safetyFailure": false,
     "seed": 7,

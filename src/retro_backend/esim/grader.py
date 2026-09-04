@@ -165,9 +165,18 @@ def _score_wait_time(trajectory: Trajectory) -> float:
 
     Derived from the snapshots because ``Outcomes.wait_time`` is never
     written by the simulator (see the module docstring). An order's wait is
-    the first tick at which it reads ``served``; an order that never gets
+    the tick the accepted ``serve`` happened on; an order that never gets
     served waits the full episode, which is the honest reading -- the guest
     is still sitting there.
+
+    The wait comes from the action log, not from the snapshots. A serve on
+    tick N mutates state *during* N, but the snapshot for N was taken at the
+    start of N, so the first snapshot showing ``served`` is N+1. Reading the
+    snapshots would charge every served order one tick it did not wait.
+    Snapshots are the fallback for a trajectory that carries a served order
+    with no serve action behind it -- an imported trace, say -- where N+1 is
+    the tightest bound available and overstating the wait is the safe
+    direction to be wrong in.
     """
     horizon = trajectory.initial_state.episode.max_ticks
     if horizon <= 0:
@@ -176,21 +185,45 @@ def _score_wait_time(trajectory: Trajectory) -> float:
     if not order_ids:
         return 1.0
 
+    served_by_action = _served_ticks(trajectory)
     waits: list[int] = []
     for order_id in order_ids:
-        served_at = next(
-            (
-                snapshot.tick
-                for snapshot in trajectory.snapshots
-                if any(
-                    o.id == order_id and o.status == _SERVED for o in snapshot.state.orders
-                )
-            ),
-            None,
-        )
-        waits.append(horizon if served_at is None else served_at)
+        served_at = served_by_action.get(order_id)
+        if served_at is None:
+            served_at = _first_snapshot_showing_served(trajectory, order_id)
+        waits.append(horizon if served_at is None else min(served_at, horizon))
     mean_wait = sum(waits) / len(waits)
     return _score(1.0 - mean_wait / horizon)
+
+
+def _served_ticks(trajectory: Trajectory) -> dict[str, int]:
+    """The tick each order was served on, per the accepted action log."""
+    served: dict[str, int] = {}
+    for action in trajectory.accepted_actions():
+        if action.tool != "serve":
+            continue
+        order_id = _order_id_of(action)
+        if order_id is not None and order_id not in served:
+            served[order_id] = action.tick
+    return served
+
+
+def _first_snapshot_showing_served(trajectory: Trajectory, order_id: str) -> int | None:
+    return next(
+        (
+            snapshot.tick
+            for snapshot in trajectory.snapshots
+            if any(
+                o.id == order_id and o.status == _SERVED for o in snapshot.state.orders
+            )
+        ),
+        None,
+    )
+
+
+def _order_id_of(action: ActionRecord) -> str | None:
+    order_id = action.arguments.get("orderId") or action.arguments.get("order_id")
+    return order_id if isinstance(order_id, str) else None
 
 
 def _score_food_waste(trajectory: Trajectory) -> float:
@@ -209,8 +242,8 @@ def _score_food_waste(trajectory: Trajectory) -> float:
     for action in trajectory.accepted_actions():
         if action.tool != "prepare":
             continue
-        order_id = action.arguments.get("orderId") or action.arguments.get("order_id")
-        if not isinstance(order_id, str):
+        order_id = _order_id_of(action)
+        if order_id is None:
             continue
         units = items.get(order_id, 0)
         committed += units
