@@ -5,6 +5,9 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from retro_backend.esim.contracts import (
     ActionEnvelope,
     ActionError,
@@ -13,7 +16,12 @@ from retro_backend.esim.contracts import (
     Role,
     Tool,
 )
-from retro_backend.esim.simulator import DINNER_RUSH_001_SCHEDULE, RestaurantSim
+from retro_backend.esim.simulator import (
+    DINNER_RUSH_001_SCHEDULE,
+    PLAYER_ACTOR_ID,
+    RestaurantSim,
+    ScheduledIncident,
+)
 from retro_backend.esim.state_hash import state_hash
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -607,3 +615,80 @@ class TestCheckpointRestore:
         straight_through = _sim()
         self._first_half(straight_through)
         assert self._second_half(resumed) == self._second_half(straight_through)
+
+
+class TestScheduledPlayerCorrection:
+    """The scripted correction is a real message, not a hidden nudge (#71)."""
+
+    def test_it_reaches_the_addressed_worker_on_the_next_tick(self):
+        sim = _sim()
+        sim.reset(42)
+        for _ in range(9):
+            sim.advance_time()
+        # Fired at tick 9, readable at tick 10 -- the same one-tick inbox rule
+        # every worker-to-worker message follows.
+        assert sim.observe("chef").messages == ()
+        sim.advance_time()
+        messages = sim.observe("chef").messages
+        assert len(messages) == 1
+        assert messages[0].from_worker_id == PLAYER_ACTOR_ID
+        assert messages[0].priority == "high"
+        assert "order-2" in messages[0].text
+
+    def test_it_goes_only_to_the_worker_it_names(self):
+        sim = _sim()
+        sim.reset(42)
+        for _ in range(10):
+            sim.advance_time()
+        assert sim.observe("server").messages == ()
+        assert sim.observe("expediter").messages == ()
+
+    def test_it_expires_like_any_other_message(self):
+        sim = _sim()
+        sim.reset(42)
+        for _ in range(11):
+            sim.advance_time()
+        assert sim.observe("chef").messages == ()
+
+    def test_it_does_not_mutate_state_behind_the_worker_s_back(self):
+        sim = _sim()
+        sim.reset(42)
+        for _ in range(8):
+            sim.advance_time()
+        before = sim.checkpoint().state
+        after = sim.advance_time()
+        # Tick 9 carries the correction and nothing else, so the only thing
+        # that may differ is the clock and the tick.
+        assert after.orders == before.orders
+        assert after.equipment == before.equipment
+        assert after.workers == before.workers
+        assert after.outcomes == before.outcomes
+
+
+class TestScheduledIncidentValidation:
+    def test_a_correction_without_text_is_rejected(self):
+        with pytest.raises(ValidationError, match="requires text"):
+            ScheduledIncident(
+                tick=9, kind="player_correction", target_id="worker-chef"
+            )
+
+    def test_a_fault_carrying_text_is_rejected(self):
+        with pytest.raises(ValidationError, match="does not carry text"):
+            ScheduledIncident(
+                tick=8, kind="oven_failure", target_id="oven-1", text="nope"
+            )
+
+    def test_a_correction_for_an_unknown_worker_is_dropped_not_raised(self):
+        sim = RestaurantSim(
+            _initial_state(),
+            event_schedule=(
+                ScheduledIncident(
+                    tick=1,
+                    kind="player_correction",
+                    target_id="worker-nobody",
+                    text="verify order-2",
+                ),
+            ),
+        )
+        sim.reset(42)
+        assert sim.advance_time().episode.tick == 1

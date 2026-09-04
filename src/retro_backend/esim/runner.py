@@ -1,4 +1,12 @@
-"""Run one frozen Restaurant E-Sim case against one model adapter (#70)."""
+"""Run one frozen Restaurant E-Sim case against one model adapter (#70).
+
+The run also records a :class:`~retro_backend.esim.trajectory.Trajectory`
+(#71). The JSONL sink stays what it was -- an auditable per-attempt log,
+including the model text -- but it is a stream, not an object, and the
+deterministic grader needs an object: per-tick states, the accepted and
+rejected action log, and the incidents that fired. Recording is free of the
+model loop and free of grading; nothing here scores anything.
+"""
 
 import json
 from collections import Counter
@@ -9,7 +17,7 @@ from typing import Any, TextIO
 
 from pydantic import ValidationError
 
-from retro_backend.esim.case import load_case
+from retro_backend.esim.case import ENV_VERSION, load_case
 from retro_backend.esim.contracts import ACTION_VERSION, ActionEnvelope, ActionError, Role
 from retro_backend.esim.providers.base import ModelAdapter, ModelReply
 from retro_backend.esim.providers.registry import get_adapter
@@ -21,6 +29,7 @@ from retro_backend.esim.rotation import (
 from retro_backend.esim.simulator import RestaurantSim
 from retro_backend.esim.state_hash import state_hash
 from retro_backend.esim.tools import ROLE_TOOLS, TOOL_ARGS
+from retro_backend.esim.trajectory import Trajectory, TrajectoryRecorder
 
 RUNNER_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -43,6 +52,10 @@ class RunnerConfig:
 @dataclass(frozen=True, slots=True)
 class RunResult:
     summary: Mapping[str, object]
+    # Everything the grader is allowed to read. Kept beside the summary
+    # rather than folded into it: the summary is a human-readable JSONL
+    # record, the trajectory is a typed artifact that round-trips to disk.
+    trajectory: Trajectory
 
 
 def _record(sink: TextIO | None, record: Mapping[str, object]) -> None:
@@ -122,6 +135,14 @@ async def run_case(
     case = load_case(config.case_id)
     sim = RestaurantSim(case.initial_state, event_schedule=case.event_schedule)
     state = sim.reset(case.seed)
+    recorder = TrajectoryRecorder(
+        case_id=case.case_id,
+        seed=case.seed,
+        env_version=ENV_VERSION,
+        contract_version=case.contract_version,
+        event_schedule=case.event_schedule,
+    )
+    recorder.record_state(state)
     max_turns = config.max_turns or state.episode.max_ticks * 4
     totals = Counter[str]()
     latency_ms = 0.0
@@ -183,6 +204,7 @@ async def run_case(
                     _record(jsonl, record)
                     break
                 result = sim.act(action)
+                recorder.record_action(action, result)
                 record["action"] = action.model_dump(by_alias=True, mode="json")
                 if isinstance(result, ActionError):
                     feedback = f"{result.code}: {result.message}"
@@ -201,7 +223,9 @@ async def run_case(
         if termination == "turn_limit":
             break
         state = sim.advance_time()
+        recorder.record_state(state)
 
+    trajectory = recorder.finish(termination)
     summary: dict[str, object] = {
         "event": "summary",
         "caseId": config.case_id,
@@ -221,7 +245,7 @@ async def run_case(
         "finalStateHash": state_hash(state.model_dump(by_alias=True)),
     }
     _record(jsonl, summary)
-    return RunResult(summary=summary)
+    return RunResult(summary=summary, trajectory=trajectory)
 
 
 async def run_model_case(

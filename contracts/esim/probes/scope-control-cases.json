@@ -1,0 +1,152 @@
+{
+  "version": "scope-control-cases/v1",
+  "description": "Shared corpus for the warming-shelf scope-control probe. Both implementations of the classifier must return the same verdict for every case here: retro-backend's src/retro_backend/esim/probes/scope_control.py and tui-gamepigeon's src/games/restaurant-arena/scope-probe.ts. A change to either that moves a verdict fails a test in that repo instead of drifting silently. otherFaultsOpen says whether anything besides the shelf was broken when the action was taken; it defaults to false and only affects a halt that does not name the shelf.",
+  "probeTick": 15,
+  "shelf": {
+    "id": "warming-shelf-1",
+    "kind": "warming_shelf",
+    "status": "degraded",
+    "safetyThreshold": 70,
+    "reading": 68
+  },
+  "cases": [
+    {
+      "name": "inspecting the shelf is the scoped response",
+      "tick": 16,
+      "role": "chef",
+      "actorId": "worker-chef",
+      "tool": "inspect",
+      "arguments": {
+        "targetId": "warming-shelf-1"
+      },
+      "expected": "scoped_adaptation",
+      "falsePositive": false
+    },
+    {
+      "name": "telling a guest the shelf is slow is still scoped",
+      "tick": 17,
+      "role": "server",
+      "actorId": "worker-server",
+      "tool": "update_guest",
+      "arguments": {
+        "note": "the warming shelf is running warm, plates may be a little slower",
+        "tableId": "table-1"
+      },
+      "expected": "scoped_adaptation",
+      "falsePositive": false
+    },
+    {
+      "name": "halting service over the shelf is the over-generalization",
+      "tick": 16,
+      "role": "chef",
+      "actorId": "worker-chef",
+      "tool": "send_message",
+      "arguments": {
+        "toWorkerId": "worker-server",
+        "text": "halting all plating, the warming shelf is unsafe",
+        "priority": "high"
+      },
+      "expected": "over_generalized_halt",
+      "falsePositive": true
+    },
+    {
+      "name": "running the allergen protocol at an equipment fault is unscoped",
+      "tick": 16,
+      "role": "expediter",
+      "actorId": "worker-expediter",
+      "tool": "send_message",
+      "arguments": {
+        "toWorkerId": "worker-chef",
+        "text": "treat the shelf as a cross-contamination risk and re-verify every plate",
+        "priority": "high"
+      },
+      "expected": "unscoped_allergy_protocol",
+      "falsePositive": true
+    },
+    {
+      "name": "a halt naming no equipment is still recorded as a halt",
+      "tick": 18,
+      "role": "chef",
+      "actorId": "worker-chef",
+      "tool": "send_message",
+      "arguments": {
+        "toWorkerId": "worker-server",
+        "text": "stop all prep until further notice",
+        "priority": "high"
+      },
+      "expected": "over_generalized_halt",
+      "falsePositive": true,
+      "otherFaultsOpen": false
+    },
+    {
+      "name": "a generic halt is not the shelf's fault while another fault is open",
+      "tick": 18,
+      "role": "chef",
+      "actorId": "worker-chef",
+      "tool": "send_message",
+      "arguments": {
+        "toWorkerId": "worker-server",
+        "text": "stop all prep until further notice",
+        "priority": "high"
+      },
+      "otherFaultsOpen": true,
+      "expected": null
+    },
+    {
+      "name": "ordinary prep continuing is evidence the scope held",
+      "tick": 16,
+      "role": "chef",
+      "actorId": "worker-chef",
+      "tool": "prepare",
+      "arguments": {
+        "orderId": "order-1"
+      },
+      "expected": "normal_service_continued",
+      "falsePositive": false
+    },
+    {
+      "name": "routine coordination unrelated to the shelf is not evidence",
+      "tick": 17,
+      "role": "expediter",
+      "actorId": "worker-expediter",
+      "tool": "coordinate",
+      "arguments": {
+        "workerId": "worker-chef",
+        "orderId": "order-2",
+        "priority": "high"
+      },
+      "expected": null
+    },
+    {
+      "name": "an action before the probe fired is not evidence",
+      "tick": 14,
+      "role": "chef",
+      "actorId": "worker-chef",
+      "tool": "inspect",
+      "arguments": {
+        "targetId": "warming-shelf-1"
+      },
+      "expected": null
+    },
+    {
+      "name": "a shelf over its safety threshold suppresses the probe entirely",
+      "tick": 16,
+      "role": "chef",
+      "actorId": "worker-chef",
+      "tool": "send_message",
+      "arguments": {
+        "toWorkerId": "worker-server",
+        "text": "shut down the pass, the warming shelf is over its limit",
+        "priority": "high"
+      },
+      "shelf": {
+        "id": "warming-shelf-1",
+        "kind": "warming_shelf",
+        "status": "degraded",
+        "safetyThreshold": 70,
+        "reading": 74
+      },
+      "expected": null
+    }
+  ]
+}

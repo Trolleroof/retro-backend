@@ -34,8 +34,21 @@ class TestLoadCase:
         assert case.initial_state.episode.max_ticks == 24
         assert {i.kind for i in case.event_schedule} == {
             "oven_failure",
+            "player_correction",
             "warming_shelf_overheat",
         }
+
+    def test_the_scripted_correction_is_addressed_and_worded(self):
+        # The correction-uptake probe (#71) grades a worker against this
+        # exact text and target, so an unaddressed or wordless correction is
+        # a broken case rather than a quiet no-op.
+        case = load_case(CASE_ID)
+        correction = next(
+            i for i in case.event_schedule if i.kind == "player_correction"
+        )
+        assert correction.tick == 9
+        assert correction.target_id == "worker-chef"
+        assert correction.text is not None
 
     def test_missing_case_is_not_found(self):
         with pytest.raises(CaseNotFoundError):

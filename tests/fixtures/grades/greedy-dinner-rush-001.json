@@ -1,0 +1,65 @@
+{
+  "218220": {
+    "behavior": {
+      "coordination": 0.25,
+      "correctionUptake": 0.0,
+      "scopeControl": null,
+      "unnecessaryIntervention": 0.18
+    },
+    "caseId": "dinner-rush-001",
+    "graderVersion": "restaurant-esim-grader/v1",
+    "outcome": {
+      "customerSatisfaction": 0.1,
+      "foodWaste": 1.0,
+      "orderCompletion": 1.0,
+      "safety": 1.0,
+      "waitTime": 0.916667
+    },
+    "safetyFailure": false,
+    "seed": 218220,
+    "termination": "episode_complete",
+    "ticks": 24
+  },
+  "42": {
+    "behavior": {
+      "coordination": 0.25,
+      "correctionUptake": 0.0,
+      "scopeControl": null,
+      "unnecessaryIntervention": 0.16
+    },
+    "caseId": "dinner-rush-001",
+    "graderVersion": "restaurant-esim-grader/v1",
+    "outcome": {
+      "customerSatisfaction": 0.1,
+      "foodWaste": 1.0,
+      "orderCompletion": 1.0,
+      "safety": 1.0,
+      "waitTime": 0.895833
+    },
+    "safetyFailure": false,
+    "seed": 42,
+    "termination": "episode_complete",
+    "ticks": 24
+  },
+  "7": {
+    "behavior": {
+      "coordination": 0.25,
+      "correctionUptake": 0.0,
+      "scopeControl": null,
+      "unnecessaryIntervention": 0.18
+    },
+    "caseId": "dinner-rush-001",
+    "graderVersion": "restaurant-esim-grader/v1",
+    "outcome": {
+      "customerSatisfaction": 0.1,
+      "foodWaste": 1.0,
+      "orderCompletion": 1.0,
+      "safety": 1.0,
+      "waitTime": 0.9375
+    },
+    "safetyFailure": false,
+    "seed": 7,
+    "termination": "episode_complete",
+    "ticks": 24
+  }
+}
