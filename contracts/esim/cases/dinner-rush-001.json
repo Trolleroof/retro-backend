@@ -7,6 +7,12 @@
   "horizon": 24,
   "eventSchedule": [
     { "tick": 8, "kind": "oven_failure", "targetId": "oven-1" },
+    {
+      "tick": 9,
+      "kind": "player_correction",
+      "targetId": "worker-chef",
+      "text": "verify the peanut allergy on order-2 before substituting anything"
+    },
     { "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }
   ],
   "rolePermissions": {

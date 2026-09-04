@@ -50,6 +50,13 @@ EquipmentStatus = Literal["working", "failed", "degraded"]
 WorkerLocation = Literal["floor", "kitchen", "pass", "queue"]
 EpisodePhase = Literal["active", "complete"]
 ActorType = Literal["worker", "player"]
+# What a frozen case may schedule. "player_correction" is not a fault: it is
+# the scripted player intervention the correction-uptake probe grades (#71).
+IncidentKind = Literal[
+    "oven_failure",
+    "warming_shelf_overheat",
+    "player_correction",
+]
 
 Tool = Literal[
     "inspect",
