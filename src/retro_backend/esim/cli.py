@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from retro_backend.esim.case import ENV_VERSION, CaseError, load_case
 from retro_backend.esim.grader import GRADER_VERSION, SERVED, Grade, grade
+from retro_backend.esim.parity import ParityReport, TraceLoadError, check_parity
 from retro_backend.esim.runner import (
     RunnerConfig,
     RunResult,
@@ -361,6 +362,70 @@ async def _regrade_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _report_parity(report: ParityReport) -> None:
+    """Print the finding, leading with the verdict rather than the scores."""
+    print(f"episode={report.episode_id} verdict={report.verdict}")
+    print(
+        f"  contract: trace={report.trace_contract_version} engine={report.engine_contract_version}"
+    )
+    print(f"  env:      trace={report.trace_env_version} engine={report.engine_env_version}")
+    if report.encoding is not None:
+        print(f"  exported hash:   {report.encoding.exported_hash}")
+        print(f"  normalized hash: {report.encoding.normalized_hash}")
+        # Capped because a whole-state spelling mismatch names every numeric
+        # field, and a hundred identical lines bury the ones that differ in
+        # content -- which are the only ones a serializer fix will not cure.
+        content = [d for d in report.encoding.divergences if not d.numeric_spelling_only]
+        spelling = [d for d in report.encoding.divergences if d.numeric_spelling_only]
+        for divergence in content[:20]:
+            spelled = f"exported={divergence.exported} engine={divergence.normalized}"
+            print(f"  CONTENT  {divergence.path}: {spelled}")
+        if len(content) > 20:
+            print(f"  CONTENT  ... and {len(content) - 20} more")
+        for divergence in spelling[:5]:
+            spelled = f"exported={divergence.exported} engine={divergence.normalized}"
+            print(f"  SPELLING {divergence.path}: {spelled}")
+        if len(spelling) > 5:
+            print(f"  SPELLING ... and {len(spelling) - 5} more numeric field(s)")
+    if report.blocked_reason is not None:
+        print(f"  why: {report.blocked_reason}")
+
+
+async def _parity_command(args: argparse.Namespace) -> int:
+    """Check whether a foreign trace export is gradeable by this engine.
+
+    Exit status is the finding, so a caller can act on it without parsing
+    prose: 5 means the export is not comparable, 6 means comparability holds
+    but parity itself was never demonstrated. 0 is reserved for parity
+    actually proven by replay, and **nothing reaches it today** -- a trace
+    carries no event schedule, so the replay stage cannot run. That the
+    success code is currently unreachable is the honest state of the check,
+    not an oversight to paper over with a green exit.
+    """
+    path = Path(args.trace)
+    try:
+        payload = json.loads(path.read_text())
+    except FileNotFoundError:
+        raise TraceLoadError(f"{path}: no such file") from None
+    except json.JSONDecodeError as exc:
+        raise TraceLoadError(f"{path}: not valid JSON ({exc.msg} at line {exc.lineno})") from exc
+    if not isinstance(payload, dict):
+        raise TraceLoadError(f"{path}: top level is not an object")
+
+    report = check_parity(payload)
+    print(f"  <- {path}")
+    _report_parity(report)
+
+    if args.output is not None:
+        destination = Path(args.output)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(destination, report.model_dump(by_alias=True, mode="json"))
+        print(f"  -> {destination}")
+    if not report.comparable:
+        return 5
+    return 6 if report.verdict == "parity_unproven" else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m retro_backend.esim.cli",
@@ -401,6 +466,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="write the new grade here; prints to stdout only when omitted",
     )
     regrade.set_defaults(func=_regrade_command)
+
+    parity = sub.add_parser(
+        "parity",
+        help="check whether a foreign trace export can be graded by this engine",
+    )
+    parity.add_argument("--trace", required=True, help="path to a restaurant-arena-trace/v1 export")
+    parity.add_argument("--output", default=None, help="write the parity report here as JSON")
+    parity.set_defaults(func=_parity_command)
     return parser
 
 
@@ -416,6 +489,9 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     except TrajectoryLoadError as exc:
         print(f"unreadable trajectory: {exc}", file=sys.stderr)
+        return 4
+    except TraceLoadError as exc:
+        print(f"unreadable trace: {exc}", file=sys.stderr)
         return 4
     except ValueError as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
