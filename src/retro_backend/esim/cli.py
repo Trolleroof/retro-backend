@@ -381,8 +381,6 @@ async def _regrade_command(args: argparse.Namespace) -> int:
 
 def _report_parity(report: ParityReport) -> None:
     print(f"episode={report.episode_id} verdict={report.verdict}")
-    if report.ticks_compared:
-        print(f"  ticks compared: {report.ticks_compared}")
     for difference in report.differences:
         print(f"  {difference}")
     print(f"  why: {report.reason}")

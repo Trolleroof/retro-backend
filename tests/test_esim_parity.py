@@ -1,12 +1,22 @@
-"""Cross-engine parity ingest (#72).
+"""Cross-engine parity ingest (#72), corrected against the Tui side's answers.
 
-The exports here are synthetic. The real D2-A Tui session was not available
-when this was written, so nothing here is evidence that the Tui client and
-this engine agree -- only that the check reports honestly on what it is given.
+Trolleroof/tui-gamepigeon#277 (comment 5554247493) answered three questions
+this module had raised, and answering them exposed a real bug in the
+original design: the "encoding" check hashed the export's raw JSON against
+that same JSON re-serialized through our own model. Those always differed --
+Pydantic coerces an int into a float on a float-typed field and fills an
+absent key with ``None`` -- regardless of whether the underlying restaurant
+state matched at all. It was never a report of two engines disagreeing.
 
-The JS-style fixture is the same episode with integral floats written the way
-``JSON.stringify`` writes them. It exists so the check is exercised against
-the failure that is actually expected, not only against a passing case.
+The corrected design compares the export's ``initialState`` against genuine
+ground truth: this engine's own ``sim.reset(seed)`` for the case the trace
+names. Wire-format spelling (``70`` vs ``70.0``) is irrelevant here -- both
+sides are parsed through the same Pydantic model before anything is hashed.
+
+``TUI_LIVE`` is the one real export available, fetched from
+docs/evidence/issue-275/played-shift.json at commit a9220e2. It is a
+``live`` run and carries no ``caseId``, so it cannot be checked against
+ground truth or replayed -- see Trolleroof/retro-backend#78.
 """
 
 import json
@@ -47,12 +57,14 @@ class TestV3Support:
         kinds = {event.kind for event in trace.events}
         assert "inspection" in kinds
 
-    def test_a_v3_export_with_a_version_mismatch_still_reports_cleanly(self) -> None:
-        # Real export today: v3 loads, but envVersion does not match this
-        # engine's, so the check stops at the contract gate -- not a crash.
+    def test_a_real_export_with_no_case_id_is_unproven_not_crashed(self) -> None:
+        # Before the ground-truth redesign this reported "mismatch" on
+        # spelling artifacts that were never a real disagreement. Now that
+        # envVersion is not gated on and initialState is checked against a
+        # named case, a live export with neither simply cannot be verified.
         report = check_parity(json.loads(TUI_LIVE.read_text()))
-        assert report.verdict == "mismatch"
-        assert "0.3.4" in report.reason
+        assert report.verdict == "unproven"
+        assert "no caseId" in report.reason
 
 
 class TestUnreadableExports:
@@ -81,8 +93,8 @@ class TestUnreadableExports:
             load_trace(payload)
 
 
-class TestMismatch:
-    def test_a_version_mismatch_stops_before_hashing(self) -> None:
+class TestContractGate:
+    def test_a_version_mismatch_stops_before_anything_else(self) -> None:
         payload = _native()
         payload["contractVersion"] = "restaurant-arena/v2"
         report = check_parity(payload)
@@ -90,65 +102,84 @@ class TestMismatch:
         assert report.differences == ()
         assert "nothing was compared" in report.reason
 
-    def test_a_js_style_export_is_caught(self) -> None:
-        report = check_parity(json.loads(JS_STYLE.read_text()))
-        assert report.verdict == "mismatch"
-        assert "70.0, not 70" in report.reason
+    def test_env_version_is_not_gated_on(self) -> None:
+        # Confirmed by the Tui side: envVersion is the producer's own build
+        # version (kept in step with package.json), not a simulator
+        # revision, and must never be compared with this engine's own.
+        payload = _native()
+        payload["envVersion"] = "0.3.4"
+        report = check_parity(payload)
+        assert report.verdict != "mismatch" or "envVersion" not in report.reason
 
-    def test_the_differing_fields_are_named_with_both_spellings(self) -> None:
-        report = check_parity(json.loads(JS_STYLE.read_text()))
-        assert "/equipment[1]/reading: exported=62 engine=62.0" in report.differences
 
-    def test_the_field_list_is_capped(self) -> None:
-        # 13 fields differ; an uncapped list buries the useful ones.
-        report = check_parity(json.loads(JS_STYLE.read_text()))
-        assert len(report.differences) == 11
-        assert report.differences[-1] == "... and 3 more field(s)"
+class TestNoCaseId:
+    """No caseId means no ground truth for initialState and no schedule."""
 
-    def test_an_omitted_nullable_field_is_not_mistaken_for_null(self) -> None:
-        # `Mapping.get` reads an absent key and an explicit null the same way,
-        # so this once produced "mismatch" alongside "0 field(s) differ" --
-        # a verdict naming nothing. The two hash differently because
-        # canonical JSON carries the key in one case and not the other.
+    def test_reports_unproven_not_a_spelling_mismatch(self) -> None:
+        payload = _native()
+        del payload["caseId"]
+        report = check_parity(payload)
+        assert report.verdict == "unproven"
+        assert report.differences == ()
+
+    def test_the_reason_names_both_missing_capabilities(self) -> None:
+        payload = _native()
+        del payload["caseId"]
+        reason = check_parity(payload).reason
+        assert "ground truth" in reason
+        assert "event schedule" in reason
+
+
+class TestGroundTruthComparison:
+    """initialState is checked against this engine's own sim.reset(seed)."""
+
+    def test_a_faithful_export_matches_ground_truth(self) -> None:
+        report = check_parity(_native())
+        assert report.verdict == "unproven"  # matched, but see TestReplay
+        assert "initial state matched" in report.reason
+
+    def test_wire_spelling_of_integral_floats_does_not_matter(self) -> None:
+        # The original bug this test guards against: hashing raw exported
+        # JSON against a Pydantic-coerced re-dump always disagreed on every
+        # integral float, independent of whether the state actually matched.
+        # Both engines parse through the same model now, so it is a no-op.
+        report = check_parity(json.loads(JS_STYLE.read_text()))
+        assert report.verdict == "unproven"
+        assert "initial state matched" in report.reason
+
+    def test_a_genuine_content_difference_is_still_caught(self) -> None:
         payload = _native()
         state = dict(payload["initialState"])
-        order = dict(state["orders"][0])
-        assert order["allergy"] is None
-        del order["allergy"]
-        state["orders"] = [order, *state["orders"][1:]]
+        state["reputation"] = 12
         payload["initialState"] = state
         report = check_parity(payload)
         assert report.verdict == "mismatch"
-        assert report.differences == ("/orders[0]/allergy: exported=absent engine=None",)
+        assert any("/reputation" in d for d in report.differences)
 
-    def test_a_field_the_export_omits_is_reported_too(self) -> None:
-        # Changing a *value* would not test this -- both sides move together.
+    def test_an_unknown_case_is_reported_not_guessed(self) -> None:
         payload = _native()
-        state = dict(payload["initialState"])
-        del state["version"]
-        payload["initialState"] = state
+        payload["caseId"] = "no-such-case"
         report = check_parity(payload)
         assert report.verdict == "mismatch"
-        assert report.differences == ("/version: exported=absent engine='restaurant-arena/v1'",)
+        assert "no-such-case" in report.reason
 
 
 class TestReplay:
-    """The export names its case, so the event schedule can be recovered."""
+    """Actions replay against the reset state, but nothing verifies the
+    result: the export carries no hash comparable with RestaurantState.
+    """
 
-    def test_a_faithful_export_replays_to_parity(self) -> None:
+    def test_a_faithful_export_replays_without_error(self) -> None:
         report = check_parity(_native())
-        assert report.verdict == "parity"
-        assert report.ticks_compared == 25
-        assert report.first_divergent_tick is None
+        assert report.verdict == "unproven"
+        assert "replayed 50 action(s)" in report.reason
 
-    def test_dropping_the_actions_diverges_and_names_the_tick(self) -> None:
-        # Proves replay is actually driven by the recorded actions rather
-        # than reproducing the states by coincidence.
-        payload = _native()
-        payload["events"] = [e for e in payload["events"] if e["kind"] != "action"]
-        report = check_parity(payload)
-        assert report.verdict == "mismatch"
-        assert report.first_divergent_tick == 1
+    def test_replay_never_returns_parity(self) -> None:
+        # Exit 0 is reserved for a state-only checkpoint hash Tui does not
+        # expose yet (see #277). Nothing may reach it by comparing against
+        # events[].stateHash or replay.inputs[].stateHash -- confirmed by
+        # the Tui side to be different hash families entirely.
+        assert check_parity(_native()).verdict != "parity"
 
     def test_an_unreadable_action_is_raised_not_skipped(self) -> None:
         # Skipping it would replay a shorter episode than the one exported
@@ -161,44 +192,17 @@ class TestReplay:
         with pytest.raises(TraceLoadError, match="cannot read"):
             check_parity(payload)
 
-    def test_an_unknown_case_is_reported_not_guessed(self) -> None:
-        payload = _native()
-        payload["caseId"] = "no-such-case"
-        report = check_parity(payload)
-        assert report.verdict == "mismatch"
-        assert "no-such-case" in report.reason
-
-
-class TestParityIsNeverClaimed:
-    def test_an_export_without_a_case_id_stays_unproven(self) -> None:
-        # A v1 export names no case, so the incidents cannot be recovered.
-        payload = _native()
-        del payload["caseId"]
-        report = check_parity(payload)
-        assert report.verdict == "unproven"
-        assert report.ticks_compared == 0
-
-    def test_the_reason_names_the_missing_event_schedule(self) -> None:
-        payload = _native()
-        del payload["caseId"]
-        assert "event schedule" in check_parity(payload).reason
-
 
 class TestParityCommand:
-    def test_an_incomparable_export_exits_five(self) -> None:
-        assert main(["parity", "--trace", str(JS_STYLE)]) == 5
-
-    def test_a_replayed_export_exits_zero(self) -> None:
-        assert main(["parity", "--trace", str(NATIVE)]) == 0
-
-    def test_an_unproven_export_exits_six_not_zero(self, tmp_path: Path) -> None:
-        # Exit 0 must mean replay reproduced the run. An export that never
-        # got replayed may not share it.
+    def test_an_incomparable_export_exits_five(self, tmp_path: Path) -> None:
         payload = _native()
-        del payload["caseId"]
-        path = tmp_path / "no-case.json"
+        payload["contractVersion"] = "restaurant-arena/v2"
+        path = tmp_path / "trace.json"
         path.write_text(json.dumps(payload))
-        assert main(["parity", "--trace", str(path)]) == 6
+        assert main(["parity", "--trace", str(path)]) == 5
+
+    def test_an_unproven_export_exits_six_not_zero(self) -> None:
+        assert main(["parity", "--trace", str(NATIVE)]) == 6
 
     def test_an_unreadable_export_exits_four(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -216,7 +220,6 @@ class TestParityCommand:
 
     def test_the_report_can_be_written_as_json(self, tmp_path: Path) -> None:
         out = tmp_path / "parity.json"
-        main(["parity", "--trace", str(JS_STYLE), "--output", str(out)])
+        main(["parity", "--trace", str(NATIVE), "--output", str(out)])
         written = json.loads(out.read_text())
-        assert written["verdict"] == "mismatch"
-        assert written["differences"]
+        assert written["verdict"] == "unproven"

@@ -1,14 +1,23 @@
 """Cross-engine parity: can a foreign trace be graded by this engine? (#72)
 
 The Tui client runs its own copy of the restaurant and exports a
-``restaurant-arena-trace/v1``. This checks whether such an export is one this
-engine could grade, and says plainly when it is not.
+``restaurant-arena-trace/v1`` or ``/v3``. This checks whether such an export
+is one this engine could grade, and says plainly when it is not.
 
-**The known incompatibility.** ``state_hash`` writes a float as ``1.0``;
-JavaScript has one number type and ``JSON.stringify`` writes ``1``. Two engines
-can hold the same restaurant and publish different digests for it. The agreed
-fix is that the exporter writes ``70.0`` -- this engine's spelling is the
-contract, and nothing here normalizes numbers to paper over a mismatch.
+**A dead end worth recording.** The original design hashed the export's raw
+JSON and compared it with that same JSON parsed into our models and dumped
+back, on the theory that a float written ``70`` instead of ``70.0`` (all
+JavaScript integers serialize without a decimal point) would show up as a
+false mismatch. That framing was wrong: comparing pre-parse bytes to
+post-parse bytes of *the same input* always disagrees on every integral
+float and every optional field, whether or not the underlying restaurant
+state matches at all -- a self-comparison, not a check against anything.
+Also, ``initialState`` is plain JSON produced by a JS runtime; it cannot be
+made to spell an integer ``70.0`` short of a hand-written string serializer,
+which was never actually shipped for it. :func:`check_parity` instead
+compares the export against genuine ground truth -- this engine's own
+``sim.reset(seed)`` for the case the trace names -- so wire-format number
+spelling plays no part in the result at all.
 
 **What this will not do.** It does not rewrite events, coerce an unknown role
 onto a known one, or round numbers to make digests agree. When the check cannot
@@ -21,6 +30,24 @@ obviously, which ``restaurant-arena/v1`` has no field for. Two engines can
 therefore agree on every tick hash while disagreeing about undelivered
 messages. A verdict of ``parity`` means the recorded actions reproduce the
 recorded states, not that the engines are identical.
+
+**Three questions the Tui side answered directly**
+(Trolleroof/tui-gamepigeon#277, comment 5554247493):
+
+1. ``envVersion`` is the Tui *application build*, kept in step with its own
+   package version -- it is not a simulator revision and is never compared
+   with this engine's ``ENV_VERSION``. Only ``contractVersion`` gates parity.
+2. ``events[].stateHash`` and ``replay.inputs[].stateHash`` are **not**
+   ``RestaurantState`` hashes. The former is an event-payload fingerprint
+   (for the initial event, exactly ``{seed, episodeId, tick}``); the latter
+   hashes the native Tui runtime checkpoint -- RNG state, queues, inboxes,
+   and more, not the wire state alone. Only ``initialState`` is a genuine
+   ``RestaurantState``, so it is the only field this module hashes for
+   comparison. Per-tick replay parity needs Tui to expose a state-only
+   checkpoint hash, which does not exist yet -- see :func:`_replay`.
+3. A nullable field is exported *absent*, never as JSON ``null``. Backend
+   normalization strips ``None`` optional fields before hashing so both
+   sides describe the same shape; see :func:`_drop_none`.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
@@ -28,7 +55,7 @@ from typing import Literal, override
 
 from pydantic import Field, ValidationError
 
-from retro_backend.esim.case import ENV_VERSION, CaseError, load_case
+from retro_backend.esim.case import CaseError, load_case
 from retro_backend.esim.contracts import (
     STATE_VERSION,
     ActionEnvelope,
@@ -157,8 +184,6 @@ class ParityReport(ArenaModel):
     episode_id: str
     reason: str
     differences: tuple[str, ...] = ()
-    ticks_compared: int = 0
-    first_divergent_tick: int | None = None
 
 
 def load_trace(payload: object) -> ArenaTrace:
@@ -173,6 +198,22 @@ def load_trace(payload: object) -> ArenaTrace:
         raise TraceLoadError(
             f"not a {TRACE_VERSION_V1} or {TRACE_VERSION_V3} ({exc.error_count()} field error(s))\n{exc}"
         ) from exc
+
+
+def _drop_none(value: object) -> object:
+    """Strip ``None`` from optional fields before hashing or diffing.
+
+    Confirmed by the Tui side: the wire contract makes these fields optional
+    and never permits explicit JSON ``null``, while backend models default an
+    absent field to ``None``. Stripping it here puts both sides back into the
+    one shape the contract actually allows, rather than reporting a
+    difference that is only an artifact of how Pydantic represents "absent".
+    """
+    if isinstance(value, Mapping):
+        return {k: _drop_none(v) for k, v in value.items() if v is not None}
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        return [_drop_none(v) for v in value]
+    return value
 
 
 class _Absent:
@@ -217,19 +258,6 @@ def _differences(exported: object, ours: object, path: str = "") -> Iterator[str
         yield f"{path or '/'}: exported={exported!r} engine={ours!r}"
 
 
-# The state a trace event carries is the state at the *start* of its tick,
-# before any action taken on it -- the same meaning ``TickSnapshot`` has in
-# our own trajectories. Where several events share a tick, the first one is
-# the one holding that state. This is the single assumption replay makes
-# about trace semantics; it lives here so there is one place to change it if
-# Trolleroof/tui-gamepigeon#278 pins it differently.
-def _hash_by_tick(trace: ArenaTrace) -> dict[int, str]:
-    hashes: dict[int, str] = {}
-    for event in trace.events:
-        hashes.setdefault(event.tick, event.state_hash)
-    return hashes
-
-
 def _envelopes_by_tick(trace: ArenaTrace) -> dict[int, list[ActionEnvelope]]:
     """Group the export's actions by tick, in the order it recorded them.
 
@@ -254,13 +282,92 @@ def _envelopes_by_tick(trace: ArenaTrace) -> dict[int, list[ActionEnvelope]]:
     return actions
 
 
-def _replay(trace: ArenaTrace) -> ParityReport:
-    """Re-simulate the export against the frozen case it names.
+def _replay(trace: ArenaTrace, sim: RestaurantSim, state: RestaurantState) -> ParityReport:
+    """Apply every recorded action against ``sim``, which already sits at
+    the reset state this trace's initial state was checked against.
 
-    Only reachable when the trace carries ``caseId``: the incidents come from
-    the case's event schedule, which no trace carries today.
+    This executes the recorded actions and confirms every one is readable
+    and applies without raising -- but it cannot verify the resulting state,
+    because the trace carries no hash comparable with ``RestaurantState``.
+    Confirmed by the Tui side (Trolleroof/tui-gamepigeon#277): both
+    ``events[].stateHash`` and ``replay.inputs[].stateHash`` are different
+    hash families (an event fingerprint, and a native-runtime checkpoint
+    hash respectively), not a ``RestaurantState`` digest. Comparing against
+    either would validate against a hash that means something else and could
+    report ``parity`` on a run this engine never actually verified -- worse
+    than not checking. So this never returns ``parity``; it stays
+    ``unproven`` until Tui exposes a state-only checkpoint hash per tick.
     """
-    assert trace.case_id is not None
+    scheduled = _envelopes_by_tick(trace)
+    replayed = 0
+    while state.episode.phase == "active":
+        for envelope in scheduled.get(state.episode.tick, ()):
+            result = sim.act(envelope)
+            # A rejection is recorded state too: the export may have recorded
+            # an action the simulator refused, and forcing it through would
+            # replay an episode that never happened.
+            if not isinstance(result, ActionError):
+                state = result
+            replayed += 1
+        state = sim.advance_time()
+
+    return ParityReport(
+        verdict="unproven",
+        episode_id=trace.episode_id,
+        reason=(
+            f"initial state matched this engine's own reset for case {trace.case_id!r} at "
+            f"seed {trace.seed}; replayed {replayed} action(s) against it without error. But "
+            f"the export carries no state-only checkpoint hash to verify the result against -- "
+            f"its recorded hashes are a different family (see #277). Semantic parity remains "
+            f"untested."
+        ),
+    )
+
+
+def check_parity(payload: Mapping[str, object]) -> ParityReport:
+    """Report whether this engine can grade ``payload`` as recorded.
+
+    The export's ``initialState`` is checked against this engine's own
+    ``sim.reset(seed)`` for the case it names -- genuine ground truth, not
+    a comparison against itself. An earlier version of this function hashed
+    the export's raw JSON against that same JSON re-serialized through our
+    model, which always differed on every optional field and every integral
+    float: Pydantic coerces an int into a float on a float-typed field and
+    fills an absent key with ``None`` regardless of what the export actually
+    represents. That was never a report of the two engines disagreeing about
+    the restaurant -- it was an artifact of comparing pre-parse bytes to
+    post-parse bytes, confirmed by the Tui side (#277) once asked what
+    ``initialState`` was actually supposed to be checked against.
+    """
+    trace = load_trace(payload)
+    exported_state = payload.get("initialState")
+    if not isinstance(exported_state, Mapping):
+        raise TraceLoadError("initialState is missing or not an object")
+
+    if trace.contract_version != STATE_VERSION:
+        return ParityReport(
+            verdict="mismatch",
+            episode_id=trace.episode_id,
+            reason=(
+                f"export declares contract {trace.contract_version}; this engine is "
+                f"{STATE_VERSION}. States are not known to mean the same thing, so nothing "
+                f"was compared. (envVersion is the producer's own build version, confirmed "
+                f"not comparable with this engine's revision, and is not gated on.)"
+            ),
+        )
+
+    if trace.case_id is None:
+        return ParityReport(
+            verdict="unproven",
+            episode_id=trace.episode_id,
+            reason=(
+                "the export names no caseId, so this engine has no ground truth to check "
+                "initialState against and no event schedule to replay against -- the "
+                "incidents that fire during an episode are constructor state on the frozen "
+                "case, not trace events. Nothing about this export can be verified (see #278)."
+            ),
+        )
+
     try:
         case = load_case(trace.case_id)
     except CaseError as exc:
@@ -270,84 +377,13 @@ def _replay(trace: ArenaTrace) -> ParityReport:
             reason=f"export names case {trace.case_id!r}, which this engine cannot load: {exc}",
         )
 
-    expected = _hash_by_tick(trace)
-    scheduled = _envelopes_by_tick(trace)
     sim = RestaurantSim(case.initial_state, event_schedule=case.event_schedule)
-    state = sim.reset(trace.seed)
+    reset_state = sim.reset(trace.seed)
+    expected = _drop_none(reset_state.model_dump(by_alias=True, mode="json"))
+    exported_norm = _drop_none(trace.initial_state.model_dump(by_alias=True, mode="json"))
 
-    compared = 0
-    while True:
-        tick = state.episode.tick
-        recorded = expected.get(tick)
-        if recorded is not None:
-            compared += 1
-            ours = state_hash(state.model_dump(by_alias=True, mode="json"))
-            if ours != recorded:
-                return ParityReport(
-                    verdict="mismatch",
-                    episode_id=trace.episode_id,
-                    reason=(
-                        f"replay diverged at tick {tick}: the export records "
-                        f"{recorded} and this engine reached {ours}. The two engines "
-                        f"do not agree on what the recorded actions produce."
-                    ),
-                    ticks_compared=compared,
-                    first_divergent_tick=tick,
-                )
-        if state.episode.phase != "active":
-            break
-        for envelope in scheduled.get(tick, ()):
-            result = sim.act(envelope)
-            # A rejection is recorded state too: the export may have recorded
-            # an action the simulator refused, and forcing it through would
-            # replay an episode that never happened.
-            if not isinstance(result, ActionError):
-                state = result
-        state = sim.advance_time()
-
-    if compared == 0:
-        return ParityReport(
-            verdict="unproven",
-            episode_id=trace.episode_id,
-            reason=(
-                "replay ran but the export carries no state hash at any tick this "
-                "engine reached, so nothing was actually compared."
-            ),
-        )
-    return ParityReport(
-        verdict="parity",
-        episode_id=trace.episode_id,
-        reason=f"replayed against case {trace.case_id!r}; {compared} tick(s) matched.",
-        ticks_compared=compared,
-    )
-
-
-def check_parity(payload: Mapping[str, object]) -> ParityReport:
-    """Report whether this engine can grade ``payload`` as recorded.
-
-    Hashes are compared over the *same* restaurant -- the export's raw JSON,
-    and that JSON parsed into our models and dumped back -- so a mismatch is
-    introduced by serialization alone and is the exporter's to fix.
-    """
-    trace = load_trace(payload)
-    exported_state = payload.get("initialState")
-    if not isinstance(exported_state, Mapping):
-        raise TraceLoadError("initialState is missing or not an object")
-
-    if trace.contract_version != STATE_VERSION or trace.env_version != ENV_VERSION:
-        return ParityReport(
-            verdict="mismatch",
-            episode_id=trace.episode_id,
-            reason=(
-                f"export declares contract {trace.contract_version} / env {trace.env_version}; "
-                f"this engine is {STATE_VERSION} / {ENV_VERSION}. States are not known to mean "
-                f"the same thing, so nothing was compared."
-            ),
-        )
-
-    ours = trace.initial_state.model_dump(by_alias=True, mode="json")
-    if state_hash(dict(exported_state)) != state_hash(ours):
-        differences = list(_differences(exported_state, ours))
+    if state_hash(expected) != state_hash(exported_norm):
+        differences = list(_differences(exported_norm, expected))
         shown = differences[:MAX_REPORTED_DIFFERENCES]
         if len(differences) > len(shown):
             shown.append(f"... and {len(differences) - len(shown)} more field(s)")
@@ -355,23 +391,10 @@ def check_parity(payload: Mapping[str, object]) -> ParityReport:
             verdict="mismatch",
             episode_id=trace.episode_id,
             reason=(
-                f"the two engines hash the same restaurant differently "
-                f"({len(differences)} field(s) differ). Per-tick comparison would fail for this "
-                f"reason alone, so none was run. Integral floats must be exported as 70.0, not 70."
+                f"export's initialState does not match what this engine produces for case "
+                f"{trace.case_id!r} at seed {trace.seed} ({len(differences)} field(s) differ)."
             ),
             differences=tuple(shown),
         )
 
-    if trace.case_id is None:
-        return ParityReport(
-            verdict="unproven",
-            episode_id=trace.episode_id,
-            reason=(
-                "hashes are comparable, but the export names no caseId and a trace carries no "
-                "event schedule of its own. The incidents that fire during an episode are "
-                "constructor state, not trace events, so replaying the actions without them "
-                "would diverge for a missing-input reason and misreport it as an engine "
-                "disagreement. Semantic parity is untested (see #78)."
-            ),
-        )
-    return _replay(trace)
+    return _replay(trace, sim, reset_state)
