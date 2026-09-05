@@ -25,8 +25,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from retro_backend.esim.case import ENV_VERSION, CaseError, load_case
-from retro_backend.esim.grader import GRADER_VERSION, Grade, grade
+from retro_backend.esim.grader import GRADER_VERSION, SERVED, Grade, grade
 from retro_backend.esim.runner import (
     RunnerConfig,
     RunResult,
@@ -192,7 +194,7 @@ def guard_output_dir(out_dir: Path, *, overwrite: bool) -> None:
 
 async def _run_once(
     config: RunnerConfig, out_dir: Path, *, repeat: int, repeats: int, overwrite: bool
-) -> Grade:
+) -> tuple[Grade, Trajectory]:
     started_at = datetime.now(UTC).isoformat()
     case = load_case(config.case_id)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -217,15 +219,28 @@ async def _run_once(
         result=result,
         graded=graded,
     )
-    return graded
+    return graded, result.trajectory
 
 
-def _report(graded: Grade, summary: dict[str, Any], out_dir: Path) -> None:
+def _report_scores(graded: Grade) -> None:
+    """The score block, shared by ``run`` and ``regrade`` so both read alike."""
     o, b = graded.outcome, graded.behavior
+    print(
+        f"     termination={graded.termination} ticks={graded.ticks} safetyFailure={graded.safety_failure}"
+    )
+    print(
+        f"     safety={o.safety} completion={o.order_completion} wait={o.wait_time} waste={o.food_waste} satisfaction={o.customer_satisfaction}"
+    )
+    print(
+        f"     coordination={b.coordination} scopeControl={b.scope_control} correctionUptake={b.correction_uptake}"
+    )
+
+
+def _report(graded: Grade, summary: dict[str, Any], out_dir: Path, trajectory: Trajectory) -> None:
     print(f"  -> {out_dir}")
-    print(f"     termination={graded.termination} ticks={graded.ticks} safetyFailure={graded.safety_failure}")
-    print(f"     safety={o.safety} completion={o.order_completion} wait={o.wait_time} waste={o.food_waste} satisfaction={o.customer_satisfaction}")
-    print(f"     coordination={b.coordination} scopeControl={b.scope_control} correctionUptake={b.correction_uptake}")
+    _report_scores(graded)
+    for line in penalty_lines(graded, trajectory):
+        print(line)
     if summary.get("servedModelMismatch"):
         print(f"     !! served model mismatch: {summary.get('servedModels')}")
 
@@ -251,11 +266,98 @@ async def _run_command(args: argparse.Namespace) -> int:
     for repeat in range(1, args.repeats + 1):
         out_dir = root / f"repeat-{repeat:02d}" if args.repeats > 1 else root
         print(f"[{repeat}/{args.repeats}] running...")
-        graded = await _run_once(
+        graded, trajectory = await _run_once(
             config, out_dir, repeat=repeat, repeats=args.repeats, overwrite=args.overwrite
         )
         summary = json.loads((out_dir / "summary.json").read_text())
-        _report(graded, summary, out_dir)
+        _report(graded, summary, out_dir, trajectory)
+    return 0
+
+
+class TrajectoryLoadError(Exception):
+    """A stored trajectory could not be read as one."""
+
+
+def load_trajectory(path: Path) -> Trajectory:
+    """Read a recorded trajectory back off disk.
+
+    Every failure mode is reported against the path rather than raised raw:
+    re-grading an archive walks over bundles this build did not write, and a
+    bare ``ValidationError`` there does not say which file was unreadable.
+
+    A parse failure is the signal the schema guard exists to catch -- a
+    ``Trajectory`` field added since the bundle was written makes every
+    archived run ungradeable, and this is where that surfaces.
+    """
+    try:
+        payload = json.loads(path.read_text())
+    except FileNotFoundError:
+        raise TrajectoryLoadError(f"{path}: no such file") from None
+    except json.JSONDecodeError as exc:
+        raise TrajectoryLoadError(
+            f"{path}: not valid JSON ({exc.msg} at line {exc.lineno})"
+        ) from exc
+    try:
+        return Trajectory.model_validate(payload)
+    except ValidationError as exc:
+        expected = Trajectory.model_fields["version"].default
+        raise TrajectoryLoadError(
+            f"{path}: does not match {expected} ({exc.error_count()} field error(s))\n{exc}"
+        ) from exc
+
+
+def penalty_lines(graded: Grade, trajectory: Trajectory) -> list[str]:
+    """Name the tick and event behind every safety and completion penalty.
+
+    The scores alone say a run lost points; they do not say where. This walks
+    the findings the grader already produced back to the tick that caused
+    them, which is what makes a re-grade actionable rather than a number.
+
+    Blocked attempts are listed beside violations and labelled as blocked.
+    A run the simulator saved is not the same as a run that chose well, and
+    collapsing the two would hide exactly the distinction the safety probe
+    exists to draw.
+    """
+    lines: list[str] = []
+    for finding in graded.safety_findings:
+        label = "VIOLATION" if finding.is_violation else "blocked  "
+        where = f"tick={finding.tick} actor={finding.actor_id} tool={finding.tool}"
+        lines.append(f"     {label} {where} kind={finding.kind}: {finding.detail}")
+    if graded.outcome.order_completion < 1.0:
+        unserved = [order.id for order in trajectory.final_state.orders if order.status != SERVED]
+        total = len(trajectory.final_state.orders)
+        named = ", ".join(unserved)
+        count = f"{len(unserved)}/{total}"
+        lines.append(
+            f"     COMPLETION {count} orders unserved at tick {trajectory.final_tick}: {named}"
+        )
+    return lines
+
+
+async def _regrade_command(args: argparse.Namespace) -> int:
+    """Re-apply the current grader to a trajectory already on disk.
+
+    No model is called and no simulation is stepped: :func:`grade` is a pure
+    function of the trajectory, so this reproduces exactly what the run would
+    score under today's rules. That is the point -- when ``GRADER_VERSION``
+    moves, re-running the model would resample and grade a *different*
+    trajectory, which cannot be compared against the old figure.
+    """
+    path = Path(args.trajectory)
+    trajectory = load_trajectory(path)
+    graded = grade(trajectory)
+
+    print(f"case={graded.case_id} seed={graded.seed} grader={graded.grader_version}")
+    print(f"  <- {path}")
+    _report_scores(graded)
+    for line in penalty_lines(graded, trajectory):
+        print(line)
+
+    if args.output is not None:
+        destination = Path(args.output)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(destination, graded.model_dump(by_alias=True, mode="json"))
+        print(f"  -> {destination}")
     return 0
 
 
@@ -287,6 +389,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="replace an existing evidence bundle in --output-dir instead of refusing",
     )
     run.set_defaults(func=_run_command)
+
+    regrade = sub.add_parser(
+        "regrade",
+        help="re-score a recorded trajectory under the current grader, with no model calls",
+    )
+    regrade.add_argument("--trajectory", required=True, help="path to a recorded trajectory.json")
+    regrade.add_argument(
+        "--output",
+        default=None,
+        help="write the new grade here; prints to stdout only when omitted",
+    )
+    regrade.set_defaults(func=_regrade_command)
     return parser
 
 
@@ -300,6 +414,9 @@ def main(argv: list[str] | None = None) -> int:
     except BundleExistsError as exc:
         print(f"refusing to overwrite: {exc}", file=sys.stderr)
         return 3
+    except TrajectoryLoadError as exc:
+        print(f"unreadable trajectory: {exc}", file=sys.stderr)
+        return 4
     except ValueError as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2
