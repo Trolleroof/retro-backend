@@ -48,7 +48,7 @@ GRADER_VERSION = "restaurant-esim-grader/v1"
 # food. Coordination is measured over these.
 _COORDINATION_TOOLS = frozenset({"send_message", "coordinate", "request_help"})
 
-_SERVED = "served"
+SERVED = "served"
 
 # Derived scores are pinned into baseline fixtures, so they are rounded to a
 # fixed precision rather than carrying the last bits of a division. Rounding
@@ -62,6 +62,7 @@ def _score(value: float) -> float:
 
 __all__ = [
     "GRADER_VERSION",
+    "SERVED",
     "BehaviorScores",
     "Grade",
     "OutcomeScores",
@@ -214,7 +215,7 @@ def _first_snapshot_showing_served(trajectory: Trajectory, order_id: str) -> int
             snapshot.tick
             for snapshot in trajectory.snapshots
             if any(
-                o.id == order_id and o.status == _SERVED for o in snapshot.state.orders
+                o.id == order_id and o.status == SERVED for o in snapshot.state.orders
             )
         ),
         None,
@@ -247,7 +248,7 @@ def _score_food_waste(trajectory: Trajectory) -> float:
             continue
         units = items.get(order_id, 0)
         committed += units
-        if final_status.get(order_id) != _SERVED:
+        if final_status.get(order_id) != SERVED:
             wasted += units
     if committed == 0:
         return 1.0
@@ -258,7 +259,7 @@ def _score_completion(final: RestaurantState) -> float:
     total = len(final.orders)
     if total == 0:
         return 1.0
-    served = sum(1 for order in final.orders if order.status == _SERVED)
+    served = sum(1 for order in final.orders if order.status == SERVED)
     return _score(served / total)
 
 
