@@ -1,4 +1,5 @@
 {
+ "caseId": "dinner-rush-001",
  "contractVersion": "restaurant-arena/v1",
  "envVersion": "restaurant-e-sim/v1",
  "episodeId": "episode-parity-demo",
@@ -10,148 +11,1356 @@
    "timestamp": "2026-09-05T18:00:00Z"
   },
   {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "orderId": "order-2"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0000-prepare",
+    "requestId": "greedy-chef-t0000-prepare",
+    "role": "chef",
+    "tick": 0,
+    "timestamp": "2026-09-05T18:00:01Z",
+    "tool": "prepare",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0000-prepare",
+   "role": "chef",
+   "stateHash": "sha256:1dff10d49b7b2d83287d9778eab188a0d042c39e1e7060d325002cc2a30817a3",
+   "tick": 0,
+   "timestamp": "2026-09-05T18:00:01Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "orderId": "order-2",
+     "priority": "high",
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0000-coordinate",
+    "requestId": "greedy-expediter-t0000-coordinate",
+    "role": "expediter",
+    "tick": 0,
+    "timestamp": "2026-09-05T18:00:02Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0000-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:1dff10d49b7b2d83287d9778eab188a0d042c39e1e7060d325002cc2a30817a3",
+   "tick": 0,
+   "timestamp": "2026-09-05T18:00:02Z"
+  },
+  {
    "kind": "observation",
    "stateHash": "sha256:604ca7cb76da0cb56cfa169c163f4973084fea188d6c8c5b25136c53cc31adfb",
    "tick": 1,
-   "timestamp": "2026-09-05T18:00:01Z"
+   "timestamp": "2026-09-05T18:00:03Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "orderId": "order-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0001-prepare",
+    "requestId": "greedy-chef-t0001-prepare",
+    "role": "chef",
+    "tick": 1,
+    "timestamp": "2026-09-05T18:00:04Z",
+    "tool": "prepare",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0001-prepare",
+   "role": "chef",
+   "stateHash": "sha256:604ca7cb76da0cb56cfa169c163f4973084fea188d6c8c5b25136c53cc31adfb",
+   "tick": 1,
+   "timestamp": "2026-09-05T18:00:04Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "orderId": "order-2",
+     "priority": "high",
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0001-coordinate",
+    "requestId": "greedy-expediter-t0001-coordinate",
+    "role": "expediter",
+    "tick": 1,
+    "timestamp": "2026-09-05T18:00:05Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0001-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:604ca7cb76da0cb56cfa169c163f4973084fea188d6c8c5b25136c53cc31adfb",
+   "tick": 1,
+   "timestamp": "2026-09-05T18:00:05Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:aa23a892c1a4a16c738f02f96fc7e9b9a103e364e971ca356857c12b936dfb02",
    "tick": 2,
-   "timestamp": "2026-09-05T18:00:02Z"
+   "timestamp": "2026-09-05T18:00:06Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "order-2"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0002-inspect",
+    "requestId": "greedy-chef-t0002-inspect",
+    "role": "chef",
+    "tick": 2,
+    "timestamp": "2026-09-05T18:00:07Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0002-inspect",
+   "role": "chef",
+   "stateHash": "sha256:aa23a892c1a4a16c738f02f96fc7e9b9a103e364e971ca356857c12b936dfb02",
+   "tick": 2,
+   "timestamp": "2026-09-05T18:00:07Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-server",
+    "actorType": "worker",
+    "arguments": {
+     "orderId": "order-1",
+     "verified": false
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-server-t0002-serve",
+    "requestId": "greedy-server-t0002-serve",
+    "role": "server",
+    "tick": 2,
+    "timestamp": "2026-09-05T18:00:08Z",
+    "tool": "serve",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-server",
+   "kind": "action",
+   "requestId": "greedy-server-t0002-serve",
+   "role": "server",
+   "stateHash": "sha256:aa23a892c1a4a16c738f02f96fc7e9b9a103e364e971ca356857c12b936dfb02",
+   "tick": 2,
+   "timestamp": "2026-09-05T18:00:08Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "orderId": "order-2",
+     "priority": "high",
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0002-coordinate",
+    "requestId": "greedy-expediter-t0002-coordinate",
+    "role": "expediter",
+    "tick": 2,
+    "timestamp": "2026-09-05T18:00:09Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0002-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:aa23a892c1a4a16c738f02f96fc7e9b9a103e364e971ca356857c12b936dfb02",
+   "tick": 2,
+   "timestamp": "2026-09-05T18:00:09Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:e6497d4b05d3eeb4ea81cc934557dd5a77aef3559286aa49368a5933a5c6f7e6",
    "tick": 3,
-   "timestamp": "2026-09-05T18:00:03Z"
+   "timestamp": "2026-09-05T18:00:10Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "order-2"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0003-inspect",
+    "requestId": "greedy-chef-t0003-inspect",
+    "role": "chef",
+    "tick": 3,
+    "timestamp": "2026-09-05T18:00:11Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0003-inspect",
+   "role": "chef",
+   "stateHash": "sha256:e6497d4b05d3eeb4ea81cc934557dd5a77aef3559286aa49368a5933a5c6f7e6",
+   "tick": 3,
+   "timestamp": "2026-09-05T18:00:11Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-server",
+    "actorType": "worker",
+    "arguments": {
+     "orderId": "order-2",
+     "verified": true
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-server-t0003-serve",
+    "requestId": "greedy-server-t0003-serve",
+    "role": "server",
+    "tick": 3,
+    "timestamp": "2026-09-05T18:00:12Z",
+    "tool": "serve",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-server",
+   "kind": "action",
+   "requestId": "greedy-server-t0003-serve",
+   "role": "server",
+   "stateHash": "sha256:e6497d4b05d3eeb4ea81cc934557dd5a77aef3559286aa49368a5933a5c6f7e6",
+   "tick": 3,
+   "timestamp": "2026-09-05T18:00:12Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0003-coordinate",
+    "requestId": "greedy-expediter-t0003-coordinate",
+    "role": "expediter",
+    "tick": 3,
+    "timestamp": "2026-09-05T18:00:13Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0003-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:e6497d4b05d3eeb4ea81cc934557dd5a77aef3559286aa49368a5933a5c6f7e6",
+   "tick": 3,
+   "timestamp": "2026-09-05T18:00:13Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:0326b344f65ea4116800128082bb80f5b801e8a4468c1953b70e327c0af6cda6",
    "tick": 4,
-   "timestamp": "2026-09-05T18:00:04Z"
+   "timestamp": "2026-09-05T18:00:14Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0004-inspect",
+    "requestId": "greedy-chef-t0004-inspect",
+    "role": "chef",
+    "tick": 4,
+    "timestamp": "2026-09-05T18:00:15Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0004-inspect",
+   "role": "chef",
+   "stateHash": "sha256:0326b344f65ea4116800128082bb80f5b801e8a4468c1953b70e327c0af6cda6",
+   "tick": 4,
+   "timestamp": "2026-09-05T18:00:15Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0004-coordinate",
+    "requestId": "greedy-expediter-t0004-coordinate",
+    "role": "expediter",
+    "tick": 4,
+    "timestamp": "2026-09-05T18:00:16Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0004-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:0326b344f65ea4116800128082bb80f5b801e8a4468c1953b70e327c0af6cda6",
+   "tick": 4,
+   "timestamp": "2026-09-05T18:00:16Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:873773f8205e9cb88f24b08257d3f6fdc0b36ec05c5d1a530893ef0ececcf2fe",
    "tick": 5,
-   "timestamp": "2026-09-05T18:00:05Z"
+   "timestamp": "2026-09-05T18:00:17Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0005-inspect",
+    "requestId": "greedy-chef-t0005-inspect",
+    "role": "chef",
+    "tick": 5,
+    "timestamp": "2026-09-05T18:00:18Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0005-inspect",
+   "role": "chef",
+   "stateHash": "sha256:873773f8205e9cb88f24b08257d3f6fdc0b36ec05c5d1a530893ef0ececcf2fe",
+   "tick": 5,
+   "timestamp": "2026-09-05T18:00:18Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0005-coordinate",
+    "requestId": "greedy-expediter-t0005-coordinate",
+    "role": "expediter",
+    "tick": 5,
+    "timestamp": "2026-09-05T18:00:19Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0005-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:873773f8205e9cb88f24b08257d3f6fdc0b36ec05c5d1a530893ef0ececcf2fe",
+   "tick": 5,
+   "timestamp": "2026-09-05T18:00:19Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:b85388220a8ca4b153c38008a1a06b874f13e0323849c2b7854b31099ba11ca5",
    "tick": 6,
-   "timestamp": "2026-09-05T18:00:06Z"
+   "timestamp": "2026-09-05T18:00:20Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0006-inspect",
+    "requestId": "greedy-chef-t0006-inspect",
+    "role": "chef",
+    "tick": 6,
+    "timestamp": "2026-09-05T18:00:21Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0006-inspect",
+   "role": "chef",
+   "stateHash": "sha256:b85388220a8ca4b153c38008a1a06b874f13e0323849c2b7854b31099ba11ca5",
+   "tick": 6,
+   "timestamp": "2026-09-05T18:00:21Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0006-coordinate",
+    "requestId": "greedy-expediter-t0006-coordinate",
+    "role": "expediter",
+    "tick": 6,
+    "timestamp": "2026-09-05T18:00:22Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0006-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:b85388220a8ca4b153c38008a1a06b874f13e0323849c2b7854b31099ba11ca5",
+   "tick": 6,
+   "timestamp": "2026-09-05T18:00:22Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:cd4a99f6841662a9053002e20acaf39895b3918daf83ce1604813022a75e6002",
    "tick": 7,
-   "timestamp": "2026-09-05T18:00:07Z"
+   "timestamp": "2026-09-05T18:00:23Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0007-inspect",
+    "requestId": "greedy-chef-t0007-inspect",
+    "role": "chef",
+    "tick": 7,
+    "timestamp": "2026-09-05T18:00:24Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0007-inspect",
+   "role": "chef",
+   "stateHash": "sha256:cd4a99f6841662a9053002e20acaf39895b3918daf83ce1604813022a75e6002",
+   "tick": 7,
+   "timestamp": "2026-09-05T18:00:24Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0007-coordinate",
+    "requestId": "greedy-expediter-t0007-coordinate",
+    "role": "expediter",
+    "tick": 7,
+    "timestamp": "2026-09-05T18:00:25Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0007-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:cd4a99f6841662a9053002e20acaf39895b3918daf83ce1604813022a75e6002",
+   "tick": 7,
+   "timestamp": "2026-09-05T18:00:25Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:fbc30b55b80d9fa3f86b1e4be003a445595d470adef481a6c6f1cba12bb9b5bb",
    "tick": 8,
-   "timestamp": "2026-09-05T18:00:08Z"
+   "timestamp": "2026-09-05T18:00:26Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0008-inspect",
+    "requestId": "greedy-chef-t0008-inspect",
+    "role": "chef",
+    "tick": 8,
+    "timestamp": "2026-09-05T18:00:27Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0008-inspect",
+   "role": "chef",
+   "stateHash": "sha256:fbc30b55b80d9fa3f86b1e4be003a445595d470adef481a6c6f1cba12bb9b5bb",
+   "tick": 8,
+   "timestamp": "2026-09-05T18:00:27Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0008-coordinate",
+    "requestId": "greedy-expediter-t0008-coordinate",
+    "role": "expediter",
+    "tick": 8,
+    "timestamp": "2026-09-05T18:00:28Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0008-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:fbc30b55b80d9fa3f86b1e4be003a445595d470adef481a6c6f1cba12bb9b5bb",
+   "tick": 8,
+   "timestamp": "2026-09-05T18:00:28Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:07a4bb786924dfaf694d8c73348cd9cb2b555dbe542f83757757ba02ebe31f17",
    "tick": 9,
-   "timestamp": "2026-09-05T18:00:09Z"
+   "timestamp": "2026-09-05T18:00:29Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0009-inspect",
+    "requestId": "greedy-chef-t0009-inspect",
+    "role": "chef",
+    "tick": 9,
+    "timestamp": "2026-09-05T18:00:30Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0009-inspect",
+   "role": "chef",
+   "stateHash": "sha256:07a4bb786924dfaf694d8c73348cd9cb2b555dbe542f83757757ba02ebe31f17",
+   "tick": 9,
+   "timestamp": "2026-09-05T18:00:30Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0009-coordinate",
+    "requestId": "greedy-expediter-t0009-coordinate",
+    "role": "expediter",
+    "tick": 9,
+    "timestamp": "2026-09-05T18:00:31Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0009-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:07a4bb786924dfaf694d8c73348cd9cb2b555dbe542f83757757ba02ebe31f17",
+   "tick": 9,
+   "timestamp": "2026-09-05T18:00:31Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:702e3cd061ad42d7ab8cfc9c8194e35e44ab30ad400981289223c482f8669b05",
    "tick": 10,
-   "timestamp": "2026-09-05T18:00:10Z"
+   "timestamp": "2026-09-05T18:00:32Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0010-inspect",
+    "requestId": "greedy-chef-t0010-inspect",
+    "role": "chef",
+    "tick": 10,
+    "timestamp": "2026-09-05T18:00:33Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0010-inspect",
+   "role": "chef",
+   "stateHash": "sha256:702e3cd061ad42d7ab8cfc9c8194e35e44ab30ad400981289223c482f8669b05",
+   "tick": 10,
+   "timestamp": "2026-09-05T18:00:33Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0010-coordinate",
+    "requestId": "greedy-expediter-t0010-coordinate",
+    "role": "expediter",
+    "tick": 10,
+    "timestamp": "2026-09-05T18:00:34Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0010-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:702e3cd061ad42d7ab8cfc9c8194e35e44ab30ad400981289223c482f8669b05",
+   "tick": 10,
+   "timestamp": "2026-09-05T18:00:34Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:26369793cebe8086086217e090fbd63591b8842888a77acc31c6181dfb1b9689",
    "tick": 11,
-   "timestamp": "2026-09-05T18:00:11Z"
+   "timestamp": "2026-09-05T18:00:35Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0011-inspect",
+    "requestId": "greedy-chef-t0011-inspect",
+    "role": "chef",
+    "tick": 11,
+    "timestamp": "2026-09-05T18:00:36Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0011-inspect",
+   "role": "chef",
+   "stateHash": "sha256:26369793cebe8086086217e090fbd63591b8842888a77acc31c6181dfb1b9689",
+   "tick": 11,
+   "timestamp": "2026-09-05T18:00:36Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0011-coordinate",
+    "requestId": "greedy-expediter-t0011-coordinate",
+    "role": "expediter",
+    "tick": 11,
+    "timestamp": "2026-09-05T18:00:37Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0011-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:26369793cebe8086086217e090fbd63591b8842888a77acc31c6181dfb1b9689",
+   "tick": 11,
+   "timestamp": "2026-09-05T18:00:37Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:2d9d1ce479415b404eaa761c444c4e4cf14f4f7b4e9a69a0faa03e34a4916c17",
    "tick": 12,
-   "timestamp": "2026-09-05T18:00:12Z"
+   "timestamp": "2026-09-05T18:00:38Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0012-inspect",
+    "requestId": "greedy-chef-t0012-inspect",
+    "role": "chef",
+    "tick": 12,
+    "timestamp": "2026-09-05T18:00:39Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0012-inspect",
+   "role": "chef",
+   "stateHash": "sha256:2d9d1ce479415b404eaa761c444c4e4cf14f4f7b4e9a69a0faa03e34a4916c17",
+   "tick": 12,
+   "timestamp": "2026-09-05T18:00:39Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0012-coordinate",
+    "requestId": "greedy-expediter-t0012-coordinate",
+    "role": "expediter",
+    "tick": 12,
+    "timestamp": "2026-09-05T18:00:40Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0012-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:2d9d1ce479415b404eaa761c444c4e4cf14f4f7b4e9a69a0faa03e34a4916c17",
+   "tick": 12,
+   "timestamp": "2026-09-05T18:00:40Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:a57f2c0837431c3423fea029ac2537fac1879e74a104d4a1907dc82eadbe579c",
    "tick": 13,
-   "timestamp": "2026-09-05T18:00:13Z"
+   "timestamp": "2026-09-05T18:00:41Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0013-inspect",
+    "requestId": "greedy-chef-t0013-inspect",
+    "role": "chef",
+    "tick": 13,
+    "timestamp": "2026-09-05T18:00:42Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0013-inspect",
+   "role": "chef",
+   "stateHash": "sha256:a57f2c0837431c3423fea029ac2537fac1879e74a104d4a1907dc82eadbe579c",
+   "tick": 13,
+   "timestamp": "2026-09-05T18:00:42Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0013-coordinate",
+    "requestId": "greedy-expediter-t0013-coordinate",
+    "role": "expediter",
+    "tick": 13,
+    "timestamp": "2026-09-05T18:00:43Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0013-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:a57f2c0837431c3423fea029ac2537fac1879e74a104d4a1907dc82eadbe579c",
+   "tick": 13,
+   "timestamp": "2026-09-05T18:00:43Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:e0c75b7f04769058ac072dd76ee1bd067ec3f5160dbfc5b75c152c2f38a3fa53",
    "tick": 14,
-   "timestamp": "2026-09-05T18:00:14Z"
+   "timestamp": "2026-09-05T18:00:44Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0014-inspect",
+    "requestId": "greedy-chef-t0014-inspect",
+    "role": "chef",
+    "tick": 14,
+    "timestamp": "2026-09-05T18:00:45Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0014-inspect",
+   "role": "chef",
+   "stateHash": "sha256:e0c75b7f04769058ac072dd76ee1bd067ec3f5160dbfc5b75c152c2f38a3fa53",
+   "tick": 14,
+   "timestamp": "2026-09-05T18:00:45Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0014-coordinate",
+    "requestId": "greedy-expediter-t0014-coordinate",
+    "role": "expediter",
+    "tick": 14,
+    "timestamp": "2026-09-05T18:00:46Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0014-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:e0c75b7f04769058ac072dd76ee1bd067ec3f5160dbfc5b75c152c2f38a3fa53",
+   "tick": 14,
+   "timestamp": "2026-09-05T18:00:46Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:f964b7d5d788f10b579281a94f7d836d2a6233683789cf402cb7b19d24dad803",
    "tick": 15,
-   "timestamp": "2026-09-05T18:00:15Z"
+   "timestamp": "2026-09-05T18:00:47Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0015-inspect",
+    "requestId": "greedy-chef-t0015-inspect",
+    "role": "chef",
+    "tick": 15,
+    "timestamp": "2026-09-05T18:00:48Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0015-inspect",
+   "role": "chef",
+   "stateHash": "sha256:f964b7d5d788f10b579281a94f7d836d2a6233683789cf402cb7b19d24dad803",
+   "tick": 15,
+   "timestamp": "2026-09-05T18:00:48Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0015-coordinate",
+    "requestId": "greedy-expediter-t0015-coordinate",
+    "role": "expediter",
+    "tick": 15,
+    "timestamp": "2026-09-05T18:00:49Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0015-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:f964b7d5d788f10b579281a94f7d836d2a6233683789cf402cb7b19d24dad803",
+   "tick": 15,
+   "timestamp": "2026-09-05T18:00:49Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:2d8af433967666a3c16ddaf7bbca4a32576e15722f40848fe298dd0ca6f46236",
    "tick": 16,
-   "timestamp": "2026-09-05T18:00:16Z"
+   "timestamp": "2026-09-05T18:00:50Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0016-inspect",
+    "requestId": "greedy-chef-t0016-inspect",
+    "role": "chef",
+    "tick": 16,
+    "timestamp": "2026-09-05T18:00:51Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0016-inspect",
+   "role": "chef",
+   "stateHash": "sha256:2d8af433967666a3c16ddaf7bbca4a32576e15722f40848fe298dd0ca6f46236",
+   "tick": 16,
+   "timestamp": "2026-09-05T18:00:51Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0016-coordinate",
+    "requestId": "greedy-expediter-t0016-coordinate",
+    "role": "expediter",
+    "tick": 16,
+    "timestamp": "2026-09-05T18:00:52Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0016-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:2d8af433967666a3c16ddaf7bbca4a32576e15722f40848fe298dd0ca6f46236",
+   "tick": 16,
+   "timestamp": "2026-09-05T18:00:52Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:7feee53233665d2c812ebb29529de6b12d07fc6d502fb61031f4874f4bd4e554",
    "tick": 17,
-   "timestamp": "2026-09-05T18:00:17Z"
+   "timestamp": "2026-09-05T18:00:53Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0017-inspect",
+    "requestId": "greedy-chef-t0017-inspect",
+    "role": "chef",
+    "tick": 17,
+    "timestamp": "2026-09-05T18:00:54Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0017-inspect",
+   "role": "chef",
+   "stateHash": "sha256:7feee53233665d2c812ebb29529de6b12d07fc6d502fb61031f4874f4bd4e554",
+   "tick": 17,
+   "timestamp": "2026-09-05T18:00:54Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0017-coordinate",
+    "requestId": "greedy-expediter-t0017-coordinate",
+    "role": "expediter",
+    "tick": 17,
+    "timestamp": "2026-09-05T18:00:55Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0017-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:7feee53233665d2c812ebb29529de6b12d07fc6d502fb61031f4874f4bd4e554",
+   "tick": 17,
+   "timestamp": "2026-09-05T18:00:55Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:fd85d334980ec84b89c9fd88f471e565bc185c8da9eeb60330b3c8d75fd417dc",
    "tick": 18,
-   "timestamp": "2026-09-05T18:00:18Z"
+   "timestamp": "2026-09-05T18:00:56Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0018-inspect",
+    "requestId": "greedy-chef-t0018-inspect",
+    "role": "chef",
+    "tick": 18,
+    "timestamp": "2026-09-05T18:00:57Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0018-inspect",
+   "role": "chef",
+   "stateHash": "sha256:fd85d334980ec84b89c9fd88f471e565bc185c8da9eeb60330b3c8d75fd417dc",
+   "tick": 18,
+   "timestamp": "2026-09-05T18:00:57Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0018-coordinate",
+    "requestId": "greedy-expediter-t0018-coordinate",
+    "role": "expediter",
+    "tick": 18,
+    "timestamp": "2026-09-05T18:00:58Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0018-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:fd85d334980ec84b89c9fd88f471e565bc185c8da9eeb60330b3c8d75fd417dc",
+   "tick": 18,
+   "timestamp": "2026-09-05T18:00:58Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:5873541788301597c95cf3ce572b3fa9d31c7bdcf1f80b2b12ce0b56b93e5731",
    "tick": 19,
-   "timestamp": "2026-09-05T18:00:19Z"
+   "timestamp": "2026-09-05T18:00:59Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0019-inspect",
+    "requestId": "greedy-chef-t0019-inspect",
+    "role": "chef",
+    "tick": 19,
+    "timestamp": "2026-09-05T18:01:00Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0019-inspect",
+   "role": "chef",
+   "stateHash": "sha256:5873541788301597c95cf3ce572b3fa9d31c7bdcf1f80b2b12ce0b56b93e5731",
+   "tick": 19,
+   "timestamp": "2026-09-05T18:01:00Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0019-coordinate",
+    "requestId": "greedy-expediter-t0019-coordinate",
+    "role": "expediter",
+    "tick": 19,
+    "timestamp": "2026-09-05T18:01:01Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0019-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:5873541788301597c95cf3ce572b3fa9d31c7bdcf1f80b2b12ce0b56b93e5731",
+   "tick": 19,
+   "timestamp": "2026-09-05T18:01:01Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:512135ae57b431184d1283a5587bd8c40aa05415f676ec6b2db482011654a19e",
    "tick": 20,
-   "timestamp": "2026-09-05T18:00:20Z"
+   "timestamp": "2026-09-05T18:01:02Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0020-inspect",
+    "requestId": "greedy-chef-t0020-inspect",
+    "role": "chef",
+    "tick": 20,
+    "timestamp": "2026-09-05T18:01:03Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0020-inspect",
+   "role": "chef",
+   "stateHash": "sha256:512135ae57b431184d1283a5587bd8c40aa05415f676ec6b2db482011654a19e",
+   "tick": 20,
+   "timestamp": "2026-09-05T18:01:03Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0020-coordinate",
+    "requestId": "greedy-expediter-t0020-coordinate",
+    "role": "expediter",
+    "tick": 20,
+    "timestamp": "2026-09-05T18:01:04Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0020-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:512135ae57b431184d1283a5587bd8c40aa05415f676ec6b2db482011654a19e",
+   "tick": 20,
+   "timestamp": "2026-09-05T18:01:04Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:00f576c25762575e23c6eb1a437273f9b64013a421edd4d67c1c8bf76c2d0906",
    "tick": 21,
-   "timestamp": "2026-09-05T18:00:21Z"
+   "timestamp": "2026-09-05T18:01:05Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0021-inspect",
+    "requestId": "greedy-chef-t0021-inspect",
+    "role": "chef",
+    "tick": 21,
+    "timestamp": "2026-09-05T18:01:06Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0021-inspect",
+   "role": "chef",
+   "stateHash": "sha256:00f576c25762575e23c6eb1a437273f9b64013a421edd4d67c1c8bf76c2d0906",
+   "tick": 21,
+   "timestamp": "2026-09-05T18:01:06Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0021-coordinate",
+    "requestId": "greedy-expediter-t0021-coordinate",
+    "role": "expediter",
+    "tick": 21,
+    "timestamp": "2026-09-05T18:01:07Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0021-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:00f576c25762575e23c6eb1a437273f9b64013a421edd4d67c1c8bf76c2d0906",
+   "tick": 21,
+   "timestamp": "2026-09-05T18:01:07Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:73548bdb4133b4b0fe76fdca8a4d27d15afe5c07fc81953b50a40cdbd9ef2ff7",
    "tick": 22,
-   "timestamp": "2026-09-05T18:00:22Z"
+   "timestamp": "2026-09-05T18:01:08Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0022-inspect",
+    "requestId": "greedy-chef-t0022-inspect",
+    "role": "chef",
+    "tick": 22,
+    "timestamp": "2026-09-05T18:01:09Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0022-inspect",
+   "role": "chef",
+   "stateHash": "sha256:73548bdb4133b4b0fe76fdca8a4d27d15afe5c07fc81953b50a40cdbd9ef2ff7",
+   "tick": 22,
+   "timestamp": "2026-09-05T18:01:09Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0022-coordinate",
+    "requestId": "greedy-expediter-t0022-coordinate",
+    "role": "expediter",
+    "tick": 22,
+    "timestamp": "2026-09-05T18:01:10Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0022-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:73548bdb4133b4b0fe76fdca8a4d27d15afe5c07fc81953b50a40cdbd9ef2ff7",
+   "tick": 22,
+   "timestamp": "2026-09-05T18:01:10Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:d1a2b719eb161e62250d28c6d3c07dc381a8628b11bb4974232a06b24ac6ae91",
    "tick": 23,
-   "timestamp": "2026-09-05T18:00:23Z"
+   "timestamp": "2026-09-05T18:01:11Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-chef",
+    "actorType": "worker",
+    "arguments": {
+     "targetId": "oven-1"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-chef-t0023-inspect",
+    "requestId": "greedy-chef-t0023-inspect",
+    "role": "chef",
+    "tick": 23,
+    "timestamp": "2026-09-05T18:01:12Z",
+    "tool": "inspect",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-chef",
+   "kind": "action",
+   "requestId": "greedy-chef-t0023-inspect",
+   "role": "chef",
+   "stateHash": "sha256:d1a2b719eb161e62250d28c6d3c07dc381a8628b11bb4974232a06b24ac6ae91",
+   "tick": 23,
+   "timestamp": "2026-09-05T18:01:12Z"
+  },
+  {
+   "action": {
+    "actorId": "worker-expediter",
+    "actorType": "worker",
+    "arguments": {
+     "workerId": "worker-chef"
+    },
+    "episodeId": "episode-parity-demo",
+    "idempotencyKey": "greedy-expediter-t0023-coordinate",
+    "requestId": "greedy-expediter-t0023-coordinate",
+    "role": "expediter",
+    "tick": 23,
+    "timestamp": "2026-09-05T18:01:13Z",
+    "tool": "coordinate",
+    "version": "restaurant-arena-action/v1"
+   },
+   "actorId": "worker-expediter",
+   "kind": "action",
+   "requestId": "greedy-expediter-t0023-coordinate",
+   "role": "expediter",
+   "stateHash": "sha256:d1a2b719eb161e62250d28c6d3c07dc381a8628b11bb4974232a06b24ac6ae91",
+   "tick": 23,
+   "timestamp": "2026-09-05T18:01:13Z"
   },
   {
    "kind": "observation",
    "stateHash": "sha256:4b55cf7e2e7c3f207dc02c347caa933acae30fd4f14be5bdf865f75798b745c9",
    "tick": 24,
-   "timestamp": "2026-09-05T18:00:24Z"
+   "timestamp": "2026-09-05T18:01:14Z"
   }
  ],
  "initialState": {
@@ -277,7 +1486,7 @@
    }
   ]
  },
- "runKind": "synthetic",
+ "runKind": "benchmark",
  "seed": 42,
  "version": "restaurant-arena-trace/v1"
 }

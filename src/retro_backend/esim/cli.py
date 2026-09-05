@@ -381,6 +381,8 @@ async def _regrade_command(args: argparse.Namespace) -> int:
 
 def _report_parity(report: ParityReport) -> None:
     print(f"episode={report.episode_id} verdict={report.verdict}")
+    if report.ticks_compared:
+        print(f"  ticks compared: {report.ticks_compared}")
     for difference in report.differences:
         print(f"  {difference}")
     print(f"  why: {report.reason}")
@@ -389,11 +391,11 @@ def _report_parity(report: ParityReport) -> None:
 async def _parity_command(args: argparse.Namespace) -> int:
     """Check whether a foreign trace export is gradeable by this engine.
 
-    Exit status is the finding: 5 means the export is not comparable, 6 means
-    it is but parity itself was never demonstrated. 0 is reserved for parity
-    proven by replay and **nothing reaches it today** -- a trace carries no
-    event schedule, so replay cannot run. An unproven check must not look
-    like a pass.
+    Exit status is the finding: 0 means replay reproduced every compared
+    tick, 5 means the export is not comparable, 6 means it is comparable but
+    parity was never demonstrated -- typically because the export names no
+    ``caseId``, so the event schedule cannot be recovered. An unproven check
+    must not look like a pass, which is why 6 is not 0.
     """
     path = Path(args.trace)
     try:
@@ -412,6 +414,8 @@ async def _parity_command(args: argparse.Namespace) -> int:
         destination.parent.mkdir(parents=True, exist_ok=True)
         _write_json(destination, report.model_dump(by_alias=True, mode="json"))
         print(f"  -> {destination}")
+    if report.verdict == "parity":
+        return 0
     return 5 if report.verdict == "mismatch" else 6
 
 

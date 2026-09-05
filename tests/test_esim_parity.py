@@ -106,23 +106,73 @@ class TestMismatch:
         assert report.differences == ("/version: exported=absent engine='restaurant-arena/v1'",)
 
 
-class TestParityIsNeverClaimed:
-    def test_a_clean_export_is_unproven_not_proven(self) -> None:
+class TestReplay:
+    """The export names its case, so the event schedule can be recovered."""
+
+    def test_a_faithful_export_replays_to_parity(self) -> None:
         report = check_parity(_native())
+        assert report.verdict == "parity"
+        assert report.ticks_compared == 25
+        assert report.first_divergent_tick is None
+
+    def test_dropping_the_actions_diverges_and_names_the_tick(self) -> None:
+        # Proves replay is actually driven by the recorded actions rather
+        # than reproducing the states by coincidence.
+        payload = _native()
+        payload["events"] = [e for e in payload["events"] if e["kind"] != "action"]
+        report = check_parity(payload)
+        assert report.verdict == "mismatch"
+        assert report.first_divergent_tick == 1
+
+    def test_an_unreadable_action_is_raised_not_skipped(self) -> None:
+        # Skipping it would replay a shorter episode than the one exported
+        # and then blame the resulting divergence on the engine.
+        payload = _native()
+        for event in payload["events"]:
+            if event["kind"] == "action":
+                event["action"] = {"nonsense": True}
+                break
+        with pytest.raises(TraceLoadError, match="cannot read"):
+            check_parity(payload)
+
+    def test_an_unknown_case_is_reported_not_guessed(self) -> None:
+        payload = _native()
+        payload["caseId"] = "no-such-case"
+        report = check_parity(payload)
+        assert report.verdict == "mismatch"
+        assert "no-such-case" in report.reason
+
+
+class TestParityIsNeverClaimed:
+    def test_an_export_without_a_case_id_stays_unproven(self) -> None:
+        # A v1 export names no case, so the incidents cannot be recovered.
+        payload = _native()
+        del payload["caseId"]
+        report = check_parity(payload)
         assert report.verdict == "unproven"
+        assert report.ticks_compared == 0
 
     def test_the_reason_names_the_missing_event_schedule(self) -> None:
-        assert "event schedule" in check_parity(_native()).reason
+        payload = _native()
+        del payload["caseId"]
+        assert "event schedule" in check_parity(payload).reason
 
 
 class TestParityCommand:
     def test_an_incomparable_export_exits_five(self) -> None:
         assert main(["parity", "--trace", str(JS_STYLE)]) == 5
 
-    def test_an_unproven_export_exits_six_not_zero(self) -> None:
-        # Exit 0 would read as "parity passed" to a caller checking only the
-        # status. Nothing may reach it until replay runs.
-        assert main(["parity", "--trace", str(NATIVE)]) == 6
+    def test_a_replayed_export_exits_zero(self) -> None:
+        assert main(["parity", "--trace", str(NATIVE)]) == 0
+
+    def test_an_unproven_export_exits_six_not_zero(self, tmp_path: Path) -> None:
+        # Exit 0 must mean replay reproduced the run. An export that never
+        # got replayed may not share it.
+        payload = _native()
+        del payload["caseId"]
+        path = tmp_path / "no-case.json"
+        path.write_text(json.dumps(payload))
+        assert main(["parity", "--trace", str(path)]) == 6
 
     def test_an_unreadable_export_exits_four(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
