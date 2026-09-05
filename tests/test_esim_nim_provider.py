@@ -479,8 +479,10 @@ async def test_exhausted_budget_is_reported_as_truncation_not_a_malformed_body()
     assert reply.error is not None
     assert reply.error.startswith(ERR_TRUNCATED)
     assert "reasoning" in reply.error
-    # Retrying the identical request cannot help, so it must not be retryable.
-    assert retryable_model_error(reply.error) is False
+    # Retryable: the runner folds this error into the next attempt's prompt as
+    # previousError, so a retry asks the model for a shorter answer rather
+    # than repeating an unchanged request under the same budget.
+    assert retryable_model_error(reply.error) is True
 
 
 async def test_served_model_is_read_back_from_the_response_body() -> None:
@@ -539,7 +541,9 @@ async def test_truncation_mid_answer_is_not_reported_as_invalid_json() -> None:
     assert reply.error is not None
     assert reply.error.startswith(ERR_TRUNCATED)
     assert "mid-answer" in reply.error
-    assert retryable_model_error(reply.error) is False
+    # Retryable on the same basis as the reasoning-truncation case: the next
+    # attempt's prompt carries this error as previousError, nudging brevity.
+    assert retryable_model_error(reply.error) is True
 
 
 async def test_a_truncated_call_still_reports_the_tokens_it_burned() -> None:

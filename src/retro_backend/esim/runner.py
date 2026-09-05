@@ -42,8 +42,10 @@ class RunnerConfig:
     max_attempts: int = 3
     # A reasoning model spends this budget thinking before it writes anything,
     # so a budget sized for the answer alone truncates every such model into a
-    # failed turn. Sized for reasoning plus a one-line tool call.
-    max_output_tokens: int = 1024
+    # failed turn. 1024 still truncated a subset of turns in live runs; 2500
+    # gives a verbose reasoner enough room without materially widening the
+    # turn-budget math in run_case (max_turns is independent of this value).
+    max_output_tokens: int = 2500
     max_turns: int | None = None
 
     def __post_init__(self) -> None:
@@ -84,9 +86,22 @@ def _messages(
     return [
         {
             "role": "system",
-            "content": "You control one restaurant worker. Reply with exactly one JSON object and no markdown.",
+            # Explicitly forbidding narrated reasoning matters for models that
+            # think in the same content channel their answer goes in: without
+            # it, a turn can spend its whole budget explaining before it ever
+            # writes the tool call, which is the exact failure this line is
+            # meant to prevent, not just clean prose off of.
+            "content": (
+                "You control one restaurant worker. Reply with exactly one "
+                "JSON object and nothing else: no markdown, no explanation, "
+                "no reasoning before or after it. Keep the JSON itself short: "
+                "one tool call, minimal argument values."
+            ),
         },
-        {"role": "user", "content": json.dumps(prompt, sort_keys=True)},
+        # Compact separators shave input tokens on every turn; they do not
+        # touch the model's own output budget, but a smaller prompt is a
+        # smaller thing to reason about before answering it.
+        {"role": "user", "content": json.dumps(prompt, sort_keys=True, separators=(",", ":"))},
     ]
 
 

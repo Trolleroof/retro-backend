@@ -111,3 +111,27 @@ async def test_runner_retries_a_transient_provider_failure() -> None:
 
 def test_safety_rejections_are_not_retryable() -> None:
     assert "unsafe_action" not in RETRYABLE_ACTION_ERRORS
+
+
+@pytest.mark.asyncio
+async def test_a_truncated_reply_is_retried_with_the_error_as_feedback() -> None:
+    """Truncation is retryable only because the retry is not identical.
+
+    The runner must actually forward the truncation error as previousError on
+    the next attempt -- that forwarding is the entire justification for
+    treating truncated_response as retryable at all.
+    """
+    adapter = Replies(
+        [
+            _reply(None, "truncated_response: output token budget exhausted mid-answer"),
+            _reply('{"tool":null}'),
+        ]
+    )
+
+    result = await run_case(RunnerConfig("dinner-rush-001", "nim:test", max_turns=2), adapter)
+
+    assert result.summary["modelErrors"] == 1
+    assert result.summary["turns"] == 2
+    second_request = adapter.messages[1]
+    user_payload = json.loads(next(m["content"] for m in second_request if m["role"] == "user"))
+    assert "truncated_response" in user_payload["previousError"]

@@ -115,7 +115,7 @@ information. Completion is what discriminates on that row.
 | --- | --- | --- |
 | Roles per tick | 4, fixed order | chef → server → host → expediter |
 | `maxAttempts` | 3 | per role per tick |
-| `maxOutputTokens` | 1024 | see truncation note below |
+| `maxOutputTokens` | 2500 | see truncation note below |
 | `maxTurns` | `maxTicks × 4 × maxAttempts` = 288 | see turn-budget note below |
 | Temperature | 0.0 | set by us |
 | Sampling seed | **not sent** | provider default applies |
@@ -139,13 +139,29 @@ returns `content: null`; a model writing directly returns a half-written
 string, which parses as invalid JSON and so reads as a model that cannot follow
 the format. Measured on `openai/gpt-oss-20b` at 256 tokens over one full
 episode: 38 turns of the first kind and 13 of the second, **51 of 132 turns —
-39% of the run** — lost to the budget. Truncation is now classified by
-`finish_reason`, reported as `truncated_response`, and deliberately **not**
-retryable, since an identical retry truncates identically.
+39% of the run** — lost to the budget. Truncation is classified by
+`finish_reason`, reported as `truncated_response`.
 
-Budget interacts with model verbosity, so it is a live source of bias: a model
-that reasons at length gets fewer effective turns than a terse one under the
-same budget. Report `truncated_response` counts alongside every score.
+Raised twice: 256 → 1024 removed most truncation (0 of 173 turns on the same
+model's next full run), then 1024 → 2500 for headroom against a more verbose
+reasoner the two verified models have not yet exercised. The system prompt was
+also tightened to forbid narrated reasoning and ask for a short, single-tool-call
+answer — a cheaper lever than raising the ceiling further, since it targets why
+the budget gets spent rather than how much of it there is.
+
+`truncated_response` is retryable, unlike the other budget-exhaustion path
+would suggest: the runner folds the error text into the next attempt's prompt
+as `previousError`, so the retry is not an unchanged request under the same
+budget — it explicitly tells the model its last answer was cut off and asks
+for something shorter. This only holds while that feedback wiring stays in
+place; a retry under a genuinely unchanged prompt would be pointless.
+
+Budget still interacts with model verbosity and remains a live source of bias:
+a model that reasons at length gets fewer effective turns than a terse one
+under the same budget, even after the prompt tightening above. Report
+`truncated_response` counts alongside every score, and treat a persistently
+high count for one model as a signal to raise its budget specifically rather
+than to read its scores as comparable to a model that never truncated.
 
 **Reproducibility limit, stated rather than implied.** The simulator is
 deterministic and its state hashes reproduce exactly. Hosted model replies are
@@ -222,6 +238,9 @@ only; `.env` is gitignored and no key is ever written to a bundle.
 ## 8. First live results — and why repeats are not optional
 
 Four full runs of `openai/gpt-oss-20b`, one model, two variants, two budgets.
+The frozen budget has since moved to 2500 (§4); these runs predate that change
+and are kept as the evidence for the variance finding below, not as a preview
+of scores under the current config.
 
 | Run | Term | Turns | Violations | Blocked unsafe | Completion | Wait | Scope |
 | --- | --- | --- | --- | --- | --- | --- | --- |

@@ -190,5 +190,5 @@ def test_cli_budget_flags_do_not_shadow_the_runner_defaults() -> None:
 
     # What the runner would use when the CLI names nothing.
     config = RunnerConfig(case_id=CASE, model="nim:vendor/m")
-    assert config.max_output_tokens == 1024
+    assert config.max_output_tokens == 2500
 

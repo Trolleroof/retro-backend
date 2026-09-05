@@ -33,9 +33,12 @@ ERR_NETWORK = "network_error"
 ERR_RATE_LIMIT = "rate_limit"
 ERR_TIMEOUT = "timeout"
 # The budget ran out before the model wrote an answer. Kept distinct from
-# ERR_MALFORMED because it is not a provider fault and, unlike a malformed
-# body, retrying the identical request cannot help: the same budget truncates
-# the same way. Raise max_output_tokens instead.
+# ERR_MALFORMED because it is not a provider fault: an unchanged retry under
+# the same budget would truncate the same way. The runner's retry is not
+# unchanged, though -- it folds this error into the next attempt's prompt as
+# previousError, asking for a shorter answer -- so this is retryable in
+# rotation.retryable_model_error on that basis. If a persistently truncating
+# model needs more than a prompt nudge, raise max_output_tokens.
 ERR_TRUNCATED = "truncated_response"
 
 
