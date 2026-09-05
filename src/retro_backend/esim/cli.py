@@ -363,44 +363,20 @@ async def _regrade_command(args: argparse.Namespace) -> int:
 
 
 def _report_parity(report: ParityReport) -> None:
-    """Print the finding, leading with the verdict rather than the scores."""
     print(f"episode={report.episode_id} verdict={report.verdict}")
-    print(
-        f"  contract: trace={report.trace_contract_version} engine={report.engine_contract_version}"
-    )
-    print(f"  env:      trace={report.trace_env_version} engine={report.engine_env_version}")
-    if report.encoding is not None:
-        print(f"  exported hash:   {report.encoding.exported_hash}")
-        print(f"  normalized hash: {report.encoding.normalized_hash}")
-        # Capped because a whole-state spelling mismatch names every numeric
-        # field, and a hundred identical lines bury the ones that differ in
-        # content -- which are the only ones a serializer fix will not cure.
-        content = [d for d in report.encoding.divergences if not d.numeric_spelling_only]
-        spelling = [d for d in report.encoding.divergences if d.numeric_spelling_only]
-        for divergence in content[:20]:
-            spelled = f"exported={divergence.exported} engine={divergence.normalized}"
-            print(f"  CONTENT  {divergence.path}: {spelled}")
-        if len(content) > 20:
-            print(f"  CONTENT  ... and {len(content) - 20} more")
-        for divergence in spelling[:5]:
-            spelled = f"exported={divergence.exported} engine={divergence.normalized}"
-            print(f"  SPELLING {divergence.path}: {spelled}")
-        if len(spelling) > 5:
-            print(f"  SPELLING ... and {len(spelling) - 5} more numeric field(s)")
-    if report.blocked_reason is not None:
-        print(f"  why: {report.blocked_reason}")
+    for difference in report.differences:
+        print(f"  {difference}")
+    print(f"  why: {report.reason}")
 
 
 async def _parity_command(args: argparse.Namespace) -> int:
     """Check whether a foreign trace export is gradeable by this engine.
 
-    Exit status is the finding, so a caller can act on it without parsing
-    prose: 5 means the export is not comparable, 6 means comparability holds
-    but parity itself was never demonstrated. 0 is reserved for parity
-    actually proven by replay, and **nothing reaches it today** -- a trace
-    carries no event schedule, so the replay stage cannot run. That the
-    success code is currently unreachable is the honest state of the check,
-    not an oversight to paper over with a green exit.
+    Exit status is the finding: 5 means the export is not comparable, 6 means
+    it is but parity itself was never demonstrated. 0 is reserved for parity
+    proven by replay and **nothing reaches it today** -- a trace carries no
+    event schedule, so replay cannot run. An unproven check must not look
+    like a pass.
     """
     path = Path(args.trace)
     try:
@@ -421,9 +397,7 @@ async def _parity_command(args: argparse.Namespace) -> int:
         destination.parent.mkdir(parents=True, exist_ok=True)
         _write_json(destination, report.model_dump(by_alias=True, mode="json"))
         print(f"  -> {destination}")
-    if not report.comparable:
-        return 5
-    return 6 if report.verdict == "parity_unproven" else 0
+    return 5 if report.verdict == "mismatch" else 6
 
 
 def build_parser() -> argparse.ArgumentParser:

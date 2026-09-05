@@ -1,25 +1,20 @@
 """Cross-engine parity: can a foreign trace be graded by this engine? (#72)
 
 The Tui client runs its own copy of the restaurant and exports a
-``restaurant-arena-trace/v1``. This module answers one question about such an
-export -- whether its state hashes are comparable with ours at all -- and
-refuses to answer questions it cannot.
+``restaurant-arena-trace/v1``. This checks whether such an export is one this
+engine could grade, and says plainly when it is not.
 
-**Why hashes are the thing to check first.** ``state_hash`` canonicalizes with
-Python's JSON spelling, where a float is written ``1.0``. JavaScript has one
-number type and ``JSON.stringify`` writes ``1``. Two engines can therefore hold
-byte-identical restaurant state and still publish different digests for it.
-:func:`check_encoding` proves which case an export is in *before* any tick is
-compared, because a mismatched digest otherwise reads as a simulator
-disagreement when it is only a serializer disagreement.
+**The known incompatibility.** ``state_hash`` writes a float as ``1.0``;
+JavaScript has one number type and ``JSON.stringify`` writes ``1``. Two engines
+can hold the same restaurant and publish different digests for it. The agreed
+fix is that the exporter writes ``70.0`` -- this engine's spelling is the
+contract, and nothing here normalizes numbers to paper over a mismatch.
 
-**What this module will not do.** It does not rewrite events, coerce an unknown
-role onto a known one, or round numbers to make digests agree. Every one of
-those would manufacture a parity result. When the check cannot be completed the
-verdict says so; there is no verdict that means "probably fine".
+**What this will not do.** It does not rewrite events, coerce an unknown role
+onto a known one, or round numbers to make digests agree. When the check cannot
+be completed the verdict says so; no verdict means "probably fine".
 """
 
-import math
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Literal
 
@@ -36,27 +31,21 @@ from retro_backend.esim.contracts import (
 from retro_backend.esim.state_hash import STATE_HASH_PATTERN, state_hash
 
 TRACE_VERSION = "restaurant-arena-trace/v1"
+# Enough differing fields to see the pattern, not so many that the real one
+# scrolls away: a whole-state spelling mismatch names every numeric field.
+MAX_REPORTED_DIFFERENCES = 10
 
 __all__ = [
     "TRACE_VERSION",
     "ArenaTrace",
-    "EncodingCheck",
-    "FieldDivergence",
     "ParityReport",
     "TraceEvent",
     "TraceLoadError",
-    "check_encoding",
     "check_parity",
-    "numerically_equal",
     "load_trace",
 ]
 
 TraceEventKind = Literal["observation", "action", "player_correction", "message", "outcome"]
-Verdict = Literal[
-    "contract_mismatch",
-    "encoding_divergence",
-    "parity_unproven",
-]
 
 
 class TraceLoadError(Exception):
@@ -66,10 +55,9 @@ class TraceLoadError(Exception):
 class TraceEvent(ArenaModel):
     """One event in a foreign trace.
 
-    Every optional field the v1 schema allows is modelled, even the ones
-    parity never reads. ``ArenaModel`` forbids extras, so omitting them would
-    turn a valid export into an unreadable one -- a false diagnostic, and the
-    kind of thing this module exists to avoid producing.
+    Every optional field the v1 schema allows is modelled, even the ones this
+    check never reads. ``ArenaModel`` forbids extras, so omitting them would
+    turn a valid export into an unreadable one -- a diagnostic we invented.
     """
 
     tick: int = Field(ge=0)
@@ -112,60 +100,23 @@ class ArenaTrace(ArenaModel):
     deletion: Mapping[str, object] | None = None
 
 
-class FieldDivergence(ArenaModel):
-    """One field whose spelling differs between the two engines."""
-
-    path: str
-    exported: str
-    normalized: str
-    # True when the two values are numerically equal and only their JSON
-    # spelling differs (``1`` against ``1.0``). False means the engines hold
-    # genuinely different state, which no serializer fix would reconcile.
-    numeric_spelling_only: bool
-
-
-class EncodingCheck(ArenaModel):
-    """Whether this engine hashes the export's own state the way it does.
-
-    Both digests are taken over the *same* restaurant: the export's raw JSON,
-    and that JSON parsed into our typed models and dumped back. Any difference
-    is introduced by serialization alone, so a mismatch proves the two engines'
-    digests are not comparable -- independent of who simulated what.
-    """
-
-    exported_hash: str
-    normalized_hash: str
-    agrees: bool
-    divergences: tuple[FieldDivergence, ...] = ()
-
-
 class ParityReport(ArenaModel):
-    """The full finding for one export. Nothing here is inferred."""
+    """The finding for one export. Nothing here is inferred."""
 
-    verdict: Verdict
+    # "mismatch" means this engine cannot grade the export as recorded.
+    # "unproven" means it could, but parity itself was never demonstrated.
+    # There is deliberately no verdict meaning "parity proven".
+    verdict: Literal["mismatch", "unproven"]
     episode_id: str
-    trace_env_version: str
-    engine_env_version: str = ENV_VERSION
-    trace_contract_version: str
-    engine_contract_version: str = STATE_VERSION
-    encoding: EncodingCheck | None = None
-    replay_attempted: bool = False
-    # Present whenever replay did not run. Parity is never claimed on the
-    # strength of a check that was skipped.
-    blocked_reason: str | None = None
-
-    @property
-    def comparable(self) -> bool:
-        """True only when this engine could grade the export as recorded."""
-        return self.verdict not in ("contract_mismatch", "encoding_divergence")
+    reason: str
+    differences: tuple[str, ...] = ()
 
 
 def load_trace(payload: object) -> ArenaTrace:
     """Parse an export, naming what made it unreadable.
 
-    A refusal here is a real result. An export carrying a role or tool this
-    engine does not define must fail loudly rather than be reshaped into one
-    that parses.
+    A refusal here is a real result: an export carrying a role this engine
+    does not define must fail loudly, not be reshaped into one that parses.
     """
     try:
         return ArenaTrace.model_validate(payload)
@@ -175,76 +126,34 @@ def load_trace(payload: object) -> ArenaTrace:
         ) from exc
 
 
-def _walk(exported: object, normalized: object, path: str = "") -> Iterator[FieldDivergence]:
-    """Yield every leaf whose JSON spelling differs between the two trees."""
-    if isinstance(exported, Mapping) and isinstance(normalized, Mapping):
-        for key in sorted(set(exported) | set(normalized)):
-            yield from _walk(exported.get(key), normalized.get(key), f"{path}/{key}")
+def _differences(exported: object, ours: object, path: str = "") -> Iterator[str]:
+    """Yield ``path: exported=X engine=Y`` for every leaf that differs."""
+    if isinstance(exported, Mapping) and isinstance(ours, Mapping):
+        for key in sorted(set(exported) | set(ours)):
+            yield from _differences(exported.get(key), ours.get(key), f"{path}/{key}")
         return
     if (
         isinstance(exported, Sequence)
-        and isinstance(normalized, Sequence)
+        and isinstance(ours, Sequence)
         and not isinstance(exported, str)
-        and not isinstance(normalized, str)
+        and not isinstance(ours, str)
     ):
-        for index in range(max(len(exported), len(normalized))):
-            item = exported[index] if index < len(exported) else None
-            other = normalized[index] if index < len(normalized) else None
-            yield from _walk(item, other, f"{path}[{index}]")
+        for index in range(max(len(exported), len(ours))):
+            left = exported[index] if index < len(exported) else None
+            right = ours[index] if index < len(ours) else None
+            yield from _differences(left, right, f"{path}[{index}]")
         return
-    if repr(exported) == repr(normalized):
-        return
-    yield FieldDivergence(
-        path=path or "/",
-        exported=repr(exported),
-        normalized=repr(normalized),
-        numeric_spelling_only=numerically_equal(exported, normalized),
-    )
-
-
-def numerically_equal(left: object, right: object) -> bool:
-    """True when both are numbers of equal value, e.g. ``1`` and ``1.0``.
-
-    ``bool`` is excluded deliberately: Python makes ``True == 1`` true, and
-    reporting a boolean field as a number-spelling difference would send a
-    reader looking for a serializer bug that is not there.
-    """
-    if isinstance(left, bool) or isinstance(right, bool):
-        return False
-    if not isinstance(left, int | float) or not isinstance(right, int | float):
-        return False
-    return math.isfinite(left) and math.isfinite(right) and left == right
-
-
-def check_encoding(trace: ArenaTrace, exported_state: Mapping[str, object]) -> EncodingCheck:
-    """Hash the export's own initial state both ways and compare.
-
-    ``exported_state`` is the raw JSON object as it arrived, not the parsed
-    model: the whole point is to observe the spelling the other engine chose
-    before our models normalize it away.
-    """
-    normalized = trace.initial_state.model_dump(by_alias=True, mode="json")
-    exported_hash = state_hash(dict(exported_state))
-    normalized_hash = state_hash(normalized)
-    if exported_hash == normalized_hash:
-        return EncodingCheck(
-            exported_hash=exported_hash, normalized_hash=normalized_hash, agrees=True
-        )
-    return EncodingCheck(
-        exported_hash=exported_hash,
-        normalized_hash=normalized_hash,
-        agrees=False,
-        divergences=tuple(_walk(exported_state, normalized)),
-    )
+    # repr, not ==, because 70 and 70.0 compare equal and are the whole point.
+    if repr(exported) != repr(ours):
+        yield f"{path or '/'}: exported={exported!r} engine={ours!r}"
 
 
 def check_parity(payload: Mapping[str, object]) -> ParityReport:
     """Report whether this engine can grade ``payload`` as recorded.
 
-    The stages are ordered so that no result rests on an earlier one that did
-    not hold: a contract mismatch stops before hashing, and an encoding
-    divergence stops before replay. Reporting a tick-by-tick comparison under
-    a digest scheme known to disagree would be noise dressed as evidence.
+    Hashes are compared over the *same* restaurant -- the export's raw JSON,
+    and that JSON parsed into our models and dumped back -- so a mismatch is
+    introduced by serialization alone and is the exporter's to fix.
     """
     trace = load_trace(payload)
     exported_state = payload.get("initialState")
@@ -253,47 +162,39 @@ def check_parity(payload: Mapping[str, object]) -> ParityReport:
 
     if trace.contract_version != STATE_VERSION or trace.env_version != ENV_VERSION:
         return ParityReport(
-            verdict="contract_mismatch",
-            blocked_reason=(
-                f"export declares contract {trace.contract_version} / env "
-                f"{trace.env_version}; this engine is {STATE_VERSION} / {ENV_VERSION}. "
-                f"States are not known to mean the same thing, so nothing is compared."
-            ),
+            verdict="mismatch",
             episode_id=trace.episode_id,
-            trace_env_version=trace.env_version,
-            trace_contract_version=trace.contract_version,
+            reason=(
+                f"export declares contract {trace.contract_version} / env {trace.env_version}; "
+                f"this engine is {STATE_VERSION} / {ENV_VERSION}. States are not known to mean "
+                f"the same thing, so nothing was compared."
+            ),
         )
 
-    encoding = check_encoding(trace, exported_state)
-    if not encoding.agrees:
-        spelling = sum(1 for d in encoding.divergences if d.numeric_spelling_only)
-        content = len(encoding.divergences) - spelling
+    ours = trace.initial_state.model_dump(by_alias=True, mode="json")
+    if state_hash(dict(exported_state)) != state_hash(ours):
+        differences = list(_differences(exported_state, ours))
+        shown = differences[:MAX_REPORTED_DIFFERENCES]
+        if len(differences) > len(shown):
+            shown.append(f"... and {len(differences) - len(shown)} more field(s)")
         return ParityReport(
-            verdict="encoding_divergence",
-            encoding=encoding,
-            blocked_reason=(
-                f"the two engines hash the same restaurant differently: "
-                f"{spelling} field(s) differ in number spelling only, "
-                f"{content} field(s) differ in content. Every per-tick hash "
-                f"comparison would fail for this reason alone, so none was run."
-            ),
+            verdict="mismatch",
             episode_id=trace.episode_id,
-            trace_env_version=trace.env_version,
-            trace_contract_version=trace.contract_version,
+            reason=(
+                f"the two engines hash the same restaurant differently "
+                f"({len(differences)} field(s) differ). Per-tick comparison would fail for this "
+                f"reason alone, so none was run. Integral floats must be exported as 70.0, not 70."
+            ),
+            differences=tuple(shown),
         )
 
     return ParityReport(
-        verdict="parity_unproven",
-        encoding=encoding,
-        replay_attempted=False,
-        blocked_reason=(
-            "hashes are comparable, but a trace carries no event schedule: the "
-            "incidents that fire during an episode (oven failure, shelf overheat, "
-            "player correction) are constructor state, not trace events. Replaying "
-            "the actions without them would diverge for a missing-input reason and "
-            "misreport it as an engine disagreement. Semantic parity is untested."
-        ),
+        verdict="unproven",
         episode_id=trace.episode_id,
-        trace_env_version=trace.env_version,
-        trace_contract_version=trace.contract_version,
+        reason=(
+            "hashes are comparable, but a trace carries no event schedule: the incidents that "
+            "fire during an episode are constructor state, not trace events. Replaying the "
+            "actions without them would diverge for a missing-input reason and misreport it as "
+            "an engine disagreement. Semantic parity is untested."
+        ),
     )
