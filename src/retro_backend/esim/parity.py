@@ -41,13 +41,15 @@ from retro_backend.esim.contracts import (
 from retro_backend.esim.simulator import RestaurantSim
 from retro_backend.esim.state_hash import STATE_HASH_PATTERN, state_hash
 
-TRACE_VERSION = "restaurant-arena-trace/v1"
+TRACE_VERSION_V1 = "restaurant-arena-trace/v1"
+TRACE_VERSION_V3 = "restaurant-arena-trace/v3"
 # Enough differing fields to see the pattern, not so many that the real one
 # scrolls away: a whole-state spelling mismatch names every numeric field.
 MAX_REPORTED_DIFFERENCES = 10
 
 __all__ = [
-    "TRACE_VERSION",
+    "TRACE_VERSION_V1",
+    "TRACE_VERSION_V3",
     "ArenaTrace",
     "ParityReport",
     "TraceEvent",
@@ -56,7 +58,27 @@ __all__ = [
     "load_trace",
 ]
 
-TraceEventKind = Literal["observation", "action", "player_correction", "message", "outcome"]
+TraceEventKind = Literal[
+    "observation",
+    "action",
+    "player_correction",
+    "message",
+    "outcome",
+    # v3 additions (Trolleroof/tui-gamepigeon#276): the inspection-workflow
+    # events. Modelled even though this check does not read them, per the
+    # class docstring below -- a valid v3 export must not be refused for a
+    # kind we chose not to keep up with.
+    "inspection",
+    "hold",
+    "hold_cleared",
+    "verification_request",
+    "verification_response",
+    "escalation",
+    "handoff",
+    "supply_order",
+    "supply_delivered",
+    "stockout",
+]
 
 
 class TraceLoadError(Exception):
@@ -94,12 +116,15 @@ class TraceEvent(ArenaModel):
     correction_category: str | None = None
     changed_decision_event_id: ArenaId | None = None
     probe_event_id: ArenaId | None = None
+    # v3: what an inspection-kind event is about, and its body.
+    subject: Mapping[str, object] | None = None
+    payload: Mapping[str, object] | None = None
 
 
 class ArenaTrace(ArenaModel):
     """A foreign engine's export of one episode."""
 
-    version: Literal["restaurant-arena-trace/v1"] = TRACE_VERSION
+    version: Literal["restaurant-arena-trace/v1", "restaurant-arena-trace/v3"] = TRACE_VERSION_V1
     episode_id: ArenaId
     seed: int = Field(ge=0)
     env_version: str = Field(min_length=1)
@@ -113,6 +138,13 @@ class ArenaTrace(ArenaModel):
     events: tuple[TraceEvent, ...] = ()
     consent: Mapping[str, object] | None = None
     deletion: Mapping[str, object] | None = None
+    # v3: episode-end status and the exporter's own replay log. Not read yet
+    # -- what `stateHash` is computed over is still an open question with the
+    # Tui side (Trolleroof/tui-gamepigeon#277) -- but a valid v3 export must
+    # load, and refusing an unrecognized-but-present field would be exactly
+    # that.
+    terminal: Mapping[str, object] | None = None
+    replay: Mapping[str, object] | None = None
 
 
 class ParityReport(ArenaModel):
@@ -139,7 +171,7 @@ def load_trace(payload: object) -> ArenaTrace:
         return ArenaTrace.model_validate(payload)
     except ValidationError as exc:
         raise TraceLoadError(
-            f"not a {TRACE_VERSION} ({exc.error_count()} field error(s))\n{exc}"
+            f"not a {TRACE_VERSION_V1} or {TRACE_VERSION_V3} ({exc.error_count()} field error(s))\n{exc}"
         ) from exc
 
 

@@ -22,11 +22,37 @@ ROOT = Path(__file__).resolve().parents[1]
 TRACES = ROOT / "tests/fixtures/traces"
 NATIVE = TRACES / "python-native-trace-v1.json"
 JS_STYLE = TRACES / "js-style-trace-v1.json"
+TUI_LIVE = TRACES / "tui-live-trace-v3.json"
 
 
 def _native() -> dict[str, Any]:
     """The export as raw JSON. Typed loosely because these tests mutate it."""
     return json.loads(NATIVE.read_text())
+
+
+class TestV3Support:
+    """v3 (Trolleroof/tui-gamepigeon#276) added event kinds and fields on
+    top of v1 -- nothing removed -- so a real export in that format must
+    load, not be refused as an unrecognized version.
+    """
+
+    def test_a_real_tui_v3_export_loads(self) -> None:
+        payload = json.loads(TUI_LIVE.read_text())
+        trace = load_trace(payload)
+        assert trace.version == "restaurant-arena-trace/v3"
+        assert trace.case_id is None  # v3 carries no caseId; see #278
+
+    def test_its_inspection_kind_events_are_not_rejected(self) -> None:
+        trace = load_trace(json.loads(TUI_LIVE.read_text()))
+        kinds = {event.kind for event in trace.events}
+        assert "inspection" in kinds
+
+    def test_a_v3_export_with_a_version_mismatch_still_reports_cleanly(self) -> None:
+        # Real export today: v3 loads, but envVersion does not match this
+        # engine's, so the check stops at the contract gate -- not a crash.
+        report = check_parity(json.loads(TUI_LIVE.read_text()))
+        assert report.verdict == "mismatch"
+        assert "0.3.4" in report.reason
 
 
 class TestUnreadableExports:
