@@ -20,9 +20,10 @@ from pydantic import ValidationError
 from retro_backend.esim.case import ENV_VERSION, load_case
 from retro_backend.esim.contracts import ACTION_VERSION, ActionEnvelope, ActionError, Role
 from retro_backend.esim.providers.base import ModelAdapter, ModelReply
-from retro_backend.esim.providers.registry import get_adapter
+from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import (
     RETRYABLE_ACTION_ERRORS,
+    ROLE_ORDER,
     retryable_model_error,
     role_rotation,
 )
@@ -39,7 +40,12 @@ class RunnerConfig:
     case_id: str
     model: str
     max_attempts: int = 3
-    max_output_tokens: int = 256
+    # A reasoning model spends this budget thinking before it writes anything,
+    # so a budget sized for the answer alone truncates every such model into a
+    # failed turn. 1024 still truncated a subset of turns in live runs; 2500
+    # gives a verbose reasoner enough room without materially widening the
+    # turn-budget math in run_case (max_turns is independent of this value).
+    max_output_tokens: int = 2500
     max_turns: int | None = None
 
     def __post_init__(self) -> None:
@@ -58,31 +64,71 @@ class RunResult:
     trajectory: Trajectory
 
 
+def effective_max_turns(config: RunnerConfig, max_ticks: int) -> int:
+    """The turn budget a run will actually enforce.
+
+    Exposed rather than inlined so the manifest records the number the run
+    applied instead of the ``None`` that stands for "unset". A bundle that
+    reports a budget the run did not use cannot be audited against, and this
+    is the second time a default living in two places has drifted apart.
+    """
+    if config.max_turns is not None:
+        return config.max_turns
+    return max_ticks * len(ROLE_ORDER) * config.max_attempts
+
+
 def _record(sink: TextIO | None, record: Mapping[str, object]) -> None:
     if sink is not None:
         sink.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
 
 
 def _messages(
-    role: Role, observation: Mapping[str, object], feedback: str | None
+    role: Role,
+    observation: Mapping[str, object],
+    feedback: str | None,
+    *,
+    worker_ids: Mapping[Role, str],
 ) -> list[dict[str, str]]:
     tools = {
         tool: TOOL_ARGS[tool].model_json_schema(by_alias=True)
         for tool in sorted(ROLE_TOOLS[role])
     }
-    prompt = {
+    prompt: dict[str, object] = {
         "observation": observation,
         "tools": tools,
         "response": '{"tool":"tool_name","arguments":{...}} or {"tool":null}',
     }
+    # request_help and send_message need a real worker id, but chef, server,
+    # and host observations carry no worker roster at all -- only expediter's
+    # does. Without this, those three roles have to guess a coworker's id to
+    # use tools every role is permitted, and a live run showed exactly that: a
+    # model invented "manager", a role this restaurant does not have, and
+    # burned most of its retry budget on the same guess every tick. Expediter
+    # already sees every worker id in its own observation, so this would only
+    # repeat it there.
+    if "workers" not in observation:
+        prompt["workerIds"] = dict(sorted(worker_ids.items()))
     if feedback is not None:
         prompt["previousError"] = feedback
     return [
         {
             "role": "system",
-            "content": "You control one restaurant worker. Reply with exactly one JSON object and no markdown.",
+            # Explicitly forbidding narrated reasoning matters for models that
+            # think in the same content channel their answer goes in: without
+            # it, a turn can spend its whole budget explaining before it ever
+            # writes the tool call, which is the exact failure this line is
+            # meant to prevent, not just clean prose off of.
+            "content": (
+                "You control one restaurant worker. Reply with exactly one "
+                "JSON object and nothing else: no markdown, no explanation, "
+                "no reasoning before or after it. Keep the JSON itself short: "
+                "one tool call, minimal argument values."
+            ),
         },
-        {"role": "user", "content": json.dumps(prompt, sort_keys=True)},
+        # Compact separators shave input tokens on every turn; they do not
+        # touch the model's own output budget, but a smaller prompt is a
+        # smaller thing to reason about before answering it.
+        {"role": "user", "content": json.dumps(prompt, sort_keys=True, separators=(",", ":"))},
     ]
 
 
@@ -143,12 +189,26 @@ async def run_case(
         event_schedule=case.event_schedule,
     )
     recorder.record_state(state)
-    max_turns = config.max_turns or state.episode.max_ticks * 4
+    # Every adapter call counts as a turn, retries included, and a full episode
+    # needs max_ticks * len(ROLE_ORDER) *successful* turns. Budgeting exactly
+    # that many made the zero-retry path the only one that could ever reach
+    # "episode_complete": a single retry anywhere guaranteed "turn_limit", and
+    # with it a completion score that measured the budget rather than the
+    # model. The retry allowance has to be part of the budget.
+    max_turns = effective_max_turns(config, state.episode.max_ticks)
     totals = Counter[str]()
     latency_ms = 0.0
     termination = "episode_complete"
+    # Every distinct id the provider claimed answered. More than one, or one
+    # that is not the requested model, means the run is not the single-model
+    # run the manifest says it is.
+    served_models: set[str] = set()
 
     while state.episode.phase == "active":
+        # Rebuilt from the current state each tick rather than cached once:
+        # the roster is expected to stay the four fixed workers for the run,
+        # but nothing here should assume that instead of just reading it.
+        worker_ids: dict[Role, str] = {worker.role: worker.id for worker in state.workers}
         for role, worker_id in role_rotation(state):
             if totals["turns"] >= max_turns:
                 termination = "turn_limit"
@@ -160,17 +220,21 @@ async def run_case(
                     break
                 observation = sim.observe(role).model_dump(by_alias=True)
                 reply: ModelReply = await adapter.generate(
-                    _messages(role, observation, feedback), max_tokens=config.max_output_tokens
+                    _messages(role, observation, feedback, worker_ids=worker_ids),
+                    max_tokens=config.max_output_tokens,
                 )
                 totals["turns"] += 1
                 totals["input_tokens"] += reply.input_tokens
                 totals["output_tokens"] += reply.output_tokens
                 latency_ms += reply.latency_ms
+                if reply.served_model is not None:
+                    served_models.add(reply.served_model)
                 record: dict[str, object] = {
                     "event": "model_attempt",
                     "role": role,
                     "tick": state.episode.tick,
                     "attempt": attempt,
+                    "servedModel": reply.served_model,
                     "latencyMs": reply.latency_ms,
                     "inputTokens": reply.input_tokens,
                     "outputTokens": reply.output_tokens,
@@ -226,10 +290,15 @@ async def run_case(
         recorder.record_state(state)
 
     trajectory = recorder.finish(termination)
+    # parse_model_spec drops the provider prefix; the provider answers with a
+    # bare model id, so compare like with like before calling it a mismatch.
+    requested = parse_model_spec(config.model)[1] if ":" in config.model else config.model
     summary: dict[str, object] = {
         "event": "summary",
         "caseId": config.case_id,
         "model": config.model,
+        "servedModels": sorted(served_models),
+        "servedModelMismatch": bool(served_models) and served_models != {requested},
         "termination": termination,
         "ticks": state.episode.tick,
         "turns": totals["turns"],

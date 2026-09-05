@@ -9,6 +9,7 @@ from retro_backend.esim.providers.base import (
     ERR_NETWORK,
     ERR_RATE_LIMIT,
     ERR_TIMEOUT,
+    ERR_TRUNCATED,
 )
 
 ROLE_ORDER: tuple[Role, ...] = ("chef", "server", "host", "expediter")
@@ -31,10 +32,18 @@ def role_rotation(state: RestaurantState) -> Iterator[tuple[Role, str]]:
 
 
 def retryable_model_error(error: str | None) -> bool:
-    """Whether retrying the same model call can reasonably help."""
+    """Whether retrying the same model call can reasonably help.
+
+    ``ERR_TRUNCATED`` is retryable on the assumption that the retry is not
+    actually identical: :func:`~retro_backend.esim.runner._messages` folds the
+    error text into ``previousError`` on the next attempt, so the model is
+    told its last answer ran out of room and to answer shorter. A retry under
+    an *unchanged* prompt would be pointless -- same budget, same cutoff -- so
+    this only holds while that feedback wiring stays in place.
+    """
     if error is None:
         return False
-    if error.startswith((ERR_TIMEOUT, ERR_NETWORK, ERR_RATE_LIMIT, ERR_MALFORMED)):
+    if error.startswith((ERR_TIMEOUT, ERR_NETWORK, ERR_RATE_LIMIT, ERR_MALFORMED, ERR_TRUNCATED)):
         return True
     if not error.startswith(ERR_HTTP):
         return False

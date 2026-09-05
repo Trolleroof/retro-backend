@@ -18,6 +18,7 @@ __all__ = [
     "ERR_NETWORK",
     "ERR_RATE_LIMIT",
     "ERR_TIMEOUT",
+    "ERR_TRUNCATED",
     "ModelAdapter",
     "ModelReply",
     "validate_https_url",
@@ -31,6 +32,14 @@ ERR_MALFORMED = "malformed_response"
 ERR_NETWORK = "network_error"
 ERR_RATE_LIMIT = "rate_limit"
 ERR_TIMEOUT = "timeout"
+# The budget ran out before the model wrote an answer. Kept distinct from
+# ERR_MALFORMED because it is not a provider fault: an unchanged retry under
+# the same budget would truncate the same way. The runner's retry is not
+# unchanged, though -- it folds this error into the next attempt's prompt as
+# previousError, asking for a shorter answer -- so this is retryable in
+# rotation.retryable_model_error on that basis. If a persistently truncating
+# model needs more than a prompt nudge, raise max_output_tokens.
+ERR_TRUNCATED = "truncated_response"
 
 
 def validate_https_url(url: str) -> str:
@@ -57,6 +66,12 @@ class ModelReply:
         output_tokens: Number of generated completion tokens consumed.
         latency_ms: Roundtrip wall-clock latency in milliseconds.
         error: Typed error description if call failed, None otherwise.
+        served_model: The model id the provider says answered, read back from
+            the response body rather than echoed from the request. A benchmark
+            claims "model X scored Y", and that claim is only auditable if the
+            run recorded which model actually replied: a provider is free to
+            route a deprecated or aliased id somewhere else. ``None`` when the
+            call failed or the body carried no id.
     """
 
     text: str | None
@@ -64,6 +79,7 @@ class ModelReply:
     output_tokens: int
     latency_ms: float
     error: str | None = None
+    served_model: str | None = None
 
     @property
     def ok(self) -> bool:

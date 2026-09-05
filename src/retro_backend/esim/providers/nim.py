@@ -29,6 +29,7 @@ from retro_backend.esim.providers.base import (
     ERR_NETWORK,
     ERR_RATE_LIMIT,
     ERR_TIMEOUT,
+    ERR_TRUNCATED,
     ModelAdapter,
     ModelReply,
     validate_https_url,
@@ -44,7 +45,14 @@ __all__ = [
 
 DEFAULT_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_NIM_TIMEOUT_SECONDS = 30.0
-DEFAULT_NIM_RATE_LIMIT_RPS = 40.0  # 40 requests/second
+# Unconfirmed against an authoritative NVIDIA source: multiple third-party
+# sources, including NVIDIA's own developer forum, describe the free tier's
+# limit as 40 requests per MINUTE, not per second -- a 60x difference. No run
+# against this adapter has hit a 429 yet, but none has driven anywhere near
+# either number's true ceiling either. Confirm the real limit, or throttle to
+# something safely under 40/min, before relying on this value under
+# meaningful concurrent load. See docs/esim-benchmark-manifest.md §9.
+DEFAULT_NIM_RATE_LIMIT_RPS = 40.0  # 40 requests/second (see caveat above)
 
 
 class AsyncRateLimiter:
@@ -267,22 +275,58 @@ class NimAdapter(ModelAdapter):
                     error=f"{ERR_MALFORMED}: missing or empty 'choices' list in response",
                 )
 
-            first_choice = choices[0]
-            message = first_choice.get("message") if isinstance(first_choice, dict) else None
-            content = message.get("content") if isinstance(message, dict) else None
-            if content is None or not isinstance(content, str):
-                return ModelReply(
-                    text=None,
-                    input_tokens=0,
-                    output_tokens=0,
-                    latency_ms=latency_ms,
-                    error=f"{ERR_MALFORMED}: missing or non-string 'content' in first choice message",
-                )
-
-            # Extract token counts
+            # Token counts and the answering model are read before any early
+            # return. A truncated call still consumed the whole budget and
+            # still costs money, so reporting zero would understate real
+            # usage. The model id matters for the same reason in reverse: if
+            # the provider served a different model on the attempt that
+            # failed, dropping the id there lets a run look like the
+            # single-model run the manifest claims while a second model
+            # actually shaped its retries.
             usage = data.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens") or 0)
             output_tokens = int(usage.get("completion_tokens") or 0)
+            raw_served = data.get("model")
+            served = raw_served if isinstance(raw_served, str) else None
+
+            first_choice = choices[0]
+            message = first_choice.get("message") if isinstance(first_choice, dict) else None
+            content = message.get("content") if isinstance(message, dict) else None
+            finish = first_choice.get("finish_reason") if isinstance(first_choice, dict) else None
+
+            # Truncation is decided by finish_reason, not by what content looks
+            # like. The budget runs out in two different-looking ways: a
+            # reasoning model leaves content null, having spent everything
+            # thinking, while a model writing directly leaves a half-written
+            # string. The second parses as "invalid json", which reads as a
+            # model that cannot follow the format and, being retryable, spends
+            # two more calls truncating identically. Both are one cause.
+            if finish == "length":
+                reasoned = isinstance(message, dict) and bool(
+                    message.get("reasoning_content") or message.get("reasoning")
+                )
+                where = "before any answer was written" if not content else "mid-answer"
+                detail = f"output token budget exhausted {where}" + (
+                    " (spent on reasoning tokens)" if reasoned else ""
+                )
+                return ModelReply(
+                    text=None,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    latency_ms=latency_ms,
+                    error=f"{ERR_TRUNCATED}: {detail}",
+                    served_model=served,
+                )
+
+            if content is None or not isinstance(content, str):
+                return ModelReply(
+                    text=None,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    latency_ms=latency_ms,
+                    error=f"{ERR_MALFORMED}: missing or non-string 'content' in first choice message",
+                    served_model=served,
+                )
 
             return ModelReply(
                 text=content,
@@ -290,6 +334,7 @@ class NimAdapter(ModelAdapter):
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
                 error=None,
+                served_model=served,
             )
 
         except httpx.TimeoutException as exc:

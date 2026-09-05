@@ -443,3 +443,158 @@ def test_register_custom_provider() -> None:
     adapter = get_adapter("custom:my-special-model")
     assert isinstance(adapter, DummyAdapter)
     assert adapter.model == "my-special-model"
+
+
+async def test_exhausted_budget_is_reported_as_truncation_not_a_malformed_body() -> None:
+    """A reasoning model that runs out of budget is a budget problem.
+
+    Calling it ``malformed_response`` sent whoever read the bundle looking for
+    a provider bug, and -- because malformed replies are retryable -- spent two
+    more identical calls that truncated identically.
+    """
+    from retro_backend.esim.providers.base import ERR_TRUNCATED
+    from retro_backend.esim.rotation import retryable_model_error
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/m",
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {"content": None, "reasoning_content": "thinking..."},
+                    }
+                ],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 256},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/m", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}], max_tokens=256)
+
+    assert not reply.ok
+    assert reply.error is not None
+    assert reply.error.startswith(ERR_TRUNCATED)
+    assert "reasoning" in reply.error
+    # Retryable: the runner folds this error into the next attempt's prompt as
+    # previousError, so a retry asks the model for a shorter answer rather
+    # than repeating an unchanged request under the same budget.
+    assert retryable_model_error(reply.error) is True
+
+
+async def test_served_model_is_read_back_from_the_response_body() -> None:
+    """The manifest's claim about which model ran must be checkable."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/actually-served",
+                "choices": [{"finish_reason": "stop", "message": {"content": "{}"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/asked", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}])
+
+    assert reply.ok
+    assert reply.served_model == "vendor/actually-served"
+
+
+async def test_truncation_mid_answer_is_not_reported_as_invalid_json() -> None:
+    """A half-written tool call is a budget problem, not a formatting one.
+
+    A model writing its answer directly (rather than reasoning first) leaves a
+    partial string when the budget runs out. Parsed as JSON that reads as a
+    model unable to follow the format, and -- being retryable -- spends two
+    more calls truncating identically.
+    """
+    from retro_backend.esim.providers.base import ERR_TRUNCATED
+    from retro_backend.esim.rotation import retryable_model_error
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/m",
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {"content": '{"tool":"prepare","arguments":{"orderId":"'},
+                    }
+                ],
+                "usage": {"prompt_tokens": 40, "completion_tokens": 256},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/m", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}], max_tokens=256)
+
+    assert reply.error is not None
+    assert reply.error.startswith(ERR_TRUNCATED)
+    assert "mid-answer" in reply.error
+    # Retryable on the same basis as the reasoning-truncation case: the next
+    # attempt's prompt carries this error as previousError, nudging brevity.
+    assert retryable_model_error(reply.error) is True
+
+
+async def test_a_truncated_call_still_reports_the_tokens_it_burned() -> None:
+    """Reporting zero would understate real usage, and so real cost."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/m",
+                "choices": [{"finish_reason": "length", "message": {"content": None}}],
+                "usage": {"prompt_tokens": 700, "completion_tokens": 1024},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/m", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}], max_tokens=1024)
+
+    assert not reply.ok
+    assert reply.input_tokens == 700
+    assert reply.output_tokens == 1024
+
+
+async def test_a_failed_attempt_still_reports_which_model_answered() -> None:
+    """Dropping the id on failures could hide a second model in the run.
+
+    servedModel drives the run summary's single-model claim. If the provider
+    served something else on the attempt that truncated, losing the id there
+    let the bundle report no mismatch while another model had in fact shaped
+    the retry that followed.
+    """
+    from retro_backend.esim.providers.base import ERR_TRUNCATED
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/substituted",
+                "choices": [{"finish_reason": "length", "message": {"content": None}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 256},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/asked", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}], max_tokens=256)
+
+    assert reply.error is not None
+    assert reply.error.startswith(ERR_TRUNCATED)
+    assert reply.served_model == "vendor/substituted"
+
