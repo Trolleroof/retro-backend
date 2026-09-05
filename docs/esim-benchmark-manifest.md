@@ -38,8 +38,21 @@ observe and control.
 
 **Sees, each turn:** the role-projected observation for the role it is currently
 acting as, the JSON schemas of the tools that role may call, and the required
-response format. On a retry it additionally sees `previousError` — the parse
-error or the simulator's rejection from its own previous attempt.
+response format. Chef, server, and host additionally see `workerIds` — the id
+of every worker by role. On a retry it additionally sees `previousError` — the
+parse error or the simulator's rejection from its own previous attempt.
+
+**`workerIds`, and why it was added.** Every role's tool set includes
+`request_help` and `send_message`, both of which take a coworker's id as an
+argument, but only expediter's observation names any worker. Chef, server, and
+host had no way to answer that argument except by guessing. A live run showed
+the cost of that gap directly: the model invented `"manager"`, a role this
+restaurant does not have, and repeated the same guess on 121 of 128 rejected
+actions in one run. `workerIds` is the same four ids expediter already sees in
+its own observation, so it discloses nothing new to the environment — chef,
+server, and host previously had less information than expediter for tools
+every role is equally permitted to use, which was an omission, not a
+deliberate asymmetry.
 
 **Does not see, ever:** the full `RestaurantState`, any other role's projection,
 the event schedule, any future incident, reference-policy actions, grader
@@ -290,14 +303,34 @@ format" must state the budget it was measured under.
 3. Run-to-run variance on the dangerous variant is large enough to flip the
    safety verdict (see §8). The size of that spread is unmeasured; the 3-repeat
    policy exists to measure it and has not yet been run.
-3. The adapter reads only `message.content`. Models that answer in
+4. The adapter reads only `message.content`. Models that answer in
    `reasoning_content` with a null `content` are unusable regardless of budget;
    this excludes `meta/muse-glimmer-30b` and is a fixable adapter gap, not a
    property of the benchmark.
-4. Two of the four JSON-capable models are not yet in the included roster.
-5. Cost is not recorded. Frozen v1's results table asks for actual cost or a
-   clearly labeled estimate; the bundle currently carries tokens and latency only.
-6. One full episode costs ~130 turns, ~90k tokens and ~8 minutes of wall clock
-   against `openai/gpt-oss-20b`. The full frozen matrix — 2 variants x 3 repeats
-   x N models — is therefore roughly `6N` runs of that size; budget accordingly
+5. Two of the four JSON-capable models are not yet in the included roster.
+6. **Cost.** NIM's free developer tier covers this benchmark's actual usage: a
+   full run is ~150k tokens, well inside the ~1,000-credit free allotment,
+   ~1 credit/call. Beyond free credits, published pricing is $0.10–$10 per
+   million tokens depending on model, and production scale requires NVIDIA AI
+   Enterprise ($4,500/GPU/year). No exact per-model rate has been confirmed
+   against an authoritative NVIDIA source; treat the range as indicative, not
+   a number to bill against.
+7. **Rate limit, unresolved.** The adapter is built and documented as 40
+   requests/second (`DEFAULT_NIM_RATE_LIMIT_RPS`); multiple third-party
+   sources, including NVIDIA's own developer forum, describe the free tier's
+   limit as 40 requests **per minute** — a 60x difference. No run so far has
+   received a 429: our actual aggregate rate has stayed near 2 req/s even with
+   12 concurrent runs, which would violate a 40/min ceiling if that number is
+   real, yet nothing has been throttled. Unresolved because the two sources
+   disagree and neither has been confirmed authoritatively. Before running
+   many processes concurrently, either confirm the true limit from NVIDIA's
+   own dashboard/docs, or throttle to something safely under 40/min and watch
+   for 429s on a small batch first.
+8. One full episode costs ~130–185 turns, ~90k–160k tokens, and 8–16 minutes
+   of wall clock against `openai/gpt-oss-20b`, depending on the token budget in
+   force. The full frozen matrix — 2 variants x 3 repeats x N models — is
+   therefore roughly `6N` runs of that size; budget accordingly. Runs are
+   independent of each other (only turns within one run are sequential), so
+   running the matrix concurrently — subject to the rate-limit caveat above —
+   turns `6N` runs' wall-clock cost into roughly one run's.
    before freezing the roster.

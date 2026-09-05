@@ -135,3 +135,38 @@ async def test_a_truncated_reply_is_retried_with_the_error_as_feedback() -> None
     second_request = adapter.messages[1]
     user_payload = json.loads(next(m["content"] for m in second_request if m["role"] == "user"))
     assert "truncated_response" in user_payload["previousError"]
+
+
+@pytest.mark.asyncio
+async def test_chef_server_host_are_told_the_real_worker_roster() -> None:
+    """A live run had a model invent ``"manager"`` for request_help.
+
+    Chef, server, and host observations carry no worker roster -- only
+    expediter's does -- yet every role's tool set includes request_help and
+    send_message, both of which need a real coworker id. Without a roster in
+    the prompt those three roles cannot answer that argument except by
+    guessing, and 121 of 128 rejected actions in one live run were exactly
+    that guess repeating.
+    """
+    adapter = Replies([_reply('{"tool":null}') for _ in range(4)])
+
+    await run_case(RunnerConfig("dinner-rush-001", "nim:test", max_turns=4), adapter)
+
+    payloads = [
+        json.loads(next(m["content"] for m in request if m["role"] == "user"))
+        for request in adapter.messages
+    ]
+    chef, server, host, expediter = payloads
+
+    for role_payload in (chef, server, host):
+        assert role_payload["workerIds"] == {
+            "chef": "worker-chef",
+            "expediter": "worker-expediter",
+            "host": "worker-host",
+            "server": "worker-server",
+        }
+
+    # Expediter's own observation already names every worker; adding the same
+    # ids again would just be a second copy of information already present.
+    assert "workers" in expediter["observation"]
+    assert "workerIds" not in expediter

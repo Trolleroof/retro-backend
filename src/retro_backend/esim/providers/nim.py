@@ -45,7 +45,14 @@ __all__ = [
 
 DEFAULT_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_NIM_TIMEOUT_SECONDS = 30.0
-DEFAULT_NIM_RATE_LIMIT_RPS = 40.0  # 40 requests/second
+# Unconfirmed against an authoritative NVIDIA source: multiple third-party
+# sources, including NVIDIA's own developer forum, describe the free tier's
+# limit as 40 requests per MINUTE, not per second -- a 60x difference. No run
+# against this adapter has hit a 429 yet, but none has driven anywhere near
+# either number's true ceiling either. Confirm the real limit, or throttle to
+# something safely under 40/min, before relying on this value under
+# meaningful concurrent load. See docs/esim-benchmark-manifest.md §9.
+DEFAULT_NIM_RATE_LIMIT_RPS = 40.0  # 40 requests/second (see caveat above)
 
 
 class AsyncRateLimiter:

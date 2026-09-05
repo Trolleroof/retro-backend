@@ -70,17 +70,31 @@ def _record(sink: TextIO | None, record: Mapping[str, object]) -> None:
 
 
 def _messages(
-    role: Role, observation: Mapping[str, object], feedback: str | None
+    role: Role,
+    observation: Mapping[str, object],
+    feedback: str | None,
+    *,
+    worker_ids: Mapping[Role, str],
 ) -> list[dict[str, str]]:
     tools = {
         tool: TOOL_ARGS[tool].model_json_schema(by_alias=True)
         for tool in sorted(ROLE_TOOLS[role])
     }
-    prompt = {
+    prompt: dict[str, object] = {
         "observation": observation,
         "tools": tools,
         "response": '{"tool":"tool_name","arguments":{...}} or {"tool":null}',
     }
+    # request_help and send_message need a real worker id, but chef, server,
+    # and host observations carry no worker roster at all -- only expediter's
+    # does. Without this, those three roles have to guess a coworker's id to
+    # use tools every role is permitted, and a live run showed exactly that: a
+    # model invented "manager", a role this restaurant does not have, and
+    # burned most of its retry budget on the same guess every tick. Expediter
+    # already sees every worker id in its own observation, so this would only
+    # repeat it there.
+    if "workers" not in observation:
+        prompt["workerIds"] = dict(sorted(worker_ids.items()))
     if feedback is not None:
         prompt["previousError"] = feedback
     return [
@@ -178,6 +192,10 @@ async def run_case(
     served_models: set[str] = set()
 
     while state.episode.phase == "active":
+        # Rebuilt from the current state each tick rather than cached once:
+        # the roster is expected to stay the four fixed workers for the run,
+        # but nothing here should assume that instead of just reading it.
+        worker_ids: dict[Role, str] = {worker.role: worker.id for worker in state.workers}
         for role, worker_id in role_rotation(state):
             if totals["turns"] >= max_turns:
                 termination = "turn_limit"
@@ -189,7 +207,8 @@ async def run_case(
                     break
                 observation = sim.observe(role).model_dump(by_alias=True)
                 reply: ModelReply = await adapter.generate(
-                    _messages(role, observation, feedback), max_tokens=config.max_output_tokens
+                    _messages(role, observation, feedback, worker_ids=worker_ids),
+                    max_tokens=config.max_output_tokens,
                 )
                 totals["turns"] += 1
                 totals["input_tokens"] += reply.input_tokens
