@@ -170,3 +170,25 @@ def test_cli_exposes_no_reference_policy_flag() -> None:
     # A reference policy is not selectable here at any spelling.
     with pytest.raises(SystemExit):
         parser.parse_args([*base, "--policy", "reference"])
+
+
+def test_cli_budget_flags_do_not_shadow_the_runner_defaults() -> None:
+    """An unnamed budget must come from the runner, not a copy in the parser.
+
+    A default repeated in argparse silently overrode the runner's own after it
+    was raised, and the manifest then recorded the stale value as a deliberate
+    choice -- the worst kind of wrong, because it looked audited.
+    """
+    parser = build_parser()
+    args = parser.parse_args(
+        ["run", "--case", CASE, "--model", "nim:vendor/m", "--output-dir", "/tmp/x"]
+    )
+
+    assert args.max_output_tokens is None
+    assert args.max_attempts is None
+    assert args.max_turns is None
+
+    # What the runner would use when the CLI names nothing.
+    config = RunnerConfig(case_id=CASE, model="nim:vendor/m")
+    assert config.max_output_tokens == 1024
+

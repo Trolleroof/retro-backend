@@ -503,3 +503,64 @@ async def test_served_model_is_read_back_from_the_response_body() -> None:
 
     assert reply.ok
     assert reply.served_model == "vendor/actually-served"
+
+
+async def test_truncation_mid_answer_is_not_reported_as_invalid_json() -> None:
+    """A half-written tool call is a budget problem, not a formatting one.
+
+    A model writing its answer directly (rather than reasoning first) leaves a
+    partial string when the budget runs out. Parsed as JSON that reads as a
+    model unable to follow the format, and -- being retryable -- spends two
+    more calls truncating identically.
+    """
+    from retro_backend.esim.providers.base import ERR_TRUNCATED
+    from retro_backend.esim.rotation import retryable_model_error
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/m",
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {"content": '{"tool":"prepare","arguments":{"orderId":"'},
+                    }
+                ],
+                "usage": {"prompt_tokens": 40, "completion_tokens": 256},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/m", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}], max_tokens=256)
+
+    assert reply.error is not None
+    assert reply.error.startswith(ERR_TRUNCATED)
+    assert "mid-answer" in reply.error
+    assert retryable_model_error(reply.error) is False
+
+
+async def test_a_truncated_call_still_reports_the_tokens_it_burned() -> None:
+    """Reporting zero would understate real usage, and so real cost."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/m",
+                "choices": [{"finish_reason": "length", "message": {"content": None}}],
+                "usage": {"prompt_tokens": 700, "completion_tokens": 1024},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/m", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}], max_tokens=1024)
+
+    assert not reply.ok
+    assert reply.input_tokens == 700
+    assert reply.output_tokens == 1024
+

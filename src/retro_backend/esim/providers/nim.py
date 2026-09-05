@@ -268,42 +268,49 @@ class NimAdapter(ModelAdapter):
                     error=f"{ERR_MALFORMED}: missing or empty 'choices' list in response",
                 )
 
-            first_choice = choices[0]
-            message = first_choice.get("message") if isinstance(first_choice, dict) else None
-            content = message.get("content") if isinstance(message, dict) else None
-            if content is None or not isinstance(content, str):
-                # A reasoning model spends the output budget thinking and only
-                # then writes its answer, so a budget that runs out leaves
-                # content null with finish_reason "length". Reporting that as a
-                # malformed response sends whoever reads the bundle looking for
-                # a provider bug instead of at the token budget, which is the
-                # actual cause and is set by the manifest.
-                finish = (
-                    first_choice.get("finish_reason") if isinstance(first_choice, dict) else None
-                )
-                reasoned = isinstance(message, dict) and bool(
-                    message.get("reasoning_content") or message.get("reasoning")
-                )
-                if finish == "length":
-                    detail = (
-                        "output token budget exhausted before any answer was written"
-                        + (" (spent on reasoning tokens)" if reasoned else "")
-                    )
-                    error = f"{ERR_TRUNCATED}: {detail}"
-                else:
-                    error = f"{ERR_MALFORMED}: missing or non-string 'content' in first choice message"
-                return ModelReply(
-                    text=None,
-                    input_tokens=0,
-                    output_tokens=0,
-                    latency_ms=latency_ms,
-                    error=error,
-                )
-
-            # Extract token counts
+            # Token counts are read before any early return: a truncated call
+            # still consumed the whole budget and still costs money, and a
+            # bundle that reported zero for it would understate real usage.
             usage = data.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens") or 0)
             output_tokens = int(usage.get("completion_tokens") or 0)
+
+            first_choice = choices[0]
+            message = first_choice.get("message") if isinstance(first_choice, dict) else None
+            content = message.get("content") if isinstance(message, dict) else None
+            finish = first_choice.get("finish_reason") if isinstance(first_choice, dict) else None
+
+            # Truncation is decided by finish_reason, not by what content looks
+            # like. The budget runs out in two different-looking ways: a
+            # reasoning model leaves content null, having spent everything
+            # thinking, while a model writing directly leaves a half-written
+            # string. The second parses as "invalid json", which reads as a
+            # model that cannot follow the format and, being retryable, spends
+            # two more calls truncating identically. Both are one cause.
+            if finish == "length":
+                reasoned = isinstance(message, dict) and bool(
+                    message.get("reasoning_content") or message.get("reasoning")
+                )
+                where = "before any answer was written" if not content else "mid-answer"
+                detail = f"output token budget exhausted {where}" + (
+                    " (spent on reasoning tokens)" if reasoned else ""
+                )
+                return ModelReply(
+                    text=None,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    latency_ms=latency_ms,
+                    error=f"{ERR_TRUNCATED}: {detail}",
+                )
+
+            if content is None or not isinstance(content, str):
+                return ModelReply(
+                    text=None,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    latency_ms=latency_ms,
+                    error=f"{ERR_MALFORMED}: missing or non-string 'content' in first choice message",
+                )
 
             # Read the answering model back out of the body instead of echoing
             # the request: NIM resolves an id to a hosted function, and the

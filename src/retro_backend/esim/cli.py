@@ -169,13 +169,20 @@ def _report(graded: Grade, summary: dict[str, Any], out_dir: Path) -> None:
 
 async def _run_command(args: argparse.Namespace) -> int:
     case_id = resolve_case_id(args.case)
-    config = RunnerConfig(
-        case_id=case_id,
-        model=args.model,
-        max_attempts=args.max_attempts,
-        max_output_tokens=args.max_output_tokens,
-        max_turns=args.max_turns,
-    )
+    # Only budgets the caller actually named are passed through. Repeating the
+    # runner's defaults here once shadowed them: the CLI kept sending its own
+    # stale 256-token budget after the runner's had been raised, and every run
+    # went out under a budget the manifest then faithfully recorded as chosen.
+    overrides: dict[str, int] = {
+        name: value
+        for name, value in (
+            ("max_attempts", args.max_attempts),
+            ("max_output_tokens", args.max_output_tokens),
+            ("max_turns", args.max_turns),
+        )
+        if value is not None
+    }
+    config = RunnerConfig(case_id=case_id, model=args.model, **overrides)
     root = Path(args.output_dir)
     print(f"case={case_id} model={args.model} repeats={args.repeats}")
     for repeat in range(1, args.repeats + 1):
@@ -204,8 +211,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="runs of this case/model pair; the case seed stays fixed so repeats measure model variability",
     )
-    run.add_argument("--max-attempts", type=int, default=3)
-    run.add_argument("--max-output-tokens", type=int, default=256)
+    # Default None, not the runner's values: an explicit default here would
+    # silently override the runner and be recorded as a deliberate choice.
+    run.add_argument("--max-attempts", type=int, default=None)
+    run.add_argument("--max-output-tokens", type=int, default=None)
     run.add_argument("--max-turns", type=int, default=None)
     run.set_defaults(func=_run_command)
     return parser
