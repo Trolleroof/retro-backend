@@ -20,9 +20,10 @@ from pydantic import ValidationError
 from retro_backend.esim.case import ENV_VERSION, load_case
 from retro_backend.esim.contracts import ACTION_VERSION, ActionEnvelope, ActionError, Role
 from retro_backend.esim.providers.base import ModelAdapter, ModelReply
-from retro_backend.esim.providers.registry import get_adapter
+from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import (
     RETRYABLE_ACTION_ERRORS,
+    ROLE_ORDER,
     retryable_model_error,
     role_rotation,
 )
@@ -39,7 +40,10 @@ class RunnerConfig:
     case_id: str
     model: str
     max_attempts: int = 3
-    max_output_tokens: int = 256
+    # A reasoning model spends this budget thinking before it writes anything,
+    # so a budget sized for the answer alone truncates every such model into a
+    # failed turn. Sized for reasoning plus a one-line tool call.
+    max_output_tokens: int = 1024
     max_turns: int | None = None
 
     def __post_init__(self) -> None:
@@ -143,10 +147,20 @@ async def run_case(
         event_schedule=case.event_schedule,
     )
     recorder.record_state(state)
-    max_turns = config.max_turns or state.episode.max_ticks * 4
+    # Every adapter call counts as a turn, retries included, and a full episode
+    # needs max_ticks * len(ROLE_ORDER) *successful* turns. Budgeting exactly
+    # that many made the zero-retry path the only one that could ever reach
+    # "episode_complete": a single retry anywhere guaranteed "turn_limit", and
+    # with it a completion score that measured the budget rather than the
+    # model. The retry allowance has to be part of the budget.
+    max_turns = config.max_turns or state.episode.max_ticks * len(ROLE_ORDER) * config.max_attempts
     totals = Counter[str]()
     latency_ms = 0.0
     termination = "episode_complete"
+    # Every distinct id the provider claimed answered. More than one, or one
+    # that is not the requested model, means the run is not the single-model
+    # run the manifest says it is.
+    served_models: set[str] = set()
 
     while state.episode.phase == "active":
         for role, worker_id in role_rotation(state):
@@ -166,11 +180,14 @@ async def run_case(
                 totals["input_tokens"] += reply.input_tokens
                 totals["output_tokens"] += reply.output_tokens
                 latency_ms += reply.latency_ms
+                if reply.served_model is not None:
+                    served_models.add(reply.served_model)
                 record: dict[str, object] = {
                     "event": "model_attempt",
                     "role": role,
                     "tick": state.episode.tick,
                     "attempt": attempt,
+                    "servedModel": reply.served_model,
                     "latencyMs": reply.latency_ms,
                     "inputTokens": reply.input_tokens,
                     "outputTokens": reply.output_tokens,
@@ -226,10 +243,15 @@ async def run_case(
         recorder.record_state(state)
 
     trajectory = recorder.finish(termination)
+    # parse_model_spec drops the provider prefix; the provider answers with a
+    # bare model id, so compare like with like before calling it a mismatch.
+    requested = parse_model_spec(config.model)[1] if ":" in config.model else config.model
     summary: dict[str, object] = {
         "event": "summary",
         "caseId": config.case_id,
         "model": config.model,
+        "servedModels": sorted(served_models),
+        "servedModelMismatch": bool(served_models) and served_models != {requested},
         "termination": termination,
         "ticks": state.episode.tick,
         "turns": totals["turns"],

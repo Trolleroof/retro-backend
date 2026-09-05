@@ -19,3 +19,6 @@ src/js-stubs/
 
 # Resume ledger written by scripts/backfill-episodes.py.
 .backfill-episodes.state.json
+
+# macOS Finder metadata.
+.DS_Store

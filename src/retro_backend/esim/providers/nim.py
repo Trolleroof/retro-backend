@@ -29,6 +29,7 @@ from retro_backend.esim.providers.base import (
     ERR_NETWORK,
     ERR_RATE_LIMIT,
     ERR_TIMEOUT,
+    ERR_TRUNCATED,
     ModelAdapter,
     ModelReply,
     validate_https_url,
@@ -271,12 +272,32 @@ class NimAdapter(ModelAdapter):
             message = first_choice.get("message") if isinstance(first_choice, dict) else None
             content = message.get("content") if isinstance(message, dict) else None
             if content is None or not isinstance(content, str):
+                # A reasoning model spends the output budget thinking and only
+                # then writes its answer, so a budget that runs out leaves
+                # content null with finish_reason "length". Reporting that as a
+                # malformed response sends whoever reads the bundle looking for
+                # a provider bug instead of at the token budget, which is the
+                # actual cause and is set by the manifest.
+                finish = (
+                    first_choice.get("finish_reason") if isinstance(first_choice, dict) else None
+                )
+                reasoned = isinstance(message, dict) and bool(
+                    message.get("reasoning_content") or message.get("reasoning")
+                )
+                if finish == "length":
+                    detail = (
+                        "output token budget exhausted before any answer was written"
+                        + (" (spent on reasoning tokens)" if reasoned else "")
+                    )
+                    error = f"{ERR_TRUNCATED}: {detail}"
+                else:
+                    error = f"{ERR_MALFORMED}: missing or non-string 'content' in first choice message"
                 return ModelReply(
                     text=None,
                     input_tokens=0,
                     output_tokens=0,
                     latency_ms=latency_ms,
-                    error=f"{ERR_MALFORMED}: missing or non-string 'content' in first choice message",
+                    error=error,
                 )
 
             # Extract token counts
@@ -284,12 +305,19 @@ class NimAdapter(ModelAdapter):
             input_tokens = int(usage.get("prompt_tokens") or 0)
             output_tokens = int(usage.get("completion_tokens") or 0)
 
+            # Read the answering model back out of the body instead of echoing
+            # the request: NIM resolves an id to a hosted function, and the
+            # manifest's claim about which model ran is only checkable if the
+            # provider's own answer is recorded.
+            served = data.get("model")
+
             return ModelReply(
                 text=content,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
                 error=None,
+                served_model=served if isinstance(served, str) else None,
             )
 
         except httpx.TimeoutException as exc:

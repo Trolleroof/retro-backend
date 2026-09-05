@@ -443,3 +443,63 @@ def test_register_custom_provider() -> None:
     adapter = get_adapter("custom:my-special-model")
     assert isinstance(adapter, DummyAdapter)
     assert adapter.model == "my-special-model"
+
+
+async def test_exhausted_budget_is_reported_as_truncation_not_a_malformed_body() -> None:
+    """A reasoning model that runs out of budget is a budget problem.
+
+    Calling it ``malformed_response`` sent whoever read the bundle looking for
+    a provider bug, and -- because malformed replies are retryable -- spent two
+    more identical calls that truncated identically.
+    """
+    from retro_backend.esim.providers.base import ERR_TRUNCATED
+    from retro_backend.esim.rotation import retryable_model_error
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/m",
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {"content": None, "reasoning_content": "thinking..."},
+                    }
+                ],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 256},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/m", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}], max_tokens=256)
+
+    assert not reply.ok
+    assert reply.error is not None
+    assert reply.error.startswith(ERR_TRUNCATED)
+    assert "reasoning" in reply.error
+    # Retrying the identical request cannot help, so it must not be retryable.
+    assert retryable_model_error(reply.error) is False
+
+
+async def test_served_model_is_read_back_from_the_response_body() -> None:
+    """The manifest's claim about which model ran must be checkable."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/actually-served",
+                "choices": [{"finish_reason": "stop", "message": {"content": "{}"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/asked", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}])
+
+    assert reply.ok
+    assert reply.served_model == "vendor/actually-served"
