@@ -108,8 +108,18 @@ class TestLoadFailuresAreNamed:
 
     def test_a_missing_file_names_the_path(self, tmp_path: Path) -> None:
         missing = tmp_path / "nope.json"
-        with pytest.raises(TrajectoryLoadError, match="no such file"):
+        with pytest.raises(TrajectoryLoadError, match="No such file"):
             load_trajectory(missing)
+
+    def test_a_directory_is_reported_not_raised_as_a_traceback(self, tmp_path: Path) -> None:
+        # Only FileNotFoundError was caught here once, so a directory (or a
+        # permission denial) escaped main() as a traceback and the caller
+        # never saw the documented exit code.
+        with pytest.raises(TrajectoryLoadError, match="Is a directory"):
+            load_trajectory(tmp_path)
+
+    def test_a_directory_exits_four_rather_than_crashing(self, tmp_path: Path) -> None:
+        assert main(["regrade", "--trajectory", str(tmp_path)]) == 4
 
     def test_malformed_json_names_the_path(self, tmp_path: Path) -> None:
         path = tmp_path / "trajectory.json"

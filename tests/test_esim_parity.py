@@ -79,6 +79,22 @@ class TestMismatch:
         assert len(report.differences) == 11
         assert report.differences[-1] == "... and 3 more field(s)"
 
+    def test_an_omitted_nullable_field_is_not_mistaken_for_null(self) -> None:
+        # `Mapping.get` reads an absent key and an explicit null the same way,
+        # so this once produced "mismatch" alongside "0 field(s) differ" --
+        # a verdict naming nothing. The two hash differently because
+        # canonical JSON carries the key in one case and not the other.
+        payload = _native()
+        state = dict(payload["initialState"])
+        order = dict(state["orders"][0])
+        assert order["allergy"] is None
+        del order["allergy"]
+        state["orders"] = [order, *state["orders"][1:]]
+        payload["initialState"] = state
+        report = check_parity(payload)
+        assert report.verdict == "mismatch"
+        assert report.differences == ("/orders[0]/allergy: exported=absent engine=None",)
+
     def test_a_field_the_export_omits_is_reported_too(self) -> None:
         # Changing a *value* would not test this -- both sides move together.
         payload = _native()
@@ -87,7 +103,7 @@ class TestMismatch:
         payload["initialState"] = state
         report = check_parity(payload)
         assert report.verdict == "mismatch"
-        assert report.differences == ("/version: exported=None engine='restaurant-arena/v1'",)
+        assert report.differences == ("/version: exported=absent engine='restaurant-arena/v1'",)
 
 
 class TestParityIsNeverClaimed:
@@ -118,6 +134,9 @@ class TestParityCommand:
 
     def test_a_missing_export_exits_four(self, tmp_path: Path) -> None:
         assert main(["parity", "--trace", str(tmp_path / "nope.json")]) == 4
+
+    def test_a_directory_exits_four_rather_than_crashing(self, tmp_path: Path) -> None:
+        assert main(["parity", "--trace", str(tmp_path)]) == 4
 
     def test_the_report_can_be_written_as_json(self, tmp_path: Path) -> None:
         out = tmp_path / "parity.json"

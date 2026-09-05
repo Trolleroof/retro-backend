@@ -16,7 +16,7 @@ be completed the verdict says so; no verdict means "probably fine".
 """
 
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Literal
+from typing import Literal, override
 
 from pydantic import Field, ValidationError
 
@@ -126,11 +126,31 @@ def load_trace(payload: object) -> ArenaTrace:
         ) from exc
 
 
+class _Absent:
+    """Marks a key or index one side does not have.
+
+    ``None`` cannot stand in for this. An omitted nullable field and one
+    explicitly set to ``null`` hash differently -- canonical JSON carries the
+    key in one case and not the other -- but both read as ``None`` through
+    ``Mapping.get``. Conflating them let a mismatch be reported with "0
+    field(s) differ", naming nothing and pointing at nothing.
+    """
+
+    @override
+    def __repr__(self) -> str:
+        return "absent"
+
+
+ABSENT = _Absent()
+
+
 def _differences(exported: object, ours: object, path: str = "") -> Iterator[str]:
     """Yield ``path: exported=X engine=Y`` for every leaf that differs."""
     if isinstance(exported, Mapping) and isinstance(ours, Mapping):
         for key in sorted(set(exported) | set(ours)):
-            yield from _differences(exported.get(key), ours.get(key), f"{path}/{key}")
+            yield from _differences(
+                exported.get(key, ABSENT), ours.get(key, ABSENT), f"{path}/{key}"
+            )
         return
     if (
         isinstance(exported, Sequence)
@@ -139,8 +159,8 @@ def _differences(exported: object, ours: object, path: str = "") -> Iterator[str
         and not isinstance(ours, str)
     ):
         for index in range(max(len(exported), len(ours))):
-            left = exported[index] if index < len(exported) else None
-            right = ours[index] if index < len(ours) else None
+            left = exported[index] if index < len(exported) else ABSENT
+            right = ours[index] if index < len(ours) else ABSENT
             yield from _differences(left, right, f"{path}[{index}]")
         return
     # repr, not ==, because 70 and 70.0 compare equal and are the whole point.

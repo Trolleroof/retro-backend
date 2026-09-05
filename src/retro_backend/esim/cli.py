@@ -279,6 +279,27 @@ class TrajectoryLoadError(Exception):
     """A stored trajectory could not be read as one."""
 
 
+def _read_json(path: Path) -> object:
+    """Read and parse a JSON file, describing any failure against the path.
+
+    ``OSError`` covers the whole family, not just a missing file: a directory
+    passed where a bundle was meant, a permission denial, a dangling symlink.
+    Catching only ``FileNotFoundError`` let those escape ``main`` as a
+    traceback, so the documented exit code for unreadable input was not
+    what the caller actually got.
+    """
+    try:
+        return json.loads(path.read_text())
+    except OSError as exc:
+        raise _ReadError(f"{path}: {exc.strerror or exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise _ReadError(f"{path}: not valid JSON ({exc.msg} at line {exc.lineno})") from exc
+
+
+class _ReadError(Exception):
+    """Internal: a path could not be read or parsed. Re-raised per command."""
+
+
 def load_trajectory(path: Path) -> Trajectory:
     """Read a recorded trajectory back off disk.
 
@@ -291,13 +312,9 @@ def load_trajectory(path: Path) -> Trajectory:
     archived run ungradeable, and this is where that surfaces.
     """
     try:
-        payload = json.loads(path.read_text())
-    except FileNotFoundError:
-        raise TrajectoryLoadError(f"{path}: no such file") from None
-    except json.JSONDecodeError as exc:
-        raise TrajectoryLoadError(
-            f"{path}: not valid JSON ({exc.msg} at line {exc.lineno})"
-        ) from exc
+        payload = _read_json(path)
+    except _ReadError as exc:
+        raise TrajectoryLoadError(str(exc)) from exc
     try:
         return Trajectory.model_validate(payload)
     except ValidationError as exc:
@@ -380,11 +397,9 @@ async def _parity_command(args: argparse.Namespace) -> int:
     """
     path = Path(args.trace)
     try:
-        payload = json.loads(path.read_text())
-    except FileNotFoundError:
-        raise TraceLoadError(f"{path}: no such file") from None
-    except json.JSONDecodeError as exc:
-        raise TraceLoadError(f"{path}: not valid JSON ({exc.msg} at line {exc.lineno})") from exc
+        payload = _read_json(path)
+    except _ReadError as exc:
+        raise TraceLoadError(str(exc)) from exc
     if not isinstance(payload, dict):
         raise TraceLoadError(f"{path}: top level is not an object")
 
