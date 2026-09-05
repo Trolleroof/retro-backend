@@ -19,6 +19,7 @@ Usage:
 import argparse
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -32,18 +33,20 @@ from retro_backend.esim.simulator import RestaurantSim  # noqa: E402
 from retro_backend.esim.state_hash import state_hash  # noqa: E402
 from retro_backend.esim.trajectory import Trajectory, TrajectoryRecorder  # noqa: E402
 
-ACTOR_IDS: dict[Role, str] = {
-    "chef": "worker-chef",
-    "server": "worker-server",
-    "host": "worker-host",
-    "expediter": "worker-expediter",
-}
 
+def _policies(name: str, episode_id: str, actor_ids: Mapping[Role, str]) -> dict[Role, Policy]:
+    """Build one policy per role, addressed to that case's real workers.
 
-def _policies(name: str, episode_id: str) -> dict[Role, Policy]:
+    Actor ids come from the loaded case rather than a constant here. Hardcoded
+    ids happen to match ``dinner-rush-001``, but this command accepts any
+    schema-valid case: against one whose workers are named differently, every
+    action would be rejected as ``unknown_entity`` and the script would still
+    run the horizon out and grade the resulting stalled rollout as though it
+    were the reference policy.
+    """
     factory = {"greedy": GreedyPolicy, "idle": IdlePolicy}[name]
     return {
-        role: factory(episode_id=episode_id, actor_id=ACTOR_IDS[role], role=role)
+        role: factory(episode_id=episode_id, actor_id=actor_ids[role], role=role)
         for role in ROLE_ORDER
     }
 
@@ -53,7 +56,11 @@ def rollout(case_id: str, policy_name: str) -> Trajectory:
     case = load_case(case_id)
     sim = RestaurantSim(case.initial_state, event_schedule=case.event_schedule)
     state = sim.reset(case.seed)
-    policies = _policies(policy_name, case.case_id)
+    actor_ids: dict[Role, str] = {w.role: w.id for w in case.initial_state.workers}
+    missing = [role for role in ROLE_ORDER if role not in actor_ids]
+    if missing:
+        raise ValueError(f"case {case_id!r} has no worker for role(s): {', '.join(missing)}")
+    policies = _policies(policy_name, case.case_id, actor_ids)
 
     recorder = TrajectoryRecorder(
         case_id=case.case_id,
@@ -77,6 +84,21 @@ def rollout(case_id: str, policy_name: str) -> Trajectory:
         recorder.record_state(state)
 
     return recorder.finish("episode_complete")
+
+
+def _at_least_two(value: str) -> int:
+    """Reject repeat counts a determinism check cannot draw a conclusion from.
+
+    Below 1 left ``fingerprints`` empty and crashed on ``fingerprints[0]``.
+    Exactly 1 was worse than a crash: it compared a run against itself and
+    printed DETERMINISM OK, which is true of any run, deterministic or not.
+    """
+    parsed = int(value)
+    if parsed < 2:
+        raise argparse.ArgumentTypeError(
+            f"a determinism check needs at least 2 runs to compare, got {parsed}"
+        )
+    return parsed
 
 
 def _write_run(out_dir: Path, trajectory: Trajectory, graded: Grade, policy: str) -> None:
@@ -106,7 +128,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--case", required=True, help="case id or path to its JSON file")
     parser.add_argument("--policy", default="greedy", choices=("greedy", "idle"))
-    parser.add_argument("--repeats", type=int, default=2, help="runs to compare (default 2)")
+    parser.add_argument(
+        "--repeats",
+        type=_at_least_two,
+        default=2,
+        help="runs to compare (minimum 2, default 2)",
+    )
     parser.add_argument("--output-dir", default=None, help="optional bundle destination")
     args = parser.parse_args(argv)
 

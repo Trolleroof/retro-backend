@@ -27,13 +27,30 @@ from typing import Any
 
 from retro_backend.esim.case import ENV_VERSION, CaseError, load_case
 from retro_backend.esim.grader import GRADER_VERSION, Grade, grade
-from retro_backend.esim.runner import RunnerConfig, RunResult, run_model_case
+from retro_backend.esim.runner import (
+    RunnerConfig,
+    RunResult,
+    effective_max_turns,
+    run_model_case,
+)
 from retro_backend.esim.state_hash import state_hash
 from retro_backend.esim.trajectory import Trajectory
 
 # Bumped when the bundle's file set or field meanings change, so a report can
 # tell a v1 bundle from a later one without guessing from its contents.
 BUNDLE_VERSION = "esim-run-bundle/v1"
+
+
+def positive_int(value: str) -> int:
+    """An argparse type that rejects zero and negatives.
+
+    ``--repeats 0`` previously exited 0 having produced no bundle at all,
+    reporting success for work that never ran.
+    """
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or greater, got {parsed}")
+    return parsed
 
 
 def resolve_case_id(value: str) -> str:
@@ -58,6 +75,7 @@ def build_manifest(
     *,
     case_seed: int,
     contract_version: str,
+    max_ticks: int,
     repeat: int,
     repeats: int,
     started_at: str,
@@ -88,7 +106,11 @@ def build_manifest(
         "budgets": {
             "maxAttempts": config.max_attempts,
             "maxOutputTokens": config.max_output_tokens,
-            "maxTurns": config.max_turns,
+            # The enforced budget, not the raw setting: unset means the runner
+            # derives it, and recording None there would describe a run under
+            # a budget it never used.
+            "maxTurns": effective_max_turns(config, max_ticks),
+            "maxTurnsExplicitlySet": config.max_turns is not None,
         },
         "sampling": {
             "set": {"temperature": 0.0},
@@ -131,10 +153,50 @@ def write_bundle(
     )
 
 
-async def _run_once(config: RunnerConfig, out_dir: Path, *, repeat: int, repeats: int) -> Grade:
+BUNDLE_FILES = (
+    "manifest.json",
+    "initial-state.json",
+    "final-state.json",
+    "trajectory.json",
+    "grade.json",
+    "summary.json",
+    "attempts.jsonl",
+)
+
+
+class BundleExistsError(Exception):
+    """An output directory already holds a run's evidence."""
+
+
+def guard_output_dir(out_dir: Path, *, overwrite: bool) -> None:
+    """Refuse to write a second run over an existing bundle.
+
+    Every artifact here is written under a fixed name, so a rerun into the
+    same directory replaces the previous evidence. Worse, the files are
+    written at different moments: ``attempts.jsonl`` is truncated when the run
+    starts and the rest are replaced only if it finishes, so a run that dies
+    partway leaves a new attempt log beside the previous run's states and
+    grade -- a bundle that looks complete while describing two different runs.
+    """
+    if overwrite:
+        return
+    existing = [name for name in BUNDLE_FILES if (out_dir / name).exists()]
+    if existing:
+        found = ", ".join(sorted(existing))
+        message = (
+            f"{out_dir} already holds a run ({found}). "
+            f"Choose a different --output-dir, or pass --overwrite to replace it."
+        )
+        raise BundleExistsError(message)
+
+
+async def _run_once(
+    config: RunnerConfig, out_dir: Path, *, repeat: int, repeats: int, overwrite: bool
+) -> Grade:
     started_at = datetime.now(UTC).isoformat()
     case = load_case(config.case_id)
     out_dir.mkdir(parents=True, exist_ok=True)
+    guard_output_dir(out_dir, overwrite=overwrite)
     # The per-attempt log is a stream, so it is written as the run happens
     # rather than assembled afterwards: a run that dies mid-episode still
     # leaves behind every raw model reply it did get.
@@ -147,6 +209,7 @@ async def _run_once(config: RunnerConfig, out_dir: Path, *, repeat: int, repeats
             config,
             case_seed=case.seed,
             contract_version=case.contract_version,
+            max_ticks=case.initial_state.episode.max_ticks,
             repeat=repeat,
             repeats=repeats,
             started_at=started_at,
@@ -188,7 +251,9 @@ async def _run_command(args: argparse.Namespace) -> int:
     for repeat in range(1, args.repeats + 1):
         out_dir = root / f"repeat-{repeat:02d}" if args.repeats > 1 else root
         print(f"[{repeat}/{args.repeats}] running...")
-        graded = await _run_once(config, out_dir, repeat=repeat, repeats=args.repeats)
+        graded = await _run_once(
+            config, out_dir, repeat=repeat, repeats=args.repeats, overwrite=args.overwrite
+        )
         summary = json.loads((out_dir / "summary.json").read_text())
         _report(graded, summary, out_dir)
     return 0
@@ -207,15 +272,20 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--output-dir", required=True, help="directory to write the evidence bundle")
     run.add_argument(
         "--repeats",
-        type=int,
+        type=positive_int,
         default=1,
         help="runs of this case/model pair; the case seed stays fixed so repeats measure model variability",
     )
     # Default None, not the runner's values: an explicit default here would
     # silently override the runner and be recorded as a deliberate choice.
-    run.add_argument("--max-attempts", type=int, default=None)
-    run.add_argument("--max-output-tokens", type=int, default=None)
-    run.add_argument("--max-turns", type=int, default=None)
+    run.add_argument("--max-attempts", type=positive_int, default=None)
+    run.add_argument("--max-output-tokens", type=positive_int, default=None)
+    run.add_argument("--max-turns", type=positive_int, default=None)
+    run.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace an existing evidence bundle in --output-dir instead of refusing",
+    )
     run.set_defaults(func=_run_command)
     return parser
 
@@ -227,6 +297,9 @@ def main(argv: list[str] | None = None) -> int:
     except CaseError as exc:
         print(f"case error: {exc}", file=sys.stderr)
         return 2
+    except BundleExistsError as exc:
+        print(f"refusing to overwrite: {exc}", file=sys.stderr)
+        return 3
     except ValueError as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2

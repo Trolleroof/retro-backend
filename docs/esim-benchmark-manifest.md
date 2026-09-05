@@ -74,12 +74,19 @@ It cannot directly write cash, inventory, orders, reputation, or outcomes.
 
 **Prompt, frozen verbatim.** System message:
 
-> You control one restaurant worker. Reply with exactly one JSON object and no markdown.
+> You control one restaurant worker. Reply with exactly one JSON object and
+> nothing else: no markdown, no explanation, no reasoning before or after it.
+> Keep the JSON itself short: one tool call, minimal argument values.
 
-User message: a JSON object with keys `observation`, `tools`, `response`, and on
-a retry `previousError`. Nothing else is appended. Per Frozen v1, model input
-carries no reference actions, no hidden grading criteria, and no future
-incidents.
+User message: a compact-separated JSON object with keys `observation`,
+`tools`, `response`, plus `workerIds` for chef, server, and host (expediter's
+observation already names every worker), plus `previousError` on a retry.
+Nothing else is appended. Per Frozen v1, model input carries no reference
+actions, no hidden grading criteria, and no future incidents.
+
+The wording above is the string in `runner._messages` as of this revision;
+`tests/test_esim_runner.py` holds the `workerIds` half of it. Any change to
+either after scored runs begin is a new manifest revision, not an edit.
 
 ## 3. The frozen cases — a matched pair
 
@@ -333,4 +340,3 @@ format" must state the budget it was measured under.
    independent of each other (only turns within one run are sequential), so
    running the matrix concurrently — subject to the rate-limit caveat above —
    turns `6N` runs' wall-clock cost into roughly one run's.
-   before freezing the roster.

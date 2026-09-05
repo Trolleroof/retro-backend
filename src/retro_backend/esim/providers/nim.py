@@ -275,12 +275,19 @@ class NimAdapter(ModelAdapter):
                     error=f"{ERR_MALFORMED}: missing or empty 'choices' list in response",
                 )
 
-            # Token counts are read before any early return: a truncated call
-            # still consumed the whole budget and still costs money, and a
-            # bundle that reported zero for it would understate real usage.
+            # Token counts and the answering model are read before any early
+            # return. A truncated call still consumed the whole budget and
+            # still costs money, so reporting zero would understate real
+            # usage. The model id matters for the same reason in reverse: if
+            # the provider served a different model on the attempt that
+            # failed, dropping the id there lets a run look like the
+            # single-model run the manifest claims while a second model
+            # actually shaped its retries.
             usage = data.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens") or 0)
             output_tokens = int(usage.get("completion_tokens") or 0)
+            raw_served = data.get("model")
+            served = raw_served if isinstance(raw_served, str) else None
 
             first_choice = choices[0]
             message = first_choice.get("message") if isinstance(first_choice, dict) else None
@@ -308,6 +315,7 @@ class NimAdapter(ModelAdapter):
                     output_tokens=output_tokens,
                     latency_ms=latency_ms,
                     error=f"{ERR_TRUNCATED}: {detail}",
+                    served_model=served,
                 )
 
             if content is None or not isinstance(content, str):
@@ -317,13 +325,8 @@ class NimAdapter(ModelAdapter):
                     output_tokens=output_tokens,
                     latency_ms=latency_ms,
                     error=f"{ERR_MALFORMED}: missing or non-string 'content' in first choice message",
+                    served_model=served,
                 )
-
-            # Read the answering model back out of the body instead of echoing
-            # the request: NIM resolves an id to a hosted function, and the
-            # manifest's claim about which model ran is only checkable if the
-            # provider's own answer is recorded.
-            served = data.get("model")
 
             return ModelReply(
                 text=content,
@@ -331,7 +334,7 @@ class NimAdapter(ModelAdapter):
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
                 error=None,
-                served_model=served if isinstance(served, str) else None,
+                served_model=served,
             )
 
         except httpx.TimeoutException as exc:

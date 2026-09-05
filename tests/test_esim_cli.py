@@ -10,8 +10,10 @@ import pytest
 
 from retro_backend.esim.cli import (
     BUNDLE_VERSION,
+    BundleExistsError,
     build_manifest,
     build_parser,
+    guard_output_dir,
     resolve_case_id,
     write_bundle,
 )
@@ -69,6 +71,7 @@ def test_manifest_separates_what_we_set_from_what_the_provider_decides() -> None
         RunnerConfig(CASE, "nim:vendor/m"),
         case_seed=218220,
         contract_version="restaurant-arena/v1",
+        max_ticks=24,
         repeat=1,
         repeats=3,
         started_at="2026-09-04T00:00:00+00:00",
@@ -98,6 +101,7 @@ async def test_bundle_records_everything_the_checklist_asks_for(tmp_path: Path) 
             RunnerConfig(CASE, "nim:vendor/m"),
             case_seed=218220,
             contract_version="restaurant-arena/v1",
+            max_ticks=24,
             repeat=1,
             repeats=1,
             started_at="2026-09-04T00:00:00+00:00",
@@ -191,4 +195,69 @@ def test_cli_budget_flags_do_not_shadow_the_runner_defaults() -> None:
     # What the runner would use when the CLI names nothing.
     config = RunnerConfig(case_id=CASE, model="nim:vendor/m")
     assert config.max_output_tokens == 2500
+
+
+def test_manifest_records_the_turn_budget_the_run_enforces() -> None:
+    """``maxTurns: null`` described a budget no run ever used.
+
+    The runner derives a budget when the flag is unset, so serializing the
+    raw ``None`` left the bundle unable to say what the run actually ran
+    under -- the one thing a manifest exists to record.
+    """
+    manifest = build_manifest(
+        RunnerConfig(CASE, "nim:vendor/m", max_attempts=3),
+        case_seed=218220,
+        contract_version="restaurant-arena/v1",
+        max_ticks=24,
+        repeat=1,
+        repeats=1,
+        started_at="2026-09-04T00:00:00+00:00",
+    )
+
+    assert manifest["budgets"]["maxTurns"] == 24 * 4 * 3
+    assert manifest["budgets"]["maxTurnsExplicitlySet"] is False
+
+    named = build_manifest(
+        RunnerConfig(CASE, "nim:vendor/m", max_turns=50),
+        case_seed=218220,
+        contract_version="restaurant-arena/v1",
+        max_ticks=24,
+        repeat=1,
+        repeats=1,
+        started_at="2026-09-04T00:00:00+00:00",
+    )
+    assert named["budgets"]["maxTurns"] == 50
+    assert named["budgets"]["maxTurnsExplicitlySet"] is True
+
+
+def test_an_existing_bundle_is_not_silently_replaced(tmp_path: Path) -> None:
+    """A rerun into the same directory destroyed the previous evidence.
+
+    Worse than losing it: attempts.jsonl is truncated at the start of a run
+    and the rest replaced only on success, so a crashed rerun left a new
+    attempt log beside the old states and grade -- a bundle that reads as
+    complete while describing two runs.
+    """
+    (tmp_path / "grade.json").write_text("{}")
+
+    with pytest.raises(BundleExistsError) as caught:
+        guard_output_dir(tmp_path, overwrite=False)
+    assert "grade.json" in str(caught.value)
+
+    # Explicit opt-in still works, and an untouched directory is fine.
+    guard_output_dir(tmp_path, overwrite=True)
+    guard_output_dir(tmp_path / "fresh", overwrite=False)
+
+
+def test_repeats_below_one_is_rejected_rather_than_exiting_clean() -> None:
+    """``--repeats 0`` exited 0 having produced no bundle at all."""
+    parser = build_parser()
+    base = ["run", "--case", CASE, "--model", "nim:vendor/m", "--output-dir", "/tmp/x"]
+
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, "--repeats", "0"])
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, "--max-output-tokens", "0"])
+
+    assert parser.parse_args([*base, "--repeats", "3"]).repeats == 3
 

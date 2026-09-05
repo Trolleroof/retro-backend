@@ -568,3 +568,33 @@ async def test_a_truncated_call_still_reports_the_tokens_it_burned() -> None:
     assert reply.input_tokens == 700
     assert reply.output_tokens == 1024
 
+
+async def test_a_failed_attempt_still_reports_which_model_answered() -> None:
+    """Dropping the id on failures could hide a second model in the run.
+
+    servedModel drives the run summary's single-model claim. If the provider
+    served something else on the attempt that truncated, losing the id there
+    let the bundle report no mismatch while another model had in fact shaped
+    the retry that followed.
+    """
+    from retro_backend.esim.providers.base import ERR_TRUNCATED
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/substituted",
+                "choices": [{"finish_reason": "length", "message": {"content": None}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 256},
+            },
+        )
+
+    adapter = NimAdapter(model="vendor/asked", api_key="k", transport=httpx.MockTransport(handler))
+    async with adapter:
+        reply = await adapter.generate([{"role": "user", "content": "hi"}], max_tokens=256)
+
+    assert reply.error is not None
+    assert reply.error.startswith(ERR_TRUNCATED)
+    assert reply.served_model == "vendor/substituted"
+

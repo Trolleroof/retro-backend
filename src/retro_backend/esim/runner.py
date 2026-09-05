@@ -64,6 +64,19 @@ class RunResult:
     trajectory: Trajectory
 
 
+def effective_max_turns(config: RunnerConfig, max_ticks: int) -> int:
+    """The turn budget a run will actually enforce.
+
+    Exposed rather than inlined so the manifest records the number the run
+    applied instead of the ``None`` that stands for "unset". A bundle that
+    reports a budget the run did not use cannot be audited against, and this
+    is the second time a default living in two places has drifted apart.
+    """
+    if config.max_turns is not None:
+        return config.max_turns
+    return max_ticks * len(ROLE_ORDER) * config.max_attempts
+
+
 def _record(sink: TextIO | None, record: Mapping[str, object]) -> None:
     if sink is not None:
         sink.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
@@ -182,7 +195,7 @@ async def run_case(
     # "episode_complete": a single retry anywhere guaranteed "turn_limit", and
     # with it a completion score that measured the budget rather than the
     # model. The retry allowance has to be part of the budget.
-    max_turns = config.max_turns or state.episode.max_ticks * len(ROLE_ORDER) * config.max_attempts
+    max_turns = effective_max_turns(config, state.episode.max_ticks)
     totals = Counter[str]()
     latency_ms = 0.0
     termination = "episode_complete"
