@@ -172,7 +172,14 @@ All four print `DETERMINISM OK`. The grades they produce are reference-policy
 grades, not model results — a scripted decision is never reported as a model
 decision, and the manifest each bundle carries says so.
 
-Reference-policy grades at the time of authoring (greedy, repeat 01):
+Reference-policy grades at the time of authoring (greedy, repeat 01). **Every
+score in this table reads high-is-good**, including the two whose names sound
+like faults: `waste` is `1.0 - wasted/committed`, so `1.0` means nothing
+prepared went unserved (`grader.py:230-255`), and `wait` is
+`1.0 - mean_wait/horizon`, so `1.0` means every order was served immediately
+(`grader.py:164-197`). A reader who inverts either one draws the opposite
+conclusion from the same run, so the direction is stated here rather than
+inferred:
 
 | Level / shape | safety | wait | waste | satisfaction | completion | coord | uptake | scope | intervention |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -190,3 +197,41 @@ the scope design on these levels is unexercised by the offline baseline and
 untested until a model runs. And `coordination` is 0.25 everywhere because the
 greedy policy has exactly one communicating role — that number describes the
 policy, not the level.
+
+## Decisions of record
+
+These were settled by the founder rather than derived from the code, so they
+are written down here instead of living in a conversation.
+
+**The three levels run a 12-round shape.** Saturday Night is frozen at 36
+ticks, which divides evenly into 12 rounds of 3 ticks, matching the round
+count the other two levels use. Issue #84 budgets Saturday Night at 56
+human-path / 70 model-path planned requests, which implies **14** rounds; 14
+does not divide 36, and `ticks_per_round` refuses a round count that would
+leave a short final round. The 12-round shape wins for consistency across the
+three levels, so **#84's Saturday Night request budget is the number that
+needs amending**, not this horizon. Recorded rather than silently reconciled.
+
+**`order-3` on Quiet Tuesday keeps no `tableId`, deliberately.** Attaching it
+to a table was tried and measured: the level's no-manager baseline moved to
+`completion 1.0 / waste 1.0 / wait 0.917 / safety 1.0`, which is Dinner Rush's
+baseline to three decimal places. Lengthening the horizon to 36 ticks to
+restore some spread made it worse — `1.0 / 1.0 / 0.944 / 1.0`, a near-perfect
+ceiling for the *naive* policy, which is the score saturation #79 says to
+revise a development case for. The reason is structural: a level that is quiet,
+well stocked, and uniformly shaped gives the reference policy nothing to fail
+at, and a dimension the naive policy already maxes cannot separate one manager
+from another. The missing `tableId` is the level's whole mechanism — it creates
+a gap that is solvable by routing information between roles and unsolvable by
+any single role working harder, which is the "incomplete visible information"
+the milestone asks for. It is a design decision, not an oversight.
+
+**The founder check on Dinner Rush was not re-run against the corrected
+document.** The recorded `passed` was given against an earlier revision of
+`esim-dinner-rush-tradeoff.md` that described a repair action the simulator
+does not have and named the safety-violating line as the service-protecting
+one. The corrected tradeoff has been reviewed and approved, but **no live
+founder session has been played against it**. Per this milestone's own
+evidence rule, a merged revision is not a played session: the founder check
+for the corrected Dinner Rush stands at **not tried**, and nothing here should
+be read as a demonstrated founder verification of the timing tradeoff.
