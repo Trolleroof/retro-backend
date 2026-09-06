@@ -437,6 +437,29 @@ async def test_a_provider_failure_marks_the_run_and_credits_no_action() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_provider_that_never_names_the_model_is_not_a_valid_result() -> None:
+    # Every call succeeded, so nothing failed -- but no reply said which model
+    # answered, and a shape whose claim is "this manager, those workers"
+    # cannot report a clean result it never confirmed.
+    manager = Replies([_reply('{"tool":null}', served=None)])
+    workers = Replies([_reply('{"tool":null}', served=None)] * 4)
+
+    result = await run_managed_case(
+        _config(rounds=1), manager_adapter=manager, worker_adapter=workers
+    )
+
+    assert result.summary["runValidity"] == "unverified_identity"
+    manager_block = result.summary["manager"]
+    workers_block = result.summary["workers"]
+    assert isinstance(manager_block, dict) and isinstance(workers_block, dict)
+    assert manager_block["servedModelUnverified"] is True
+    assert workers_block["servedModelUnverified"] is True
+    # Nothing failed, so this must not be reported as a provider failure.
+    assert manager_block["modelErrors"] == 0
+    assert manager_block["servedModelMismatch"] is False
+
+
+@pytest.mark.asyncio
 async def test_a_served_model_that_is_not_the_requested_one_is_not_valid() -> None:
     manager = Replies([_reply('{"tool":null}')], served="vendor/somebody-else")
     workers = Replies([], served="vendor/staff")
@@ -641,6 +664,59 @@ def test_the_managed_subcommand_takes_two_models_and_defaults_to_twelve_rounds()
         ManagedRunnerConfig(case_id=CASE, manager_model="a", worker_model="b").rounds
         == DEFAULT_ROUNDS
     )
+
+
+def test_the_request_timeout_flag_reaches_the_config_and_the_manifest() -> None:
+    # Unset must stay None all the way down: pinning a copy of the adapter's
+    # default here is how a manifest ends up reporting a timeout the run never
+    # applied.
+    args = build_parser().parse_args(
+        [
+            "run-managed",
+            "--case",
+            CASE,
+            "--manager-model",
+            "nim:a",
+            "--worker-model",
+            "nim:b",
+            "--output-dir",
+            "artifacts/managed",
+            "--request-timeout",
+            "90",
+        ]
+    )
+    assert args.request_timeout == 90.0
+
+    config = ManagedRunnerConfig(
+        case_id=CASE, manager_model="nim:a", worker_model="nim:b", request_timeout=90.0
+    )
+    manifest = build_managed_manifest(
+        config,
+        case_seed=218220,
+        contract_version="restaurant-arena/v1",
+        max_ticks=24,
+        repeat=1,
+        repeats=1,
+        started_at="2026-09-05T00:00:00+00:00",
+    )
+    assert manifest["budgets"]["requestTimeoutSeconds"] == 90.0
+    assert (
+        build_managed_manifest(
+            _config(),
+            case_seed=218220,
+            contract_version="restaurant-arena/v1",
+            max_ticks=24,
+            repeat=1,
+            repeats=1,
+            started_at="2026-09-05T00:00:00+00:00",
+        )["budgets"]["requestTimeoutSeconds"]
+        is None
+    )
+
+    with pytest.raises(ValueError, match="request_timeout"):
+        ManagedRunnerConfig(
+            case_id=CASE, manager_model="nim:a", worker_model="nim:b", request_timeout=0
+        )
 
 
 def test_a_standing_directive_is_capped_like_a_message() -> None:

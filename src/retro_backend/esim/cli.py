@@ -78,6 +78,14 @@ def positive_int(value: str) -> int:
     return parsed
 
 
+def positive_float(value: str) -> float:
+    """An argparse type for a duration that must be greater than zero."""
+    parsed = float(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"must be greater than 0, got {parsed}")
+    return parsed
+
+
 def resolve_case_id(value: str) -> str:
     """Accept either a case id or a path to its JSON file.
 
@@ -350,6 +358,9 @@ def build_managed_manifest(
             "workerRequestsPerLevel": config.rounds * 4,
             "maxAttempts": config.max_attempts,
             "maxOutputTokens": config.max_output_tokens,
+            # None means the provider adapter's own default applied; the
+            # summary records the same value the run enforced.
+            "requestTimeoutSeconds": config.request_timeout,
             "maxManagerTurns": manager_turn_budget(config),
             "maxWorkerTurns": worker_turn_budget(config),
         },
@@ -461,6 +472,9 @@ def _report_managed(graded: Grade, summary: dict[str, Any], out_dir: Path, traje
 
 async def _run_managed_command(args: argparse.Namespace) -> int:
     case_id = resolve_case_id(args.case)
+    # Only budgets the caller actually named are passed through, so the
+    # frozen defaults stay in one place -- ManagedRunnerConfig -- rather than
+    # being repeated here where they could drift out of step with it.
     overrides: dict[str, int] = {
         name: value
         for name, value in (
@@ -474,6 +488,7 @@ async def _run_managed_command(args: argparse.Namespace) -> int:
         case_id=case_id,
         manager_model=args.manager_model,
         worker_model=args.worker_model,
+        request_timeout=args.request_timeout,
         **overrides,
     )
     root = Path(args.output_dir)
@@ -693,6 +708,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     managed.add_argument("--max-attempts", type=positive_int, default=None)
     managed.add_argument("--max-output-tokens", type=positive_int, default=None)
+    managed.add_argument(
+        "--request-timeout",
+        type=positive_float,
+        default=None,
+        help="per-request seconds; unset keeps the provider adapter's default (30s for NIM)",
+    )
     managed.add_argument(
         "--overwrite",
         action="store_true",

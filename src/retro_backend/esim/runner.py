@@ -79,8 +79,18 @@ def effective_max_turns(config: RunnerConfig, max_ticks: int) -> int:
 
 
 def record_jsonl(sink: TextIO | None, record: Mapping[str, object]) -> None:
+    """Append one auditable record, and put it on disk now.
+
+    Flushed per record rather than left to the buffer: the attempt log is
+    written as the run happens precisely so a run that dies mid-episode still
+    leaves behind every raw reply it did get, and an unflushed buffer loses
+    the last several thousand characters of exactly that evidence. A managed
+    episode is tens of minutes long, so this is also what makes the log
+    readable while the run is still going.
+    """
     if sink is not None:
         sink.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+        sink.flush()
 
 
 def build_worker_messages(

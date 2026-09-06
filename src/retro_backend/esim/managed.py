@@ -99,12 +99,21 @@ class ManagedRunnerConfig:
     rounds: int = DEFAULT_ROUNDS
     max_attempts: int = 3
     max_output_tokens: int = 2500
+    # Per-request wall clock, seconds. A manager turn carries the whole tool
+    # surface and a shift to read, and a reasoning model can spend longer on
+    # that than the adapter's 30s default allows -- which shows up as a
+    # timeout, not as a slow answer, and costs the round its decision. Left as
+    # None to keep the adapter's own default rather than pinning a second copy
+    # of it here.
+    request_timeout: float | None = None
 
     def __post_init__(self) -> None:
         if self.max_attempts < 1 or self.max_output_tokens < 1:
             raise ValueError("max_attempts and max_output_tokens must be positive")
         if self.rounds < 1:
             raise ValueError("rounds must be positive")
+        if self.request_timeout is not None and self.request_timeout <= 0:
+            raise ValueError("request_timeout must be positive when set")
 
 
 def ticks_per_round(max_ticks: int, rounds: int) -> int:
@@ -230,6 +239,8 @@ class _ActorTally:
 
     def observe_reply(self, reply: ModelReply) -> None:
         self.totals["turns"] += 1
+        if reply.ok:
+            self.totals["ok_replies"] += 1
         self.totals["input_tokens"] += reply.input_tokens
         self.totals["output_tokens"] += reply.output_tokens
         self.latency_ms += reply.latency_ms
@@ -246,6 +257,17 @@ class _ActorTally:
             else requested_spec
         )
         return bool(self.served_models) and self.served_models != {requested}
+
+    def unverified(self) -> bool:
+        """This actor answered, but never said which model did.
+
+        A provider may return a body with no usable ``model`` field, and an
+        empty served-model set cannot mismatch anything -- so without this the
+        run would report ``valid`` having confirmed nothing about who answered.
+        On a shape whose whole claim is "this manager, those workers", an
+        unconfirmed identity is not a clean result.
+        """
+        return bool(self.totals["ok_replies"]) and not self.served_models
 
 
 async def run_managed_case(
@@ -602,17 +624,29 @@ def _summary(
     """The run summary, with the two models' numbers reported side by side.
 
     ``runValidity`` is the field that keeps a degraded run from being read as
-    a result. Any adapter error, or any reply served by a model other than the
-    one requested, marks the run ``provider_failure``: the scores it carries
-    describe a run that did not get the models it asked for.
+    a result, and it has three values rather than two.
+
+    ``provider_failure`` -- an adapter error, or a reply served by a model
+    other than the one requested. The scores describe a run that did not get
+    the models it asked for.
+
+    ``unverified_identity`` -- every call succeeded, but a provider never named
+    the model that answered, so which model produced these scores is not
+    established. Kept apart from ``provider_failure`` because nothing failed;
+    kept apart from ``valid`` because attribution is the claim this shape
+    makes, and an unconfirmed one is not a result to report.
     """
     manager_mismatch = manager.mismatch(config.manager_model)
     worker_mismatch = workers.mismatch(config.worker_model)
-    degraded = (
+    failed = (
         manager_mismatch
         or worker_mismatch
         or bool(manager.totals["model_errors"])
         or bool(workers.totals["model_errors"])
+    )
+    unverified = manager.unverified() or workers.unverified()
+    validity = (
+        "provider_failure" if failed else "unverified_identity" if unverified else "valid"
     )
     return {
         "event": "summary",
@@ -622,13 +656,15 @@ def _summary(
         "workerModel": config.worker_model,
         "rounds": config.rounds,
         "roundsPlayed": rounds_played,
+        "requestTimeoutSeconds": config.request_timeout,
         "ticksPerRound": interval,
         "termination": trajectory.termination,
         "ticks": state.episode.tick,
-        "runValidity": "provider_failure" if degraded else "valid",
+        "runValidity": validity,
         "manager": {
             "servedModels": sorted(manager.served_models),
             "servedModelMismatch": manager_mismatch,
+            "servedModelUnverified": manager.unverified(),
             "turns": manager.totals["turns"],
             "directivesAccepted": manager.totals["accepted_actions"],
             "directivesRejected": manager.totals["rejected_actions"],
@@ -642,6 +678,7 @@ def _summary(
         "workers": {
             "servedModels": sorted(workers.served_models),
             "servedModelMismatch": worker_mismatch,
+            "servedModelUnverified": workers.unverified(),
             "turns": workers.totals["turns"],
             "acceptedActions": workers.totals["accepted_actions"],
             "rejectedActions": workers.totals["rejected_actions"],
@@ -672,6 +709,8 @@ async def run_managed_model_case(
     conversation, and reusing one object for both would make the run depend on
     whether the operator happened to name the same model twice.
     """
+    if config.request_timeout is not None:
+        provider_kwargs.setdefault("timeout", config.request_timeout)
     manager_adapter = get_adapter(config.manager_model, **provider_kwargs)
     worker_adapter = get_adapter(config.worker_model, **provider_kwargs)
     async with manager_adapter, worker_adapter:

@@ -410,11 +410,22 @@ episode it landed.
 | Enforced worker turn budget | `rounds × 4 × maxAttempts` = 144 |
 | `maxOutputTokens` | 2500 |
 | Temperature | 0.0 |
+| Per-request timeout | `--request-timeout`, unset = the adapter default (30s) |
 | Environment seed | 218220, frozen in the case |
 
 The two budgets are counted separately per actor, so a manager cannot spend the
 workers' allowance or the reverse. Exhausting either terminates the run as
 `turn_limit`, exactly as in the flat shape.
+
+**Timeout is a budget too, and it bites the manager first.** A manager turn
+carries the whole tool surface and a shift to read, and a reasoning model can
+spend longer on that than the adapter's 30s default allows. Measured on the
+first live managed run (`openai/gpt-oss-20b` managing
+`nvidia/nemotron-3-super-120b-a12b`): 9 of 20 manager turns and 2 of 56 worker
+turns timed out at the default, and the run was correctly reported as
+`provider_failure` rather than as a result. `--request-timeout` raises it; the
+value applied is recorded in `manifest.budgets.requestTimeoutSeconds`, and
+`null` there means the adapter default was in force.
 
 ### 10.3 What the manager sees and controls
 
@@ -472,9 +483,13 @@ manifest declares `bundleVersion: esim-managed-run-bundle/v1`.
   that does not match another, so it cannot be quietly reused.
 - `summary.json` reports the manager's and the workers' turns, tokens,
   latency, and served models in **separate blocks**, and carries
-  `runValidity`. Any adapter error, or any reply served by a model other than
-  the one requested, marks the run `provider_failure` — visible, and distinct
-  from a valid model result.
+  `runValidity` with three values. Any adapter error, or any reply served by a
+  model other than the one requested, marks the run `provider_failure`. A run
+  in which every call succeeded but no provider ever named the model that
+  answered is `unverified_identity` — nothing failed, but which model produced
+  the scores was never established, and on a shape whose claim is "this
+  manager, those workers" that is not a result to report. Only a run that
+  confirmed both identities is `valid`.
 
 Nothing scripted is ever recorded as a model decision. When an adapter fails,
 the round records the failure and moves on; no reference policy stands in for
@@ -499,3 +514,6 @@ scripted-manager mechanics check lives in `scripts/reference_rollout.py`
    concern.
 4. Run-to-run variance (§8) applies here too, and is unmeasured for this
    shape. Report the range across repeats, never a single run.
+5. Manager and worker turns are issued sequentially against one provider, so a
+   managed run's wall clock is dominated by the slower of the two models. The
+   first live run took ~28 minutes for 12 rounds with a 120B worker model.
