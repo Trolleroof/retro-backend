@@ -193,6 +193,61 @@ class TestReplay:
             check_parity(payload)
 
 
+class TestLiveEventSchedule:
+    """A live run carries its own eventSchedule instead of a caseId
+    (Trolleroof/tui-gamepigeon#284): there is no frozen case to load the
+    incidents from, so they have to travel with the trace.
+    """
+
+    def _live_payload(self) -> dict[str, Any]:
+        payload = _native()
+        schedule = payload["caseId"] and json.loads(
+            (ROOT / "contracts/esim/cases/dinner-rush-001.json").read_text()
+        )["eventSchedule"]
+        del payload["caseId"]
+        payload["runKind"] = "live"
+        payload["eventSchedule"] = schedule
+        return payload
+
+    def test_loads_without_a_case_id(self) -> None:
+        trace = load_trace(self._live_payload())
+        assert trace.case_id is None
+        assert trace.event_schedule is not None
+        assert len(trace.event_schedule) == 3
+
+    def test_replays_against_its_own_schedule_not_a_frozen_case(self) -> None:
+        report = check_parity(self._live_payload())
+        assert report.verdict == "unproven"
+        assert "no caseId" in report.reason
+        assert "replayed 50 action(s)" in report.reason
+
+    def test_never_returns_parity_either(self) -> None:
+        # Same reason as the caseId path: no state-only checkpoint hash to
+        # verify the replayed result against yet (see #277, #283).
+        assert check_parity(self._live_payload()).verdict != "parity"
+
+    def test_an_inconsistent_seed_is_caught_not_trusted(self) -> None:
+        # sim.reset() re-derives episode/clock/seed from scratch rather than
+        # trusting the export's initialState wholesale, so a live trace whose
+        # nested seed disagrees with its own top-level seed is a genuine
+        # internal inconsistency, not a third-party ground truth mismatch.
+        payload = self._live_payload()
+        state = dict(payload["initialState"])
+        state["seed"] = state["seed"] + 1
+        payload["initialState"] = state
+        report = check_parity(payload)
+        assert report.verdict == "mismatch"
+        assert any("/seed" in d for d in report.differences)
+
+    def test_still_unproven_with_neither_case_id_nor_schedule(self) -> None:
+        # Unchanged behavior: TUI_LIVE (the one real export available) has
+        # neither field yet, since eventSchedule is not on the wire.
+        report = check_parity(json.loads(TUI_LIVE.read_text()))
+        assert report.verdict == "unproven"
+        assert "no caseId" in report.reason
+        assert "eventSchedule" in report.reason
+
+
 class TestParityCommand:
     def test_an_incomparable_export_exits_five(self, tmp_path: Path) -> None:
         payload = _native()
