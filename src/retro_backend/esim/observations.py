@@ -45,7 +45,7 @@ def _worker_load(state: RestaurantState, role: Role) -> float:
     raise ValueError(f"no worker occupies role {role!r}")
 
 
-def _table_wait_minutes(state: RestaurantState, table: Table) -> int:
+def table_wait_minutes(state: RestaurantState, table: Table) -> int:
     if table.order_id is None:
         return 0
     order = next((o for o in state.orders if o.id == table.order_id), None)
@@ -88,7 +88,7 @@ def observe_server(
             id=t.id,
             order_id=t.order_id,
             status=_order_status_for_table(state, t),
-            wait_minutes=_table_wait_minutes(state, t),
+            wait_minutes=table_wait_minutes(state, t),
         )
         for t in state.tables
         if t.status == "occupied"
