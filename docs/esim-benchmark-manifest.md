@@ -356,17 +356,20 @@ format" must state the budget it was measured under.
    Enterprise ($4,500/GPU/year). No exact per-model rate has been confirmed
    against an authoritative NVIDIA source; treat the range as indicative, not
    a number to bill against.
-7. **Rate limit, unresolved.** The adapter is built and documented as 40
-   requests/second (`DEFAULT_NIM_RATE_LIMIT_RPS`); multiple third-party
-   sources, including NVIDIA's own developer forum, describe the free tier's
-   limit as 40 requests **per minute** — a 60x difference. No run so far has
-   received a 429: our actual aggregate rate has stayed near 2 req/s even with
-   12 concurrent runs, which would violate a 40/min ceiling if that number is
-   real, yet nothing has been throttled. Unresolved because the two sources
-   disagree and neither has been confirmed authoritatively. Before running
-   many processes concurrently, either confirm the true limit from NVIDIA's
-   own dashboard/docs, or throttle to something safely under 40/min and watch
-   for 429s on a small batch first.
+7. **Rate limit: 429s are now real, the exact ceiling still is not.** The
+   adapter is built and documented as 40 requests/second
+   (`DEFAULT_NIM_RATE_LIMIT_RPS`); multiple third-party sources, including
+   NVIDIA's own developer forum, describe the free tier's limit as 40 requests
+   **per minute** — a 60x difference. Earlier runs never saw a 429. **Two
+   concurrent managed runs did**: `moonshotai/kimi-k3` took `rate_limit` on 12
+   of its 20 manager turns while a second managed run was in flight, at an
+   aggregate rate nowhere near 40 req/s. So the effective ceiling is far below
+   what the adapter assumes, and it is shared across processes on one key.
+   Until the true number is confirmed from NVIDIA's own dashboard, **run the
+   matrix serially, or throttle well under 40/min and watch a small batch for
+   429s first.** Note also that a retried `rate_limit` is retried immediately,
+   with no backoff, so a throttled turn tends to burn its whole retry
+   allowance in under a second and land as a `provider_failure`.
 8. One full episode costs ~130–185 turns, ~90k–160k tokens, and 8–16 minutes
    of wall clock against `openai/gpt-oss-20b`, depending on the token budget in
    force. The full frozen matrix — 2 variants x 3 repeats x N models — is
@@ -515,5 +518,7 @@ scripted-manager mechanics check lives in `scripts/reference_rollout.py`
 4. Run-to-run variance (§8) applies here too, and is unmeasured for this
    shape. Report the range across repeats, never a single run.
 5. Manager and worker turns are issued sequentially against one provider, so a
-   managed run's wall clock is dominated by the slower of the two models. The
-   first live run took ~28 minutes for 12 rounds with a 120B worker model.
+   managed run's wall clock is dominated by the slower of the two models.
+   Measured: 6–12 minutes for a 12-round level with a 120B worker model, an
+   order of magnitude cheaper than a 24-tick flat run (§9.8) because a level
+   is 60 requests before retries rather than ~96.
