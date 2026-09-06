@@ -51,7 +51,7 @@ from retro_backend.esim.contracts import (
     Table,
     Tool,
 )
-from retro_backend.esim.observations import table_wait_minutes
+from retro_backend.esim.observations import ACTIVE_ORDER_STATUSES, table_wait_minutes
 from retro_backend.esim.state_hash import state_hash
 from retro_backend.esim.tools import ToolArgs
 
@@ -293,6 +293,13 @@ class ObservedManagerTable(ArenaModel):
     threshold a reader would otherwise have to reconstruct; naming it saves a
     manager (model or human) from missing the floor signal a server would
     never miss.
+
+    ``has_allergy_order`` is a *live* signal, not a history of the table: it
+    stands only while the table's order carries an allergy and is still
+    active. A served table keeps both its ``occupied`` status and its
+    ``order_id``, so reading the allergy off the order alone would leave the
+    flag raised for the rest of the shift and invite the manager to keep
+    issuing safety-priority directives about a plate already on the guest.
     """
 
     id: ArenaId
@@ -391,11 +398,7 @@ def observe_manager(
                 id=table.id,
                 wait_minutes=(wait := table_wait_minutes(state, table)),
                 impatient=wait >= IMPATIENT_WAIT_MINUTES,
-                has_allergy_order=(
-                    order.allergy is not None
-                    if (order := _order_for_table(state, table)) is not None
-                    else False
-                ),
+                has_allergy_order=_has_active_allergy_order(state, table),
             )
             for table in state.tables
             if table.status == "occupied"
@@ -414,3 +417,19 @@ def _order_for_table(state: RestaurantState, table: Table) -> Order | None:
     if table.order_id is None:
         return None
     return next((o for o in state.orders if o.id == table.order_id), None)
+
+
+def _has_active_allergy_order(state: RestaurantState, table: Table) -> bool:
+    """Whether ``table`` has an allergy order the floor still has to protect.
+
+    Both halves matter. The allergy half is what makes the order a safety
+    concern at all; the active half is what keeps the concern current. Reuses
+    ``ACTIVE_ORDER_STATUSES`` from :mod:`retro_backend.esim.observations` --
+    the same set ``table_wait_minutes`` and the worker projections read -- so
+    "still live" cannot come to mean one thing to a worker and another to the
+    manager directing it.
+    """
+    order = _order_for_table(state, table)
+    if order is None:
+        return False
+    return order.allergy is not None and order.status in ACTIVE_ORDER_STATUSES
