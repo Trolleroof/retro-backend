@@ -48,6 +48,16 @@ recorded states, not that the engines are identical.
 3. A nullable field is exported *absent*, never as JSON ``null``. Backend
    normalization strips ``None`` optional fields before hashing so both
    sides describe the same shape; see :func:`_drop_none`.
+
+**Live traces (Trolleroof/tui-gamepigeon#284).** A ``benchmark``/``synthetic``
+export names its incidents indirectly through ``caseId``; a ``live`` run has
+no frozen case to name, so its schedule travels directly as ``eventSchedule``
+-- the same ``ScheduledIncident`` shape a case file uses. When ``caseId`` is
+absent and ``eventSchedule`` is present, the export's own ``initialState`` is
+the ground truth (there is nothing else to check it against), and
+``sim.reset()`` still re-derives episode/clock/seed from it rather than
+trusting them wholesale, so an internally inconsistent export (e.g. a nested
+``seed`` that disagrees with the trace's own) still reports ``mismatch``.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
@@ -65,7 +75,7 @@ from retro_backend.esim.contracts import (
     RestaurantState,
     Role,
 )
-from retro_backend.esim.simulator import RestaurantSim
+from retro_backend.esim.simulator import RestaurantSim, ScheduledIncident
 from retro_backend.esim.state_hash import STATE_HASH_PATTERN, state_hash
 
 TRACE_VERSION_V1 = "restaurant-arena-trace/v1"
@@ -161,6 +171,12 @@ class ArenaTrace(ArenaModel):
     # Optional so a v1 export still loads: without it the incidents that fire
     # during the episode cannot be recovered and replay does not run.
     case_id: str | None = None
+    # A live run's own schedule (Trolleroof/tui-gamepigeon#284): there is no
+    # frozen case to load it from, so it has to travel in the trace. Additive
+    # to v3 rather than a new version -- same reasoning as case_id above. Only
+    # consulted when case_id is absent; a benchmark/synthetic trace's schedule
+    # still comes from the named case, which is the authored ground truth.
+    event_schedule: tuple[ScheduledIncident, ...] | None = None
     initial_state: RestaurantState
     events: tuple[TraceEvent, ...] = ()
     consent: Mapping[str, object] | None = None
@@ -282,7 +298,9 @@ def _envelopes_by_tick(trace: ArenaTrace) -> dict[int, list[ActionEnvelope]]:
     return actions
 
 
-def _replay(trace: ArenaTrace, sim: RestaurantSim, state: RestaurantState) -> ParityReport:
+def _replay(
+    trace: ArenaTrace, sim: RestaurantSim, state: RestaurantState, *, basis: str
+) -> ParityReport:
     """Apply every recorded action against ``sim``, which already sits at
     the reset state this trace's initial state was checked against.
 
@@ -296,7 +314,13 @@ def _replay(trace: ArenaTrace, sim: RestaurantSim, state: RestaurantState) -> Pa
     either would validate against a hash that means something else and could
     report ``parity`` on a run this engine never actually verified -- worse
     than not checking. So this never returns ``parity``; it stays
-    ``unproven`` until Tui exposes a state-only checkpoint hash per tick.
+    ``unproven`` until Tui exposes a state-only checkpoint hash per tick
+    (Trolleroof/tui-gamepigeon#283).
+
+    ``basis`` names what the starting state was established against --
+    a named frozen case, or (for a live run, #284) the export's own
+    initialState and eventSchedule -- so the reason reads correctly either
+    way.
     """
     scheduled = _envelopes_by_tick(trace)
     replayed = 0
@@ -315,11 +339,10 @@ def _replay(trace: ArenaTrace, sim: RestaurantSim, state: RestaurantState) -> Pa
         verdict="unproven",
         episode_id=trace.episode_id,
         reason=(
-            f"initial state matched this engine's own reset for case {trace.case_id!r} at "
-            f"seed {trace.seed}; replayed {replayed} action(s) against it without error. But "
-            f"the export carries no state-only checkpoint hash to verify the result against -- "
-            f"its recorded hashes are a different family (see #277). Semantic parity remains "
-            f"untested."
+            f"initial state matched {basis}; replayed {replayed} action(s) against it "
+            f"without error. But the export carries no state-only checkpoint hash to verify "
+            f"the result against -- its recorded hashes are a different family (see #277). "
+            f"Semantic parity remains untested."
         ),
     )
 
@@ -356,29 +379,45 @@ def check_parity(payload: Mapping[str, object]) -> ParityReport:
             ),
         )
 
-    if trace.case_id is None:
+    if trace.case_id is not None:
+        try:
+            case = load_case(trace.case_id)
+        except CaseError as exc:
+            return ParityReport(
+                verdict="mismatch",
+                episode_id=trace.episode_id,
+                reason=f"export names case {trace.case_id!r}, which this engine cannot load: {exc}",
+            )
+        sim = RestaurantSim(case.initial_state, event_schedule=case.event_schedule)
+        reset_state = sim.reset(trace.seed)
+        basis = f"what this engine produces for case {trace.case_id!r} at seed {trace.seed}"
+    elif trace.event_schedule is not None:
+        # A live run (#284): there is no frozen case, so the export's own
+        # initialState and eventSchedule are the ground truth, not a
+        # third-party fixture to check against. The comparison below still
+        # catches internal inconsistency -- e.g. initialState.seed disagreeing
+        # with the trace's top-level seed, or a tick/phase that is not a
+        # genuine episode start -- since sim.reset() re-derives those from
+        # scratch rather than trusting them as given.
+        sim = RestaurantSim(trace.initial_state, event_schedule=trace.event_schedule)
+        reset_state = sim.reset(trace.seed)
+        basis = (
+            "this engine's own reset of the export's initialState at seed "
+            f"{trace.seed} (no caseId; a live run has no frozen case, see #284)"
+        )
+    else:
         return ParityReport(
             verdict="unproven",
             episode_id=trace.episode_id,
             reason=(
-                "the export names no caseId, so this engine has no ground truth to check "
-                "initialState against and no event schedule to replay against -- the "
-                "incidents that fire during an episode are constructor state on the frozen "
-                "case, not trace events. Nothing about this export can be verified (see #278)."
+                "the export names no caseId and carries no eventSchedule, so this engine has "
+                "no ground truth to check initialState against and no event schedule to "
+                "replay against -- the incidents that fire during an episode are constructor "
+                "state on the frozen case, not trace events. Nothing about this export can be "
+                "verified (see #278, #284)."
             ),
         )
 
-    try:
-        case = load_case(trace.case_id)
-    except CaseError as exc:
-        return ParityReport(
-            verdict="mismatch",
-            episode_id=trace.episode_id,
-            reason=f"export names case {trace.case_id!r}, which this engine cannot load: {exc}",
-        )
-
-    sim = RestaurantSim(case.initial_state, event_schedule=case.event_schedule)
-    reset_state = sim.reset(trace.seed)
     expected = _drop_none(reset_state.model_dump(by_alias=True, mode="json"))
     exported_norm = _drop_none(trace.initial_state.model_dump(by_alias=True, mode="json"))
 
@@ -391,10 +430,10 @@ def check_parity(payload: Mapping[str, object]) -> ParityReport:
             verdict="mismatch",
             episode_id=trace.episode_id,
             reason=(
-                f"export's initialState does not match what this engine produces for case "
-                f"{trace.case_id!r} at seed {trace.seed} ({len(differences)} field(s) differ)."
+                f"export's initialState does not match {basis} "
+                f"({len(differences)} field(s) differ)."
             ),
             differences=tuple(shown),
         )
 
-    return _replay(trace, sim, reset_state)
+    return _replay(trace, sim, reset_state, basis=basis)
