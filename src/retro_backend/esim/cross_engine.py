@@ -1,9 +1,9 @@
 """Small v2 compatibility reports for representative Tui actions."""
 
-from collections.abc import Sequence
-from datetime import UTC, datetime
 import json
 import sys
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Literal
 
 from retro_backend.esim.contracts import ActionEnvelope, RestaurantState
@@ -41,7 +41,13 @@ def cross_engine_v2_report(
         return _report(scenario, {"tick": 0, "role": supply_role, "tool": "coordinate", "accepted": not hasattr(result, "code"), "state": result.model_dump(by_alias=True, mode="json") if isinstance(result, RestaurantState) else None})
 
     if scenario == "incident":
-        for _ in range(8):
+        target_tick = next(
+            (incident.tick for incident in event_schedule if incident.kind == "oven_failure"),
+            None,
+        )
+        if target_tick is None:
+            raise ValueError("cross-engine incident scenario requires an oven_failure")
+        for _ in range(target_tick):
             state = sim.advance_time()
         return _report(scenario, {"tick": state.episode.tick, "incident": state.emergency.model_dump(by_alias=True, mode="json") if state.emergency else None, "equipment": [item.model_dump(by_alias=True, mode="json") for item in state.equipment]})
 
