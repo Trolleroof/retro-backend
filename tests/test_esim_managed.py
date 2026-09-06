@@ -34,6 +34,7 @@ from retro_backend.esim.managed import (
     worker_turn_budget,
 )
 from retro_backend.esim.manager import (
+    IMPATIENT_WAIT_MINUTES,
     DirectiveBoard,
     ManagerActionEnvelope,
     StandingDirective,
@@ -378,15 +379,64 @@ def test_the_manager_projection_hides_the_schedule_and_the_scores() -> None:
         "staff",
         "orders",
         "equipment",
+        "tables",
+        "inventory",
+        "lowStock",
         "emergency",
         "standingDirectives",
         "lastRound",
     }
-    # Nothing about future incidents, and nothing derived by the grader.
+    # Nothing about future incidents, and nothing derived by the grader: the
+    # manager sees stock on hand and a table's wait (#79), never a score.
     blob = json.dumps(observation)
     assert "eventSchedule" not in blob
     assert "outcomes" not in blob
     assert "correctionUptake" not in blob
+    assert "cash" not in blob
+    assert "waste" not in blob
+    assert "satisfaction" not in blob
+
+
+def test_the_manager_sees_the_dinner_rush_tradeoff_signals() -> None:
+    """table-1's wait and fish's stock are visible from tick 0 (#79): the
+    manager does not need a scripted event to notice either half of the
+    tradeoff, only to keep watching as the shift runs.
+    """
+    case = load_case(CASE)
+    observation = observe_manager(
+        case.initial_state,
+        round_number=1,
+        rounds_total=12,
+        directives=(),
+        last_round=(),
+    )
+
+    table_1 = next(t for t in observation.tables if t.id == "table-1")
+    assert table_1.wait_minutes == 0
+    assert table_1.impatient is False
+
+    table_2 = next(t for t in observation.tables if t.id == "table-2")
+    assert table_2.has_allergy_order is True
+
+    assert observation.inventory["fish"] == 2
+    assert "fish" in observation.low_stock
+
+
+def test_a_table_turns_impatient_once_its_wait_crosses_the_threshold() -> None:
+    case = load_case(CASE)
+    waited = case.initial_state.model_copy(
+        update={
+            "clock": case.initial_state.clock.model_copy(
+                update={"minute": IMPATIENT_WAIT_MINUTES}
+            )
+        }
+    )
+    observation = observe_manager(
+        waited, round_number=2, rounds_total=12, directives=(), last_round=()
+    )
+
+    table_1 = next(t for t in observation.tables if t.id == "table-1")
+    assert table_1.impatient is True
 
 
 def test_the_manager_action_envelope_is_not_a_worker_action() -> None:

@@ -43,17 +43,35 @@ from retro_backend.esim.contracts import (
     EquipmentKind,
     EquipmentStatus,
     Load,
+    Order,
     OrderStatus,
     Priority,
     RestaurantState,
     Role,
+    Table,
     Tool,
 )
+from retro_backend.esim.observations import table_wait_minutes
 from retro_backend.esim.state_hash import state_hash
 from retro_backend.esim.tools import ToolArgs
 
 MANAGER_ACTION_VERSION = "restaurant-arena-manager-action/v1"
-MANAGER_OBSERVATION_VERSION = "restaurant-arena-manager-observation/v1"
+# v2 adds tables and inventory: a manager weighing a floor tradeoff (#79)
+# needs to see a table's wait and the stock on hand, same as it already sees
+# emergency/equipment/orders. It still does not see Outcomes -- the manager
+# runs a shift, not the exam (see module docstring).
+MANAGER_OBSERVATION_VERSION = "restaurant-arena-manager-observation/v2"
+
+# A table is called out as impatient once its wait crosses this many minutes.
+# Matches the pace of the frozen Dinner Rush schedule (oven fails at tick 8):
+# table-1 crosses this a few ticks later, forcing the tradeoff against the
+# allergy order and the low-stock report rather than at episode start.
+IMPATIENT_WAIT_MINUTES = 10
+
+# An item is called out as low stock once remaining units drop to or below
+# this line. Fish starts at 2 in dinner-rush-001, so the oven failure (which
+# blocks fish's other prep path) puts it at the line immediately.
+LOW_STOCK_THRESHOLD = 2
 
 # The manager is staff, not a player: it is recorded under its own actor id so
 # no reader can mistake a manager decision for a worker's or for the scripted
@@ -82,9 +100,12 @@ __all__ = [
     "ClearDirectiveArgs",
     "DirectiveBoard",
     "DirectiveTarget",
+    "IMPATIENT_WAIT_MINUTES",
+    "LOW_STOCK_THRESHOLD",
     "ManagerActionEnvelope",
     "ManagerObservation",
     "ManagerTool",
+    "ObservedManagerTable",
     "SetDirectiveArgs",
     "StandingDirective",
     "WorkerActivity",
@@ -265,6 +286,21 @@ class ObservedShiftEquipment(ArenaModel):
     status: EquipmentStatus
 
 
+class ObservedManagerTable(ArenaModel):
+    """A table as the manager sees it: how long it has waited, not its order.
+
+    ``impatient`` is the same ``wait_minutes >= IMPATIENT_WAIT_MINUTES``
+    threshold a reader would otherwise have to reconstruct; naming it saves a
+    manager (model or human) from missing the floor signal a server would
+    never miss.
+    """
+
+    id: ArenaId
+    wait_minutes: int = Field(ge=0, strict=True)
+    impatient: bool
+    has_allergy_order: bool
+
+
 class WorkerActivity(ArenaModel):
     """What one worker did on the round that just finished.
 
@@ -284,7 +320,7 @@ class WorkerActivity(ArenaModel):
 class ManagerObservation(ArenaModel):
     """The shift as the manager sees it at the top of one round."""
 
-    version: Literal["restaurant-arena-manager-observation/v1"] = (
+    version: Literal["restaurant-arena-manager-observation/v2"] = (
         MANAGER_OBSERVATION_VERSION
     )
     role: Literal["manager"] = "manager"
@@ -295,6 +331,9 @@ class ManagerObservation(ArenaModel):
     staff: tuple[ObservedStaff, ...]
     orders: tuple[ObservedShiftOrder, ...]
     equipment: tuple[ObservedShiftEquipment, ...]
+    tables: tuple[ObservedManagerTable, ...] = ()
+    inventory: Mapping[str, int] = Field(default_factory=dict)
+    low_stock: tuple[str, ...] = ()
     emergency: bool
     standing_directives: tuple[StandingDirective, ...] = ()
     last_round: tuple[WorkerActivity, ...] = ()
@@ -347,7 +386,31 @@ def observe_manager(
             ObservedShiftEquipment(id=item.id, kind=item.kind, status=item.status)
             for item in state.equipment
         ),
+        tables=tuple(
+            ObservedManagerTable(
+                id=table.id,
+                wait_minutes=(wait := table_wait_minutes(state, table)),
+                impatient=wait >= IMPATIENT_WAIT_MINUTES,
+                has_allergy_order=(
+                    order.allergy is not None
+                    if (order := _order_for_table(state, table)) is not None
+                    else False
+                ),
+            )
+            for table in state.tables
+            if table.status == "occupied"
+        ),
+        inventory=dict(state.inventory),
+        low_stock=tuple(
+            item for item, qty in state.inventory.items() if qty <= LOW_STOCK_THRESHOLD
+        ),
         emergency=state.emergency is not None and state.emergency.active,
         standing_directives=tuple(directives),
         last_round=tuple(last_round),
     )
+
+
+def _order_for_table(state: RestaurantState, table: Table) -> Order | None:
+    if table.order_id is None:
+        return None
+    return next((o for o in state.orders if o.id == table.order_id), None)
