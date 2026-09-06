@@ -7,7 +7,11 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from retro_backend.esim.contracts import ActionEnvelope, RestaurantState
-from retro_backend.esim.manager import DirectiveBoard, ManagerActionEnvelope
+from retro_backend.esim.manager import (
+    DirectiveBoard,
+    ManagerActionEnvelope,
+    StandingDirective,
+)
 from retro_backend.esim.role_normalization import normalize_role_for_v1
 from retro_backend.esim.simulator import RestaurantSim, ScheduledIncident
 
@@ -47,6 +51,7 @@ def cross_engine_v2_report(
         )
         if target_tick is None:
             raise ValueError("cross-engine incident scenario requires an oven_failure")
+        state = initial_state
         for _ in range(target_tick):
             state = sim.advance_time()
         return _report(scenario, {"tick": state.episode.tick, "incident": state.emergency.model_dump(by_alias=True, mode="json") if state.emergency else None, "equipment": [item.model_dump(by_alias=True, mode="json") for item in state.equipment]})
@@ -61,7 +66,7 @@ def cross_engine_v2_report(
         request_id="cross-engine-manager-correction",
     )
     posted = board.apply(directive)
-    return _report(scenario, {"accepted": not hasattr(posted, "code"), "role": supply_role, "directive": {"targetRole": supply_role, "instruction": "prioritize order-1", "priority": "high"}, "v1TargetRole": posted.target_role if posted else None, "stateChanged": False})
+    return _report(scenario, {"accepted": isinstance(posted, StandingDirective), "role": supply_role, "directive": {"targetRole": supply_role, "instruction": "prioritize order-1", "priority": "high"}, "v1TargetRole": posted.target_role if isinstance(posted, StandingDirective) else None, "stateChanged": False})
 
 
 def _report(scenario: CrossEngineScenario, record: dict[str, object]) -> dict[str, object]:

@@ -1,10 +1,13 @@
+from typing import Any, cast
+
 from retro_backend.esim.case import load_case
-from retro_backend.esim.cross_engine import cross_engine_v2_report
+from retro_backend.esim.cross_engine import CrossEngineScenario, cross_engine_v2_report
 
 
-def _report(scenario: str) -> dict[str, object]:
+def _report(scenario: CrossEngineScenario) -> dict[str, Any]:
     case = load_case("dinner-rush-001")
-    return cross_engine_v2_report(case.initial_state, case.event_schedule, scenario)  # type: ignore[arg-type]
+    report = cross_engine_v2_report(case.initial_state, case.event_schedule, scenario)
+    return cast(dict[str, Any], report)
 
 
 def test_routine_report_uses_supply_lead_and_coordinates_order() -> None:
