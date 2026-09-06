@@ -427,6 +427,7 @@ async def test_a_provider_failure_marks_the_run_and_credits_no_action() -> None:
     manager_block = result.summary["manager"]
     assert isinstance(manager_block, dict)
     assert manager_block["modelErrors"] == 3
+    assert manager_block["turnsLostToProvider"] == 1
     # The round is still recorded, and nothing stood in for the manager.
     recorded = result.trajectory.manager_actions
     assert len(recorded) == 1
@@ -434,6 +435,35 @@ async def test_a_provider_failure_marks_the_run_and_credits_no_action() -> None:
     # nothing, its provider never answered.
     assert recorded[0].tool is None and recorded[0].outcome == "no_decision"
     assert result.trajectory.final_directives == ()
+
+
+@pytest.mark.asyncio
+async def test_an_error_a_retry_recovered_from_does_not_fail_the_run() -> None:
+    # One timeout, then an answer. The turn happened and the model decided, so
+    # the run is a result -- the attempt stays visible in modelErrors, which is
+    # what a reader needs to judge how noisy the run was.
+    manager = Replies(
+        [
+            _reply(None, error=f"{ERR_TIMEOUT}: slow"),
+            _reply(
+                '{"tool":"set_directive","arguments":{"targetRole":"all","instruction":"go"}}',
+                served="vendor/boss",
+            ),
+        ],
+        served="vendor/boss",
+    )
+    workers = Replies([], served="vendor/staff")
+
+    result = await run_managed_case(
+        _config(rounds=1), manager_adapter=manager, worker_adapter=workers
+    )
+
+    manager_block = result.summary["manager"]
+    assert isinstance(manager_block, dict)
+    assert manager_block["modelErrors"] == 1
+    assert manager_block["turnsLostToProvider"] == 0
+    assert result.summary["runValidity"] == "valid"
+    assert result.trajectory.manager_actions[0].outcome == "applied"
 
 
 @pytest.mark.asyncio

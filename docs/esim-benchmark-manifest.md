@@ -486,8 +486,13 @@ manifest declares `bundleVersion: esim-managed-run-bundle/v1`.
   that does not match another, so it cannot be quietly reused.
 - `summary.json` reports the manager's and the workers' turns, tokens,
   latency, and served models in **separate blocks**, and carries
-  `runValidity` with three values. Any adapter error, or any reply served by a
-  model other than the one requested, marks the run `provider_failure`. A run
+  `runValidity` with three values. A turn **lost** to the provider — its last
+  attempt was an adapter error, so the actor never got to decide — or a reply
+  served by a model other than the one requested, marks the run
+  `provider_failure`. An error a retry recovered from does not: the turn
+  happened and the model decided, and the attempt is still counted in
+  `modelErrors` beside `turnsLostToProvider` so a reader can see how noisy the
+  run was. A run
   in which every call succeeded but no provider ever named the model that
   answered is `unverified_identity` — nothing failed, but which model produced
   the scores was never established, and on a shape whose claim is "this

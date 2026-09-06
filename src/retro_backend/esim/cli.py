@@ -466,6 +466,7 @@ def _report_managed(graded: Grade, summary: dict[str, Any], out_dir: Path, traje
             f"     !! runValidity={summary.get('runValidity')}"
             + f" managerServed={manager.get('servedModels')}"
             + f" workerServed={workers.get('servedModels')}"
+            + f" turnsLost={manager.get('turnsLostToProvider')}/{workers.get('turnsLostToProvider')}"
             + f" modelErrors={manager.get('modelErrors')}/{workers.get('modelErrors')}"
         )
 

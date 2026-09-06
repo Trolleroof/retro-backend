@@ -429,6 +429,9 @@ async def _run_manager_turn(
             if retryable_model_error(error) and attempt < config.max_attempts:
                 feedback = error
                 continue
+            # Out of attempts with nothing but adapter errors: this turn was
+            # lost to the provider, not spent by the model.
+            tally.totals["lost_turns"] += 1
             break
 
         record["response"] = reply.text or ""
@@ -552,6 +555,7 @@ async def _run_worker_round(
                 if retryable_model_error(error) and attempt < config.max_attempts:
                     feedback = error
                     continue
+                tally.totals["lost_turns"] += 1
                 break
 
             record["response"] = reply.text or ""
@@ -626,9 +630,13 @@ def _summary(
     ``runValidity`` is the field that keeps a degraded run from being read as
     a result, and it has three values rather than two.
 
-    ``provider_failure`` -- an adapter error, or a reply served by a model
-    other than the one requested. The scores describe a run that did not get
-    the models it asked for.
+    ``provider_failure`` -- a turn was **lost** to the provider (its last
+    attempt was an adapter error, so the actor never got to decide), or a
+    reply came back served by a model other than the one requested. An error
+    that a retry recovered from is not this: the turn happened, the model
+    decided, and the attempt is still counted in ``modelErrors`` for anyone
+    reading how noisy the run was. Conflating the two would mark almost every
+    hosted run a failure and leave the word meaning nothing.
 
     ``unverified_identity`` -- every call succeeded, but a provider never named
     the model that answered, so which model produced these scores is not
@@ -641,8 +649,8 @@ def _summary(
     failed = (
         manager_mismatch
         or worker_mismatch
-        or bool(manager.totals["model_errors"])
-        or bool(workers.totals["model_errors"])
+        or bool(manager.totals["lost_turns"])
+        or bool(workers.totals["lost_turns"])
     )
     unverified = manager.unverified() or workers.unverified()
     validity = (
@@ -671,6 +679,9 @@ def _summary(
             "noActions": manager.totals["no_actions"],
             "invalidResponses": manager.totals["invalid_responses"],
             "modelErrors": manager.totals["model_errors"],
+            # Turns the provider never let the model take, as opposed to
+            # attempts a retry recovered from.
+            "turnsLostToProvider": manager.totals["lost_turns"],
             "inputTokens": manager.totals["input_tokens"],
             "outputTokens": manager.totals["output_tokens"],
             "latencyMs": manager.latency_ms,
@@ -685,6 +696,7 @@ def _summary(
             "noActions": workers.totals["no_actions"],
             "invalidResponses": workers.totals["invalid_responses"],
             "modelErrors": workers.totals["model_errors"],
+            "turnsLostToProvider": workers.totals["lost_turns"],
             "inputTokens": workers.totals["input_tokens"],
             "outputTokens": workers.totals["output_tokens"],
             "latencyMs": workers.latency_ms,
