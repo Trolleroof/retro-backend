@@ -35,8 +35,9 @@ def retryable_model_error(error: str | None) -> bool:
     """Whether retrying the same model call can reasonably help.
 
     ``ERR_TRUNCATED`` is retryable on the assumption that the retry is not
-    actually identical: :func:`~retro_backend.esim.runner._messages` folds the
-    error text into ``previousError`` on the next attempt, so the model is
+    actually identical: the runner's
+    :func:`~retro_backend.esim.runner.build_worker_messages` folds the error
+    text into ``previousError`` on the next attempt, so the model is
     told its last answer ran out of room and to answer shorter. A retry under
     an *unchanged* prompt would be pointless -- same budget, same cutoff -- so
     this only holds while that feedback wiring stays in place.

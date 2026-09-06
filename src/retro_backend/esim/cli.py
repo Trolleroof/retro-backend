@@ -6,10 +6,19 @@ no scoring, and no provider logic: it resolves a case, hands it to
 trajectory to :func:`~retro_backend.esim.grader.grade`, and lands both on disk
 beside the manifest that says how the run was configured.
 
-**One model per run, all four roles.** The selected model answers as chef,
-server, host, and expediter in the fixed order :data:`ROLE_ORDER` sets. The
-comparison this supports is *between models in a fixed multi-role harness*; it
-is not an isolated test of one role, and it is not a single-manager benchmark.
+Two run shapes live here, and they measure different things.
+
+**``run`` -- one model per run, all four roles.** The selected model answers as
+chef, server, host, and expediter in the fixed order :data:`ROLE_ORDER` sets.
+The comparison this supports is *between models in a fixed multi-role
+harness*; it is not an isolated test of one role.
+
+**``run-managed`` -- one manager model over a fixed worker model (#75).** A
+manager model reads the shift and posts standing directives; a separate,
+fixed worker model makes all four worker decisions under them. The comparison
+this supports is *between manager models with worker identity held constant*.
+The two identities are never merged into one field: manifest, summary, and
+every attempt record name which model answered as what.
 
 **The reference policy is deliberately not reachable from here.** ``policies``
 is infrastructure-only -- nothing under ``src/`` may import it -- so that no
@@ -21,6 +30,7 @@ import argparse
 import asyncio
 import json
 import sys
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -29,6 +39,15 @@ from pydantic import ValidationError
 
 from retro_backend.esim.case import ENV_VERSION, CaseError, load_case
 from retro_backend.esim.grader import GRADER_VERSION, SERVED, Grade, grade
+from retro_backend.esim.managed import (
+    DEFAULT_ROUNDS,
+    MANAGED_SHAPE,
+    ManagedRunnerConfig,
+    manager_turn_budget,
+    run_managed_model_case,
+    ticks_per_round,
+    worker_turn_budget,
+)
 from retro_backend.esim.parity import ParityReport, TraceLoadError, check_parity
 from retro_backend.esim.runner import (
     RunnerConfig,
@@ -42,6 +61,9 @@ from retro_backend.esim.trajectory import Trajectory
 # Bumped when the bundle's file set or field meanings change, so a report can
 # tell a v1 bundle from a later one without guessing from its contents.
 BUNDLE_VERSION = "esim-run-bundle/v1"
+# A managed run records two model identities and a directive log, so a reader
+# must be able to tell one from a single-model bundle without inspecting it.
+MANAGED_BUNDLE_VERSION = "esim-managed-run-bundle/v1"
 
 
 def positive_int(value: str) -> int:
@@ -166,12 +188,18 @@ BUNDLE_FILES = (
     "attempts.jsonl",
 )
 
+# A managed bundle is a run bundle plus the manager's own record: what it
+# posted, when, and what stood at the end.
+MANAGED_BUNDLE_FILES = (*BUNDLE_FILES, "directives.json")
+
 
 class BundleExistsError(Exception):
     """An output directory already holds a run's evidence."""
 
 
-def guard_output_dir(out_dir: Path, *, overwrite: bool) -> None:
+def guard_output_dir(
+    out_dir: Path, *, overwrite: bool, files: Sequence[str] = BUNDLE_FILES
+) -> None:
     """Refuse to write a second run over an existing bundle.
 
     Every artifact here is written under a fixed name, so a rerun into the
@@ -183,7 +211,7 @@ def guard_output_dir(out_dir: Path, *, overwrite: bool) -> None:
     """
     if overwrite:
         return
-    existing = [name for name in BUNDLE_FILES if (out_dir / name).exists()]
+    existing = [name for name in files if (out_dir / name).exists()]
     if existing:
         found = ", ".join(sorted(existing))
         message = (
@@ -272,6 +300,195 @@ async def _run_command(args: argparse.Namespace) -> int:
         )
         summary = json.loads((out_dir / "summary.json").read_text())
         _report(graded, summary, out_dir, trajectory)
+    return 0
+
+
+def build_managed_manifest(
+    config: ManagedRunnerConfig,
+    *,
+    case_seed: int,
+    contract_version: str,
+    max_ticks: int,
+    repeat: int,
+    repeats: int,
+    started_at: str,
+) -> dict[str, Any]:
+    """The configuration record a managed run travels with.
+
+    ``managerModel`` and ``workerModel`` are separate keys, and there is no
+    combined ``model`` field for a reader to mistake for either. The budgets
+    are the frozen ones: one manager and four worker requests per round for
+    :attr:`ManagedRunnerConfig.rounds` rounds, each multiplied by the retry
+    allowance and enforced per actor.
+    """
+    return {
+        "bundleVersion": MANAGED_BUNDLE_VERSION,
+        "envVersion": ENV_VERSION,
+        "contractVersion": contract_version,
+        "graderVersion": GRADER_VERSION,
+        "harness": {
+            "shape": MANAGED_SHAPE,
+            "roleOrder": ["chef", "server", "host", "expediter"],
+            "roundShape": [
+                "manager observation",
+                "manager action",
+                "four worker decisions",
+                "routine simulation interval",
+            ],
+            "claim": "manager-model comparison with worker identity held fixed",
+        },
+        "caseId": config.case_id,
+        "managerModel": config.manager_model,
+        "workerModel": config.worker_model,
+        "seed": case_seed,
+        "repeat": repeat,
+        "repeats": repeats,
+        "budgets": {
+            "rounds": config.rounds,
+            "ticksPerRound": ticks_per_round(max_ticks, config.rounds),
+            "managerRequestsPerLevel": config.rounds,
+            "workerRequestsPerLevel": config.rounds * 4,
+            "maxAttempts": config.max_attempts,
+            "maxOutputTokens": config.max_output_tokens,
+            "maxManagerTurns": manager_turn_budget(config),
+            "maxWorkerTurns": worker_turn_budget(config),
+        },
+        "sampling": {
+            "set": {"temperature": 0.0},
+            "providerControlled": [
+                "sampling seed (not sent; provider default applies)",
+                "model revision / snapshot pinning (not exposed by NIM)",
+            ],
+        },
+        "startedAt": started_at,
+    }
+
+
+def write_managed_bundle(
+    out_dir: Path,
+    *,
+    manifest: dict[str, Any],
+    result: RunResult,
+    graded: Grade,
+) -> None:
+    """The run bundle, plus the manager's own record as its own file.
+
+    ``directives.json`` duplicates what ``trajectory.json`` already carries.
+    That is deliberate: the founder check is "follow one instruction through a
+    worker response", and a small file listing every directive with the round
+    and digest it took effect on is what makes that a two-minute read rather
+    than a grep through a full trajectory.
+    """
+    write_bundle(out_dir, manifest=manifest, result=result, graded=graded)
+    trajectory = result.trajectory
+    _write_json(
+        out_dir / "directives.json",
+        {
+            "managerModel": manifest["managerModel"],
+            "workerModel": manifest["workerModel"],
+            "managerActions": [
+                record.model_dump(by_alias=True, mode="json")
+                for record in trajectory.manager_actions
+            ],
+            "finalDirectives": [
+                directive.model_dump(by_alias=True, mode="json")
+                for directive in trajectory.final_directives
+            ],
+        },
+    )
+
+
+async def _run_managed_once(
+    config: ManagedRunnerConfig,
+    out_dir: Path,
+    *,
+    repeat: int,
+    repeats: int,
+    overwrite: bool,
+) -> tuple[Grade, Trajectory]:
+    started_at = datetime.now(UTC).isoformat()
+    case = load_case(config.case_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    guard_output_dir(out_dir, overwrite=overwrite, files=MANAGED_BUNDLE_FILES)
+    with (out_dir / "attempts.jsonl").open("w") as sink:
+        result = await run_managed_model_case(config, jsonl=sink)
+    graded = grade(result.trajectory)
+    write_managed_bundle(
+        out_dir,
+        manifest=build_managed_manifest(
+            config,
+            case_seed=case.seed,
+            contract_version=case.contract_version,
+            max_ticks=case.initial_state.episode.max_ticks,
+            repeat=repeat,
+            repeats=repeats,
+            started_at=started_at,
+        ),
+        result=result,
+        graded=graded,
+    )
+    return graded, result.trajectory
+
+
+def _report_managed(graded: Grade, summary: dict[str, Any], out_dir: Path, trajectory: Trajectory) -> None:
+    manager = summary.get("manager", {})
+    workers = summary.get("workers", {})
+    print(f"  -> {out_dir}")
+    print(
+        f"     rounds={summary.get('roundsPlayed')}/{summary.get('rounds')}"
+        + f" managerTurns={manager.get('turns')} workerTurns={workers.get('turns')}"
+        + f" directives={manager.get('directivesAccepted')}"
+    )
+    _report_scores(graded)
+    for line in penalty_lines(graded, trajectory):
+        print(line)
+    for directive in trajectory.final_directives:
+        print(
+            f"     DIRECTIVE {directive.target_role} (round {directive.issued_at_round}):"
+            + f" {directive.instruction}"
+        )
+    # A degraded run is called out on the same line as its scores, because the
+    # scores of a run that did not get the models it asked for are not a
+    # result and must not be read as one.
+    if summary.get("runValidity") != "valid":
+        print(
+            f"     !! runValidity={summary.get('runValidity')}"
+            + f" managerServed={manager.get('servedModels')}"
+            + f" workerServed={workers.get('servedModels')}"
+            + f" modelErrors={manager.get('modelErrors')}/{workers.get('modelErrors')}"
+        )
+
+
+async def _run_managed_command(args: argparse.Namespace) -> int:
+    case_id = resolve_case_id(args.case)
+    overrides: dict[str, int] = {
+        name: value
+        for name, value in (
+            ("rounds", args.rounds),
+            ("max_attempts", args.max_attempts),
+            ("max_output_tokens", args.max_output_tokens),
+        )
+        if value is not None
+    }
+    config = ManagedRunnerConfig(
+        case_id=case_id,
+        manager_model=args.manager_model,
+        worker_model=args.worker_model,
+        **overrides,
+    )
+    root = Path(args.output_dir)
+    print(
+        f"case={case_id} manager={config.manager_model} worker={config.worker_model}"
+        + f" rounds={config.rounds} repeats={args.repeats}"
+    )
+    for repeat in range(1, args.repeats + 1):
+        out_dir = root / f"repeat-{repeat:02d}" if args.repeats > 1 else root
+        print(f"[{repeat}/{args.repeats}] running...")
+        graded, trajectory = await _run_managed_once(
+            config, out_dir, repeat=repeat, repeats=args.repeats, overwrite=args.overwrite
+        )
+        summary = json.loads((out_dir / "summary.json").read_text())
+        _report_managed(graded, summary, out_dir, trajectory)
     return 0
 
 
@@ -445,6 +662,43 @@ def build_parser() -> argparse.ArgumentParser:
         help="replace an existing evidence bundle in --output-dir instead of refusing",
     )
     run.set_defaults(func=_run_command)
+
+    managed = sub.add_parser(
+        "run-managed",
+        help="run one manager model over four workers operated by a fixed worker model",
+    )
+    managed.add_argument("--case", required=True, help="case id or path to its JSON file")
+    managed.add_argument(
+        "--manager-model",
+        required=True,
+        help="provider spec for the model being ranked, e.g. nim:openai/gpt-oss-20b",
+    )
+    managed.add_argument(
+        "--worker-model",
+        required=True,
+        help="provider spec for the fixed staff; hold this constant across managers",
+    )
+    managed.add_argument("--output-dir", required=True, help="directory to write the evidence bundle")
+    managed.add_argument(
+        "--rounds",
+        type=positive_int,
+        default=None,
+        help=f"proposed rounds per level (default {DEFAULT_ROUNDS}); must divide the case horizon",
+    )
+    managed.add_argument(
+        "--repeats",
+        type=positive_int,
+        default=1,
+        help="runs of this case/model pair; the case seed stays fixed so repeats measure model variability",
+    )
+    managed.add_argument("--max-attempts", type=positive_int, default=None)
+    managed.add_argument("--max-output-tokens", type=positive_int, default=None)
+    managed.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace an existing evidence bundle in --output-dir instead of refusing",
+    )
+    managed.set_defaults(func=_run_managed_command)
 
     regrade = sub.add_parser(
         "regrade",
