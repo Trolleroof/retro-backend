@@ -50,6 +50,7 @@ from retro_backend.esim.contracts import (
     ServerObservation,
     Tool,
 )
+from retro_backend.esim.manager import ManagerActionEnvelope, ManagerObservation
 from retro_backend.esim.rng import Rng
 
 __all__ = [
@@ -57,6 +58,7 @@ __all__ = [
     "GreedyPolicy",
     "IdlePolicy",
     "Policy",
+    "ScriptedManagerPolicy",
     "idempotency_key_for",
     "request_id_for",
 ]
@@ -354,3 +356,79 @@ def _inventory_covers(inventory: Mapping[str, int], items: Sequence[str]) -> boo
     for item in items:
         required[item] = required.get(item, 0) + 1
     return all(inventory.get(item, 0) >= quantity for item, quantity in required.items())
+
+
+class ScriptedManagerPolicy:
+    """A deterministic stand-in for a manager model. Infrastructure only.
+
+    Exists for the same reason :class:`GreedyPolicy` does: the managed round
+    loop -- manager turn, four worker decisions, routine interval -- needs a
+    fixed driver before it can be checked for determinism, and a model is not
+    that. It posts a small, predictable set of standing directives off the
+    manager projection alone.
+
+    **Its output is test evidence, never a benchmark result.** A scripted
+    manager decision is not a manager model's decision, and the offline
+    rollout that drives this labels every artifact it writes accordingly. Like
+    the rest of this module it is unreachable from ``src/``.
+    """
+
+    name: str = "stub-manager"
+
+    def __init__(self, *, episode_id: str) -> None:
+        self.episode_id: str = episode_id
+
+    def reset(self) -> None:
+        return None
+
+    def decide(self, observation: ManagerObservation) -> ManagerActionEnvelope | None:
+        """One directive per round at most, chosen by a fixed precedence."""
+        standing = {directive.target_role for directive in observation.standing_directives}
+        decision: tuple[str, dict[str, object]] | None = None
+
+        if observation.round == observation.rounds_total and "all" in standing:
+            decision = ("clear_directive", {"targetRole": "all"})
+        elif "all" not in standing:
+            decision = (
+                "set_directive",
+                {
+                    "targetRole": "all",
+                    "instruction": "keep the pass moving and verify every guest constraint before serving",
+                },
+            )
+        elif observation.emergency and "expediter" not in standing:
+            decision = (
+                "set_directive",
+                {
+                    "targetRole": "expediter",
+                    "instruction": "equipment is down: coordinate the pass around it",
+                    "priority": "high",
+                },
+            )
+        else:
+            constrained = sorted(
+                order.id for order in observation.orders if order.allergy is not None
+            )
+            if constrained and "chef" not in standing:
+                decision = (
+                    "set_directive",
+                    {
+                        "targetRole": "chef",
+                        "instruction": f"verify the requirements on {constrained[0]} before substituting",
+                        "priority": "high",
+                    },
+                )
+
+        if decision is None:
+            return None
+        tool, arguments = decision
+        return ManagerActionEnvelope.model_validate(
+            {
+                "episodeId": self.episode_id,
+                "tool": tool,
+                "arguments": arguments,
+                "round": observation.round,
+                "tick": observation.tick,
+                "requestId": f"{self.name}-r{observation.round:03d}",
+            }
+        )

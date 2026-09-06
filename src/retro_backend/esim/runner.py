@@ -10,7 +10,7 @@ model loop and free of grading; nothing here scores anything.
 
 import json
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, TextIO
@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from retro_backend.esim.case import ENV_VERSION, load_case
 from retro_backend.esim.contracts import ACTION_VERSION, ActionEnvelope, ActionError, Role
+from retro_backend.esim.manager import StandingDirective
 from retro_backend.esim.providers.base import ModelAdapter, ModelReply
 from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import (
@@ -77,17 +78,28 @@ def effective_max_turns(config: RunnerConfig, max_ticks: int) -> int:
     return max_ticks * len(ROLE_ORDER) * config.max_attempts
 
 
-def _record(sink: TextIO | None, record: Mapping[str, object]) -> None:
+def record_jsonl(sink: TextIO | None, record: Mapping[str, object]) -> None:
+    """Append one auditable record, and put it on disk now.
+
+    Flushed per record rather than left to the buffer: the attempt log is
+    written as the run happens precisely so a run that dies mid-episode still
+    leaves behind every raw reply it did get, and an unflushed buffer loses
+    the last several thousand characters of exactly that evidence. A managed
+    episode is tens of minutes long, so this is also what makes the log
+    readable while the run is still going.
+    """
     if sink is not None:
         sink.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+        sink.flush()
 
 
-def _messages(
+def build_worker_messages(
     role: Role,
     observation: Mapping[str, object],
     feedback: str | None,
     *,
     worker_ids: Mapping[Role, str],
+    directives: Sequence[StandingDirective] = (),
 ) -> list[dict[str, str]]:
     tools = {
         tool: TOOL_ARGS[tool].model_json_schema(by_alias=True)
@@ -108,6 +120,14 @@ def _messages(
     # repeat it there.
     if "workers" not in observation:
         prompt["workerIds"] = dict(sorted(worker_ids.items()))
+    # Only present on a managed run, and only while something stands. The
+    # single-model prompt in docs/esim-benchmark-manifest.md §2 is frozen, so
+    # an empty board must leave it byte-identical rather than adding an empty
+    # key to every turn.
+    if directives:
+        prompt["standingDirectives"] = [
+            directive.model_dump(by_alias=True, mode="json") for directive in directives
+        ]
     if feedback is not None:
         prompt["previousError"] = feedback
     return [
@@ -132,7 +152,7 @@ def _messages(
     ]
 
 
-def _parse_action(
+def parse_worker_action(
     text: str,
     *,
     episode_id: str,
@@ -220,7 +240,7 @@ async def run_case(
                     break
                 observation = sim.observe(role).model_dump(by_alias=True)
                 reply: ModelReply = await adapter.generate(
-                    _messages(role, observation, feedback, worker_ids=worker_ids),
+                    build_worker_messages(role, observation, feedback, worker_ids=worker_ids),
                     max_tokens=config.max_output_tokens,
                 )
                 totals["turns"] += 1
@@ -243,14 +263,14 @@ async def run_case(
                     error = reply.error or "unknown_model_error"
                     totals["model_errors"] += 1
                     record["error"] = error
-                    _record(jsonl, record)
+                    record_jsonl(jsonl, record)
                     if retryable_model_error(error) and attempt < config.max_attempts:
                         feedback = error
                         continue
                     break
                 record["response"] = reply.text or ""
                 try:
-                    action = _parse_action(
+                    action = parse_worker_action(
                         reply.text or "", episode_id=state.episode.id, worker_id=worker_id,
                         role=role, tick=state.episode.tick, attempt=attempt,
                     )
@@ -258,14 +278,14 @@ async def run_case(
                     feedback = str(exc)
                     totals["invalid_responses"] += 1
                     record["error"] = feedback
-                    _record(jsonl, record)
+                    record_jsonl(jsonl, record)
                     if attempt < config.max_attempts:
                         continue
                     break
                 if action is None:
                     totals["no_actions"] += 1
                     record["action"] = None
-                    _record(jsonl, record)
+                    record_jsonl(jsonl, record)
                     break
                 result = sim.act(action)
                 recorder.record_action(action, result)
@@ -274,13 +294,13 @@ async def run_case(
                     feedback = f"{result.code}: {result.message}"
                     totals["rejected_actions"] += 1
                     record["actionError"] = result.model_dump(by_alias=True)
-                    _record(jsonl, record)
+                    record_jsonl(jsonl, record)
                     if result.code in RETRYABLE_ACTION_ERRORS and attempt < config.max_attempts:
                         continue
                     break
                 state = result
                 totals["accepted_actions"] += 1
-                _record(jsonl, record)
+                record_jsonl(jsonl, record)
                 break
             if termination == "turn_limit":
                 break
@@ -313,7 +333,7 @@ async def run_case(
         "outcomes": state.outcomes.model_dump(by_alias=True),
         "finalStateHash": state_hash(state.model_dump(by_alias=True)),
     }
-    _record(jsonl, summary)
+    record_jsonl(jsonl, summary)
     return RunResult(summary=summary, trajectory=trajectory)
 
 
