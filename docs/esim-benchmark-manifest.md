@@ -387,6 +387,21 @@ format" must state the budget it was measured under.
    backoff of its own — it now waits on the budget's `Retry-After` penalty
    instead, so a throttled turn no longer burns its whole retry allowance in
    under a second.
+
+   **Queueing is bounded, and a turn lost to it is named.** Admission is
+   awaited *outside* the adapter's per-request timeout, so without a bound of
+   its own a throttled call could hold a turn open for minutes past the
+   timeout meant to bound it. A caller waits at most
+   `DEFAULT_MAX_QUEUE_SECONDS` (180s = one window + the largest possible
+   penalty, so it never rejects a wait that was going to succeed) and then
+   fails with `budget_timeout`. That error is deliberately **not** retryable:
+   unlike a 429, which says the provider is busy, it says this process has no
+   allowance to give, and retrying would ask the same exhausted budget the
+   same question `max_attempts` times.
+
+   Attempt records and run summaries carry `queueDelayMs` beside `latencyMs`
+   for exactly this reason — a run throttled by its own share of the account
+   must not be readable as a run against a slow model.
 8. One full episode costs ~130–185 turns, ~90k–160k tokens, and 8–16 minutes
    of wall clock against `openai/gpt-oss-20b`, depending on the token budget in
    force. The full frozen matrix — 2 variants x 3 repeats x N models — is

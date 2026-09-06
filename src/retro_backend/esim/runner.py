@@ -218,6 +218,10 @@ async def run_case(
     max_turns = effective_max_turns(config, state.episode.max_ticks)
     totals = Counter[str]()
     latency_ms = 0.0
+    # Time spent queued for the shared request budget, kept apart from
+    # latency_ms. Folded together, a run throttled by this process' share of
+    # the account would be indistinguishable from one against a slow model.
+    queue_delay_ms = 0.0
     termination = "episode_complete"
     # Every distinct id the provider claimed answered. More than one, or one
     # that is not the requested model, means the run is not the single-model
@@ -247,6 +251,7 @@ async def run_case(
                 totals["input_tokens"] += reply.input_tokens
                 totals["output_tokens"] += reply.output_tokens
                 latency_ms += reply.latency_ms
+                queue_delay_ms += reply.queue_delay_ms
                 if reply.served_model is not None:
                     served_models.add(reply.served_model)
                 record: dict[str, object] = {
@@ -256,6 +261,7 @@ async def run_case(
                     "attempt": attempt,
                     "servedModel": reply.served_model,
                     "latencyMs": reply.latency_ms,
+                    "queueDelayMs": reply.queue_delay_ms,
                     "inputTokens": reply.input_tokens,
                     "outputTokens": reply.output_tokens,
                 }
@@ -330,6 +336,7 @@ async def run_case(
         "inputTokens": totals["input_tokens"],
         "outputTokens": totals["output_tokens"],
         "latencyMs": latency_ms,
+        "queueDelayMs": queue_delay_ms,
         "outcomes": state.outcomes.model_dump(by_alias=True),
         "finalStateHash": state_hash(state.model_dump(by_alias=True)),
     }

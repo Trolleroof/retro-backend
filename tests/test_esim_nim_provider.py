@@ -12,13 +12,17 @@ import httpx
 import pytest
 
 from retro_backend.esim.providers import (
+    DEFAULT_MAX_QUEUE_SECONDS,
+    DEFAULT_WINDOW_SECONDS,
     ERR_AUTH,
+    ERR_BUDGET_TIMEOUT,
     ERR_HTTP,
     ERR_MALFORMED,
     ERR_NETWORK,
     ERR_RATE_LIMIT,
     ERR_TIMEOUT,
     MAX_RETRY_AFTER_SECONDS,
+    AdmissionTimeout,
     ModelAdapter,
     ModelReply,
     NimAdapter,
@@ -78,10 +82,19 @@ class FakeClock:
         await asyncio.sleep(0)
 
 
-def budget_with(clock: FakeClock, max_starts: int = 30) -> RollingWindowBudget:
+def budget_with(
+    clock: FakeClock,
+    max_starts: int = 30,
+    *,
+    max_queue_seconds: float | None = None,
+) -> RollingWindowBudget:
+    # The queue deadline defaults to off here so a test can exercise the
+    # window itself without tripping the bound that exists for pathological
+    # waits; the tests that mean to check the bound pass one explicitly.
     return RollingWindowBudget(
         max_starts=max_starts,
         window_seconds=60.0,
+        max_queue_seconds=max_queue_seconds,
         clock=clock,
         sleep=clock.sleep,
     )
@@ -178,6 +191,85 @@ def test_budget_rejects_a_nonsense_configuration() -> None:
         RollingWindowBudget(max_starts=0)
     with pytest.raises(ValueError, match="strictly positive"):
         RollingWindowBudget(max_starts=30, window_seconds=0)
+    with pytest.raises(ValueError, match="strictly positive"):
+        RollingWindowBudget(max_starts=30, max_queue_seconds=0)
+
+
+@pytest.mark.asyncio
+async def test_a_wait_past_the_queue_deadline_fails_instead_of_stalling() -> None:
+    """Admission happens outside the adapter's per-request timeout.
+
+    Without a bound of its own, a throttled call could hold a turn open for
+    minutes past the timeout that was supposed to bound it.
+    """
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=1, max_queue_seconds=10.0)
+    await budget.acquire()
+
+    with pytest.raises(AdmissionTimeout, match="could not be admitted within 10s"):
+        await budget.acquire()
+    # Failed rather than slept: the clock never advanced to the free slot.
+    assert clock.now == 0.0
+
+
+@pytest.mark.asyncio
+async def test_the_queue_deadline_admits_a_wait_that_fits_inside_it() -> None:
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=1, max_queue_seconds=90.0)
+    await budget.acquire()
+
+    delay = await budget.acquire()
+    assert delay == pytest.approx(60.0)
+
+
+def test_the_default_queue_deadline_covers_the_worst_legitimate_wait() -> None:
+    """It must never reject a caller that was going to be admitted anyway.
+
+    A full window plus the largest penalty a provider can impose is the
+    longest wait that is not pathological.
+    """
+    assert DEFAULT_MAX_QUEUE_SECONDS == DEFAULT_WINDOW_SECONDS + MAX_RETRY_AFTER_SECONDS
+
+
+def test_a_budget_timeout_is_not_retryable() -> None:
+    """Retrying asks the same exhausted budget the same question.
+
+    Unlike a 429, which says the provider is busy, this says this process has
+    no allowance to give. Retrying would multiply one long wait by
+    max_attempts.
+    """
+    from retro_backend.esim.rotation import retryable_model_error
+
+    assert retryable_model_error(f"{ERR_BUDGET_TIMEOUT}: could not be admitted within 180s") is False
+    # The provider-side refusal stays retryable; these are different claims.
+    assert retryable_model_error(f"{ERR_RATE_LIMIT}: 429 Too Many Requests") is True
+
+
+@pytest.mark.asyncio
+async def test_the_adapter_reports_a_budget_timeout_without_calling_the_provider() -> None:
+    calls = 0
+
+    def handle_request(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=1, max_queue_seconds=10.0)
+    adapter = NimAdapter(
+        model="vendor/m",
+        api_key="test-key",
+        budget=budget,
+        transport=httpx.MockTransport(handle_request),
+    )
+    async with adapter:
+        await adapter.generate("Hello")
+        blocked = await adapter.generate("Hello again")
+
+    assert calls == 1
+    assert blocked.error is not None
+    assert blocked.error.startswith(ERR_BUDGET_TIMEOUT)
+    assert blocked.latency_ms == 0.0
 
 
 @pytest.mark.parametrize(

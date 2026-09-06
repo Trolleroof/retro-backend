@@ -12,6 +12,7 @@ from typing import Protocol, Self, runtime_checkable
 
 __all__ = [
     "ERR_AUTH",
+    "ERR_BUDGET_TIMEOUT",
     "ERR_CONFIGURATION",
     "ERR_HTTP",
     "ERR_MALFORMED",
@@ -26,6 +27,12 @@ __all__ = [
 
 # Standard error category prefixes
 ERR_AUTH = "auth_error"
+# The shared request budget could not admit this call inside its queue
+# deadline. Deliberately kept out of rotation.retryable_model_error: unlike a
+# 429, which says the provider is busy now, this says *this process* has no
+# allowance to give, and an immediate retry asks the same exhausted budget the
+# same question. Retrying it would multiply one long wait by max_attempts.
+ERR_BUDGET_TIMEOUT = "budget_timeout"
 ERR_CONFIGURATION = "configuration_error"
 ERR_HTTP = "http_error"
 ERR_MALFORMED = "malformed_response"

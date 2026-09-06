@@ -37,11 +37,16 @@ __all__ = [
     "DEFAULT_MAX_STARTS_PER_WINDOW",
     "DEFAULT_WINDOW_SECONDS",
     "MAX_RETRY_AFTER_SECONDS",
+    "AdmissionTimeout",
     "BudgetSnapshot",
     "RollingWindowBudget",
     "default_budget",
     "reset_default_budget",
 ]
+
+
+class AdmissionTimeout(Exception):
+    """Raised when a caller could not be admitted inside its queue deadline."""
 
 # This process' share of the account, not the account's own ceiling. The demo
 # account is metered at 40 requests per minute and two callers draw on it: the
@@ -57,6 +62,17 @@ DEFAULT_WINDOW_SECONDS = 60.0
 # waits are clamped to this and the call fails on its own timeout instead,
 # which is a bounded, visible outcome rather than a silent stall.
 MAX_RETRY_AFTER_SECONDS = 120.0
+
+# The longest a caller will queue before giving up, derived rather than picked:
+# a full window plus the largest penalty a provider can impose is the worst
+# *legitimate* wait, so this never rejects a caller that was going to be
+# admitted anyway. Beyond it something is wrong -- a budget configured far
+# below what the run needs, or a provider throttling hard -- and a bounded,
+# named failure beats a run stalling with nothing to read. Without it,
+# admission sits outside the adapter's per-request timeout, so a throttled
+# call could hold a turn open for minutes past the timeout that was supposed
+# to bound it.
+DEFAULT_MAX_QUEUE_SECONDS = DEFAULT_WINDOW_SECONDS + MAX_RETRY_AFTER_SECONDS
 
 _ENV_MAX_STARTS = "ESIM_NIM_MAX_STARTS_PER_WINDOW"
 _ENV_WINDOW_SECONDS = "ESIM_NIM_WINDOW_SECONDS"
@@ -101,6 +117,7 @@ class RollingWindowBudget:
         max_starts: int = DEFAULT_MAX_STARTS_PER_WINDOW,
         window_seconds: float = DEFAULT_WINDOW_SECONDS,
         *,
+        max_queue_seconds: float | None = DEFAULT_MAX_QUEUE_SECONDS,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
@@ -108,8 +125,13 @@ class RollingWindowBudget:
             raise ValueError(f"max_starts must be strictly positive, got: {max_starts}")
         if window_seconds <= 0:
             raise ValueError(f"window_seconds must be strictly positive, got: {window_seconds}")
+        if max_queue_seconds is not None and max_queue_seconds <= 0:
+            raise ValueError(
+                f"max_queue_seconds must be strictly positive when set, got: {max_queue_seconds}"
+            )
         self.max_starts = int(max_starts)
         self.window_seconds = float(window_seconds)
+        self.max_queue_seconds = max_queue_seconds
         self._clock = clock
         self._sleep = sleep
         self._starts: deque[float] = deque()
@@ -131,8 +153,17 @@ class RollingWindowBudget:
         to prevent; holding it makes waiters queue and re-check one at a time.
         The returned delay is the queue time this call paid, recorded per
         request so a slow run can be told apart from a throttled one.
+
+        Raises:
+            AdmissionTimeout: If admission would take longer than
+                ``max_queue_seconds``. Waiting happens outside any per-request
+                timeout the caller holds, so without this bound a throttled
+                call could hold a turn open long past it.
         """
         started_waiting = self._clock()
+        deadline = (
+            None if self.max_queue_seconds is None else started_waiting + self.max_queue_seconds
+        )
         self._waiting += 1
         try:
             async with self._lock:
@@ -140,6 +171,7 @@ class RollingWindowBudget:
                     now = self._clock()
                     self._prune(now)
                     if now < self._blocked_until:
+                        self._wait_until(self._blocked_until, deadline, now)
                         await self._sleep(self._blocked_until - now)
                         continue
                     if len(self._starts) < self.max_starts:
@@ -147,9 +179,25 @@ class RollingWindowBudget:
                         return max(0.0, now - started_waiting)
                     # The oldest start leaves the window at this moment, and
                     # its slot is free from then on.
-                    await self._sleep(self._starts[0] + self.window_seconds - now)
+                    ready_at = self._starts[0] + self.window_seconds
+                    self._wait_until(ready_at, deadline, now)
+                    await self._sleep(ready_at - now)
         finally:
             self._waiting -= 1
+
+    def _wait_until(self, ready_at: float, deadline: float | None, now: float) -> None:
+        """Refuse a wait that would run past the caller's queue deadline.
+
+        Checked before sleeping rather than after, so a caller that cannot be
+        admitted in time fails immediately instead of sleeping first and
+        discovering it later.
+        """
+        if deadline is not None and ready_at > deadline:
+            waited = self.max_queue_seconds
+            away = ready_at - now
+            raise AdmissionTimeout(
+                f"could not be admitted within {waited:.0f}s; next slot is {away:.0f}s away"
+            )
 
     def penalize(self, retry_after_seconds: float) -> float:
         """Back every caller off after the provider said to, and report for how long.

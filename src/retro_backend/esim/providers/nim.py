@@ -26,6 +26,7 @@ import httpx
 
 from retro_backend.esim.providers.base import (
     ERR_AUTH,
+    ERR_BUDGET_TIMEOUT,
     ERR_HTTP,
     ERR_MALFORMED,
     ERR_NETWORK,
@@ -36,7 +37,11 @@ from retro_backend.esim.providers.base import (
     ModelReply,
     validate_https_url,
 )
-from retro_backend.esim.providers.budget import RollingWindowBudget, default_budget
+from retro_backend.esim.providers.budget import (
+    AdmissionTimeout,
+    RollingWindowBudget,
+    default_budget,
+)
 
 __all__ = [
     "DEFAULT_NIM_BASE_URL",
@@ -150,7 +155,21 @@ class NimAdapter(ModelAdapter):
         answering, and folding the two together would make a throttled run look
         like a slow model.
         """
-        queue_delay_seconds = await self._budget.acquire()
+        t0 = time.perf_counter()
+        try:
+            queue_delay_seconds = await self._budget.acquire()
+        except AdmissionTimeout as exc:
+            # Reported rather than raised, like every other failure here, and
+            # with the wait it did pay recorded: a turn lost to this process'
+            # own rationing must be legible as that, not as a provider fault.
+            return ModelReply(
+                text=None,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0.0,
+                error=f"{ERR_BUDGET_TIMEOUT}: {exc}",
+                queue_delay_ms=(time.perf_counter() - t0) * 1000.0,
+            )
         reply = await self._request(messages, max_tokens=max_tokens)
         return replace(reply, queue_delay_ms=queue_delay_seconds * 1000.0)
 
