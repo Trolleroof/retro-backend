@@ -66,6 +66,12 @@ class ModelReply:
         output_tokens: Number of generated completion tokens consumed.
         latency_ms: Roundtrip wall-clock latency in milliseconds.
         error: Typed error description if call failed, None otherwise.
+        queue_delay_ms: Wall-clock milliseconds this call spent waiting for the
+            request budget to admit it, before any HTTP request was made. Kept
+            apart from ``latency_ms`` because the two have different causes and
+            different remedies: latency is the model thinking, queue delay is
+            this process rationing a shared account. A run that reported them
+            as one number would blame the model for its own throttling.
         served_model: The model id the provider says answered, read back from
             the response body rather than echoed from the request. A benchmark
             claims "model X scored Y", and that claim is only auditable if the
@@ -80,6 +86,7 @@ class ModelReply:
     latency_ms: float
     error: str | None = None
     served_model: str | None = None
+    queue_delay_ms: float = 0.0
 
     @property
     def ok(self) -> bool:

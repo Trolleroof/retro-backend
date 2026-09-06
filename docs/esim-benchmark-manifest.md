@@ -356,20 +356,37 @@ format" must state the budget it was measured under.
    Enterprise ($4,500/GPU/year). No exact per-model rate has been confirmed
    against an authoritative NVIDIA source; treat the range as indicative, not
    a number to bill against.
-7. **Rate limit: 429s are now real, the exact ceiling still is not.** The
-   adapter is built and documented as 40 requests/second
-   (`DEFAULT_NIM_RATE_LIMIT_RPS`); multiple third-party sources, including
-   NVIDIA's own developer forum, describe the free tier's limit as 40 requests
-   **per minute** — a 60x difference. Earlier runs never saw a 429. **Two
-   concurrent managed runs did**: `moonshotai/kimi-k3` took `rate_limit` on 12
-   of its 20 manager turns while a second managed run was in flight, at an
-   aggregate rate nowhere near 40 req/s. So the effective ceiling is far below
-   what the adapter assumes, and it is shared across processes on one key.
-   Until the true number is confirmed from NVIDIA's own dashboard, **run the
-   matrix serially, or throttle well under 40/min and watch a small batch for
-   429s first.** Note also that a retried `rate_limit` is retried immediately,
-   with no backoff, so a throttled turn tends to burn its whole retry
-   allowance in under a second and land as a `provider_failure`.
+7. **Rate limit: a rolling-window budget, split between the two callers (#84).**
+   The adapter used to be built and documented as 40 requests/**second**, while
+   multiple third-party sources, including NVIDIA's own developer forum,
+   describe the free tier's limit as 40 requests **per minute** — a 60x
+   difference. Earlier runs never saw a 429. **Two concurrent managed runs
+   did**: `moonshotai/kimi-k3` took `rate_limit` on 12 of its 20 manager turns
+   while a second managed run was in flight, at an aggregate rate nowhere near
+   40 req/s.
+
+   Two separate faults produced that. A token bucket does not bound a rolling
+   window at all — one sized at `N` admits up to `2N` starts inside a single
+   rolling minute — and every adapter held its own bucket, so a managed run's
+   manager and worker each drew a full allowance against one key.
+   `RollingWindowBudget` replaces it: a real rolling window, shared
+   process-wide by default, honoring `Retry-After` by backing off every caller
+   in the process rather than only the one that saw the 429.
+
+   **The budget is this process' share, not the account's ceiling.** Two
+   callers draw on the demo key — the desktop app playing a live shift, and
+   this harness — and their shares must sum to under 40/min. The defaults are
+   10/min here (`ESIM_NIM_MAX_STARTS_PER_WINDOW`) and 20/min in the app
+   (`GAMEPIGEON_MODEL_MAX_STARTS_PER_WINDOW`), leaving headroom. **Raising
+   either without lowering the other re-opens the overrun.** Nothing enforces
+   the split across processes: two harness processes still hold one budget
+   each, so **run the matrix serially**, and confirm the true ceiling from
+   NVIDIA's own dashboard when that becomes possible.
+
+   Note also that a retried `rate_limit` is retried immediately, with no
+   backoff of its own — it now waits on the budget's `Retry-After` penalty
+   instead, so a throttled turn no longer burns its whole retry allowance in
+   under a second.
 8. One full episode costs ~130–185 turns, ~90k–160k tokens, and 8–16 minutes
    of wall clock against `openai/gpt-oss-20b`, depending on the token budget in
    force. The full frozen matrix — 2 variants x 3 repeats x N models — is

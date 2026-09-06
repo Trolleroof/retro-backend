@@ -4,9 +4,11 @@ Provides a pure httpx.AsyncClient implementation for interacting with NVIDIA NIM
 hosted or self-hosted OpenAI-compatible endpoints (https://integrate.api.nvidia.com/v1).
 
 Key design features:
-- Explicit 40 requests/sec (40 req/sec) rate limiter to avoid 429 Too Many Requests.
-  Note: This limits HTTP request throughput (req/sec), completely distinct from LLM
-  input/output generation tokens.
+- A rolling-window request budget shared by every adapter in the process
+  (:mod:`retro_backend.esim.providers.budget`), so a managed run's manager,
+  workers, and retries draw on one allowance instead of one each. Note that
+  this bounds HTTP request starts, which is distinct from LLM input/output
+  generation tokens.
 - Strict HTTPS enforcement.
 - Hardcoded temperature 0.0 for deterministic evaluation.
 - Detailed token consumption and latency measurement on success and error paths.
@@ -14,10 +16,10 @@ Key design features:
   responses into structured ModelReply envelopes without raising unhandled exceptions.
 """
 
-import asyncio
 import os
 import time
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import override
 
 import httpx
@@ -34,83 +36,34 @@ from retro_backend.esim.providers.base import (
     ModelReply,
     validate_https_url,
 )
+from retro_backend.esim.providers.budget import RollingWindowBudget, default_budget
 
 __all__ = [
     "DEFAULT_NIM_BASE_URL",
-    "DEFAULT_NIM_RATE_LIMIT_RPS",
     "DEFAULT_NIM_TIMEOUT_SECONDS",
-    "AsyncRateLimiter",
     "NimAdapter",
+    "parse_retry_after",
 ]
 
 DEFAULT_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_NIM_TIMEOUT_SECONDS = 30.0
-# Unconfirmed against an authoritative NVIDIA source: multiple third-party
-# sources, including NVIDIA's own developer forum, describe the free tier's
-# limit as 40 requests per MINUTE, not per second -- a 60x difference. No run
-# against this adapter has hit a 429 yet, but none has driven anywhere near
-# either number's true ceiling either. Confirm the real limit, or throttle to
-# something safely under 40/min, before relying on this value under
-# meaningful concurrent load. See docs/esim-benchmark-manifest.md §9.
-DEFAULT_NIM_RATE_LIMIT_RPS = 40.0  # 40 requests/second (see caveat above)
 
 
-class AsyncRateLimiter:
-    """Thread-safe and async-safe HTTP request rate limiter (req/sec).
+def parse_retry_after(value: str | None) -> float | None:
+    """Read a Retry-After header as seconds, or None when it says nothing usable.
 
-    Enforces an upper bound on HTTP requests per second (req/sec).
-    Replenishes request permits smoothly based on elapsed monotonic time up to a maximum
-    burst capacity. Callers await :meth:`acquire` before issuing each outbound HTTP request.
+    Only the delta-seconds form is honored. The HTTP-date form is legal and
+    NIM has not been observed to send it; treating an unparsable header as
+    "no guidance" leaves the budget's own window in charge, which is the safe
+    direction to fail.
     """
-
-    def __init__(
-        self,
-        requests_per_second: float | None = None,
-        burst_capacity: float | None = None,
-        *,
-        rate: float | None = None,
-        capacity: float | None = None,
-    ) -> None:
-        rps = (
-            requests_per_second
-            if requests_per_second is not None
-            else (rate if rate is not None else 40.0)
-        )
-        burst = (
-            burst_capacity
-            if burst_capacity is not None
-            else (capacity if capacity is not None else rps)
-        )
-        if rps <= 0:
-            raise ValueError(f"requests_per_second must be strictly positive, got: {rps}")
-        self.requests_per_second = float(rps)
-        self.burst_capacity = float(burst)
-        self._available_requests = self.burst_capacity
-        self._last_updated = time.monotonic()
-        self._lock = asyncio.Lock()
-
-    async def acquire(self) -> None:
-        """Acquire permit for 1 HTTP request, pausing asynchronously if rate limit is reached."""
-        async with self._lock:
-            now = time.monotonic()
-            elapsed = now - self._last_updated
-            self._last_updated = now
-
-            # Replenish available request permits based on elapsed time (req/sec)
-            self._available_requests = min(
-                self.burst_capacity,
-                self._available_requests + elapsed * self.requests_per_second,
-            )
-
-            if self._available_requests < 1.0:
-                needed = 1.0 - self._available_requests
-                wait_seconds = needed / self.requests_per_second
-                await asyncio.sleep(wait_seconds)
-                # After sleeping, exactly 1 request permit is consumed
-                self._available_requests = 0.0
-                self._last_updated = time.monotonic()
-            else:
-                self._available_requests -= 1.0
+    if value is None:
+        return None
+    try:
+        seconds = float(value.strip())
+    except ValueError:
+        return None
+    return seconds if seconds > 0 else None
 
 
 class NimAdapter(ModelAdapter):
@@ -123,7 +76,7 @@ class NimAdapter(ModelAdapter):
         api_key: str | None = None,
         base_url: str = DEFAULT_NIM_BASE_URL,
         timeout: float = DEFAULT_NIM_TIMEOUT_SECONDS,
-        rate_limit_rps: float = DEFAULT_NIM_RATE_LIMIT_RPS,
+        budget: RollingWindowBudget | None = None,
         client: httpx.AsyncClient | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -134,7 +87,10 @@ class NimAdapter(ModelAdapter):
             api_key: NVIDIA NIM API key. If omitted, read from NVIDIA_API_KEY or NIM_API_KEY env.
             base_url: Provider base URL. Must start with https://.
             timeout: Explicit request timeout in seconds.
-            rate_limit_rps: Max HTTP requests per second (req/sec, defaults to 40.0).
+            budget: The rolling-window request budget to draw on. Defaults to
+                the process-wide one, which is the point: two adapters built
+                for one run must share an allowance, not hold one each. Pass
+                an explicit budget only to isolate a test.
             client: Optional pre-configured httpx.AsyncClient (for testing).
             transport: Optional custom httpx transport (e.g. MockTransport for testing).
         """
@@ -144,7 +100,7 @@ class NimAdapter(ModelAdapter):
         self.model = model.strip()
         self.base_url = validate_https_url(base_url)
         self.timeout = float(timeout)
-        self.rate_limit_rps = float(rate_limit_rps)
+        self._budget = budget if budget is not None else default_budget()
 
         resolved_key = api_key or os.environ.get("NVIDIA_API_KEY") or os.environ.get("NIM_API_KEY")
         if not resolved_key or not resolved_key.strip():
@@ -153,13 +109,6 @@ class NimAdapter(ModelAdapter):
                 + "variable, or pass api_key explicitly."
             )
         self._api_key = resolved_key.strip()
-
-        # Request rate limiter setup (40 req/sec)
-        self._rate_limiter = (
-            AsyncRateLimiter(requests_per_second=self.rate_limit_rps)
-            if self.rate_limit_rps > 0
-            else None
-        )
 
         # Client management
         self._owns_client = client is None
@@ -177,6 +126,16 @@ class NimAdapter(ModelAdapter):
         """Configured API key."""
         return self._api_key
 
+    @property
+    def budget(self) -> RollingWindowBudget:
+        """The request budget this adapter draws on.
+
+        Public so a caller can read :meth:`RollingWindowBudget.snapshot` for a
+        waiting indicator, and so a test can assert that two adapters share
+        one allowance rather than holding one each.
+        """
+        return self._budget
+
     @override
     async def generate(
         self,
@@ -184,7 +143,24 @@ class NimAdapter(ModelAdapter):
         *,
         max_tokens: int | None = None,
     ) -> ModelReply:
-        """Query the model with messages and return a ModelReply envelope."""
+        """Query the model with messages and return a ModelReply envelope.
+
+        Admission comes first and is awaited outside the latency measurement:
+        time spent queued for the account's budget is not time the model spent
+        answering, and folding the two together would make a throttled run look
+        like a slow model.
+        """
+        queue_delay_seconds = await self._budget.acquire()
+        reply = await self._request(messages, max_tokens=max_tokens)
+        return replace(reply, queue_delay_ms=queue_delay_seconds * 1000.0)
+
+    async def _request(
+        self,
+        messages: Sequence[Mapping[str, str]] | str,
+        *,
+        max_tokens: int | None = None,
+    ) -> ModelReply:
+        """Issue one already-admitted request and envelope whatever comes back."""
         # Normalize input to chat message format
         if isinstance(messages, str):
             formatted_messages: list[dict[str, str]] = [{"role": "user", "content": messages}]
@@ -205,10 +181,6 @@ class NimAdapter(ModelAdapter):
             "Accept": "application/json",
         }
 
-        # Apply client-side 40 req/s rate limiting before outbound HTTP request
-        if self._rate_limiter is not None:
-            await self._rate_limiter.acquire()
-
         t0 = time.perf_counter()
         try:
             response = await self._client.post(
@@ -224,6 +196,14 @@ class NimAdapter(ModelAdapter):
                 msg = f"{ERR_RATE_LIMIT}: 429 Too Many Requests"
                 if retry_after:
                     msg += f" (retry-after={retry_after})"
+                # The account said stop, so every caller in this process stops,
+                # not just this one. A 429 means the window this budget models
+                # is wrong right now; the next caller learning that the hard way
+                # too would spend a second request to find out the same thing.
+                seconds = parse_retry_after(retry_after)
+                if seconds is not None:
+                    applied = self._budget.penalize(seconds)
+                    msg += f" (backing off {applied:.0f}s)"
                 return ModelReply(
                     text=None,
                     input_tokens=0,

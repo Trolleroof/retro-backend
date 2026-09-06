@@ -3,8 +3,8 @@
 All tests use pure httpx.MockTransport with zero live network calls.
 """
 
+import asyncio
 import json
-import time
 from collections.abc import Mapping, Sequence
 from typing import Any, Self, override
 
@@ -18,13 +18,16 @@ from retro_backend.esim.providers import (
     ERR_NETWORK,
     ERR_RATE_LIMIT,
     ERR_TIMEOUT,
-    AsyncRateLimiter,
+    MAX_RETRY_AFTER_SECONDS,
     ModelAdapter,
     ModelReply,
     NimAdapter,
+    RollingWindowBudget,
     get_adapter,
     parse_model_spec,
+    parse_retry_after,
     register_provider,
+    reset_default_budget,
     validate_https_url,
 )
 
@@ -52,37 +55,155 @@ def test_validate_https_url_rejects_other_schemes() -> None:
         validate_https_url("ftp://integrate.api.nvidia.com/v1")
 
 
-# --- Rate Limiter Tests ---
+# --- Request Budget Tests ---
+
+
+class FakeClock:
+    """A monotonic clock a test drives, so a 60s window costs no real seconds.
+
+    Sleeping advances the clock rather than the wall, and yields once so other
+    tasks get their turn. That is safe against over-admission precisely
+    because :meth:`RollingWindowBudget.acquire` holds its lock across the
+    wait: only one waiter is ever inside the window check.
+    """
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.now += max(0.0, seconds)
+        await asyncio.sleep(0)
+
+
+def budget_with(clock: FakeClock, max_starts: int = 30) -> RollingWindowBudget:
+    return RollingWindowBudget(
+        max_starts=max_starts,
+        window_seconds=60.0,
+        clock=clock,
+        sleep=clock.sleep,
+    )
+
+
+def max_starts_in_any_window(starts: Sequence[float], window: float = 60.0) -> int:
+    """The largest number of starts falling inside any rolling window."""
+    return max(
+        (sum(1 for other in starts if start <= other < start + window) for start in starts),
+        default=0,
+    )
 
 
 @pytest.mark.asyncio
-async def test_async_rate_limiter_initial_burst() -> None:
-    # 40 requests/sec with burst capacity of 40 requests
-    limiter = AsyncRateLimiter(requests_per_second=40.0, burst_capacity=40.0)
-    t0 = time.monotonic()
-    for _ in range(10):
-        await limiter.acquire()
-    elapsed = time.monotonic() - t0
-    assert elapsed < 0.1
+async def test_budget_admits_a_full_window_without_waiting() -> None:
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=30)
+    for _ in range(30):
+        assert await budget.acquire() == 0.0
+    assert clock.now == 0.0
 
 
 @pytest.mark.asyncio
-async def test_async_rate_limiter_throttles_when_exhausted() -> None:
-    # 10 requests/sec with burst capacity of 1 request
-    limiter = AsyncRateLimiter(requests_per_second=10.0, burst_capacity=1.0)
-    await limiter.acquire()
+async def test_budget_makes_the_next_start_wait_for_the_window_to_roll() -> None:
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=2)
+    await budget.acquire()
+    clock.now = 10.0
+    await budget.acquire()
 
-    t0 = time.monotonic()
-    await limiter.acquire()
-    elapsed = time.monotonic() - t0
-    assert elapsed >= 0.08
+    # Two starts are in the window; the third waits for the first to leave it
+    # at t=60, not for the second. It began waiting at t=10, so the delay it
+    # reports is the 50s it personally spent queued, not the window's length.
+    delay = await budget.acquire()
+    assert clock.now == pytest.approx(60.0)
+    assert delay == pytest.approx(50.0)
 
 
-def test_async_rate_limiter_invalid_rate() -> None:
+@pytest.mark.asyncio
+async def test_two_concurrent_sessions_with_retries_never_exceed_the_budget() -> None:
+    """The acceptance test: nothing exceeds 30 starts in any rolling 60s.
+
+    Two sessions run concurrently, each retrying every request twice, which is
+    the shape that defeated the per-adapter limiter this replaced: 2 callers x
+    3 attempts against one account.
+    """
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=30)
+    admitted: list[float] = []
+
+    async def session(requests: int) -> None:
+        for _ in range(requests):
+            for _attempt in range(3):  # one call plus two retries
+                await budget.acquire()
+                admitted.append(clock.now)
+
+    await asyncio.gather(session(12), session(12))
+
+    assert len(admitted) == 72
+    assert max_starts_in_any_window(admitted) <= 30
+
+
+@pytest.mark.asyncio
+async def test_budget_backs_every_caller_off_after_retry_after() -> None:
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=30)
+    assert budget.penalize(15.0) == 15.0
+
+    delay = await budget.acquire()
+    assert clock.now == pytest.approx(15.0)
+    assert delay == pytest.approx(15.0)
+
+
+def test_budget_caps_an_unreasonable_retry_after() -> None:
+    clock = FakeClock()
+    budget = budget_with(clock)
+    assert budget.penalize(3_600.0) == MAX_RETRY_AFTER_SECONDS
+    assert budget.penalize(0) == 0.0
+    assert budget.penalize(-5) == 0.0
+
+
+def test_budget_snapshot_reports_admission_state() -> None:
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=2)
+    snapshot = budget.snapshot()
+    assert snapshot.starts_in_window == 0
+    assert snapshot.max_starts == 2
+    assert snapshot.waiting == 0
+    assert snapshot.admitting
+
+
+def test_budget_rejects_a_nonsense_configuration() -> None:
     with pytest.raises(ValueError, match="strictly positive"):
-        AsyncRateLimiter(requests_per_second=0)
+        RollingWindowBudget(max_starts=0)
     with pytest.raises(ValueError, match="strictly positive"):
-        AsyncRateLimiter(requests_per_second=-5)
+        RollingWindowBudget(max_starts=30, window_seconds=0)
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [("12", 12.0), ("0.5", 0.5), (" 3 ", 3.0), ("0", None), ("-1", None), (None, None)],
+)
+def test_parse_retry_after(header: str | None, expected: float | None) -> None:
+    assert parse_retry_after(header) == expected
+
+
+def test_parse_retry_after_ignores_the_http_date_form() -> None:
+    assert parse_retry_after("Wed, 21 Oct 2026 07:28:00 GMT") is None
+
+
+def test_default_budget_is_shared_across_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two adapters, one allowance -- the bug that motivated #84."""
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
+    monkeypatch.setenv("ESIM_NIM_MAX_STARTS_PER_WINDOW", "7")
+    reset_default_budget()
+    try:
+        manager = NimAdapter(model="meta/llama-3-70b-instruct")
+        worker = NimAdapter(model="meta/llama-3-8b-instruct")
+        assert manager.budget is worker.budget
+        assert manager.budget.max_starts == 7
+    finally:
+        reset_default_budget()
 
 
 # --- NimAdapter Credentials & Initialization Tests ---
@@ -241,6 +362,67 @@ async def test_nim_adapter_handles_429_rate_limit() -> None:
     assert reply.error is not None
     assert ERR_RATE_LIMIT in reply.error
     assert "retry-after=2" in reply.error
+
+
+@pytest.mark.asyncio
+async def test_a_429_backs_off_the_budget_every_other_caller_shares() -> None:
+    """One refusal is evidence about the account, not about one caller.
+
+    Without this, the manager sees the 429 and the four workers behind it each
+    spend a request discovering the same closed door.
+    """
+
+    def handle_request(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, text="Too Many Requests", headers={"retry-after": "30"})
+
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=30)
+    adapter = NimAdapter(
+        model="meta/llama-3-70b-instruct",
+        api_key="test-key",
+        budget=budget,
+        transport=httpx.MockTransport(handle_request),
+    )
+    reply = await adapter.generate("Hello")
+    await adapter.close()
+
+    assert reply.error is not None
+    assert "backing off 30s" in reply.error
+    snapshot = budget.snapshot()
+    assert snapshot.penalty_seconds == pytest.approx(30.0)
+    assert not snapshot.admitting
+
+
+@pytest.mark.asyncio
+async def test_queue_delay_is_reported_apart_from_model_latency() -> None:
+    """A throttled run must not read as a slow model."""
+
+    def handle_request(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "vendor/m",
+                "choices": [{"finish_reason": "stop", "message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    clock = FakeClock()
+    budget = budget_with(clock, max_starts=1)
+    adapter = NimAdapter(
+        model="vendor/m",
+        api_key="test-key",
+        budget=budget,
+        transport=httpx.MockTransport(handle_request),
+    )
+    async with adapter:
+        first = await adapter.generate("Hello")
+        second = await adapter.generate("Hello again")
+
+    assert first.queue_delay_ms == 0.0
+    # The second call waited a full window for the first's slot to expire.
+    assert second.queue_delay_ms == pytest.approx(60_000.0)
+    assert second.latency_ms < 1_000.0
 
 
 @pytest.mark.asyncio
