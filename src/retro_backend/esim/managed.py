@@ -232,6 +232,10 @@ class _ActorTally:
     totals: Counter[str]
     served_models: set[str]
     latency_ms: float = 0.0
+    # Time queued for the shared request budget, per actor. Kept apart from
+    # latency_ms: one is the model thinking, the other is this process
+    # rationing a metered account, and they have different remedies.
+    queue_delay_ms: float = 0.0
 
     @classmethod
     def empty(cls) -> "_ActorTally":
@@ -244,6 +248,7 @@ class _ActorTally:
         self.totals["input_tokens"] += reply.input_tokens
         self.totals["output_tokens"] += reply.output_tokens
         self.latency_ms += reply.latency_ms
+        self.queue_delay_ms += reply.queue_delay_ms
         if reply.served_model is not None:
             self.served_models.add(reply.served_model)
 
@@ -418,6 +423,7 @@ async def _run_manager_turn(
             "attempt": attempt,
             "servedModel": reply.served_model,
             "latencyMs": reply.latency_ms,
+            "queueDelayMs": reply.queue_delay_ms,
             "inputTokens": reply.input_tokens,
             "outputTokens": reply.output_tokens,
         }
@@ -544,6 +550,7 @@ async def _run_worker_round(
                 "directivesDigest": digest,
                 "servedModel": reply.served_model,
                 "latencyMs": reply.latency_ms,
+                "queueDelayMs": reply.queue_delay_ms,
                 "inputTokens": reply.input_tokens,
                 "outputTokens": reply.output_tokens,
             }
@@ -685,6 +692,7 @@ def _summary(
             "inputTokens": manager.totals["input_tokens"],
             "outputTokens": manager.totals["output_tokens"],
             "latencyMs": manager.latency_ms,
+            "queueDelayMs": manager.queue_delay_ms,
         },
         "workers": {
             "servedModels": sorted(workers.served_models),
@@ -700,6 +708,7 @@ def _summary(
             "inputTokens": workers.totals["input_tokens"],
             "outputTokens": workers.totals["output_tokens"],
             "latencyMs": workers.latency_ms,
+            "queueDelayMs": workers.queue_delay_ms,
         },
         "finalDirectives": [
             directive.model_dump(by_alias=True, mode="json")

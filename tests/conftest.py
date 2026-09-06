@@ -1,5 +1,5 @@
 import json
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,6 +8,8 @@ from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+from retro_backend.esim.providers.budget import reset_default_budget
 
 ROOT = Path(__file__).resolve().parents[1]
 V2_FIXTURE = ROOT / "contracts/fixtures/interaction-trace-chunk-v2.json"
@@ -450,3 +452,21 @@ async def app_client(fake_env: SimpleNamespace) -> AsyncIterator[AsyncClient]:
     ) as client:
         yield client
     del app.state.env
+
+
+@pytest.fixture(autouse=True)
+def unthrottled_request_budget(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Take the account's request budget out of the way of the unit suite.
+
+    The process-wide budget is deliberately strict -- ten starts a minute is
+    this process' share of a metered account -- and every adapter draws on it
+    by default. Tests answer from a mock transport and cost the account
+    nothing, so left alone they would spend real minutes queueing against a
+    limit that protects nothing here. Tests that mean to exercise throttling
+    build their own :class:`RollingWindowBudget` on a fake clock and are
+    unaffected by this.
+    """
+    monkeypatch.setenv("ESIM_NIM_MAX_STARTS_PER_WINDOW", "1000000")
+    reset_default_budget()
+    yield
+    reset_default_budget()
