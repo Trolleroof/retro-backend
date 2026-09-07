@@ -1,0 +1,38 @@
+{
+ "planVersion": "esim-packet-plan/v1",
+ "packetId": "m5-demo",
+ "status": "skeleton",
+ "frozenAt": null,
+ "shape": "managed",
+ "workerModel": "nim:openai/gpt-oss-20b",
+ "rounds": 12,
+ "levels": [
+  "quiet-tuesday-001",
+  "dinner-rush-001",
+  "saturday-night-001"
+ ],
+ "managerModels": [
+  "nim:openai/gpt-oss-20b",
+  "nim:nvidia/nemotron-3-super-120b-a12b"
+ ],
+ "excludedModels": [
+  {
+   "model": "nim:nvidia/nemotron-3.5-lightning-30b-a3b",
+   "reason": "reachable, but emits prose reasoning rather than parseable tool JSON"
+  },
+  {
+   "model": "nim:meta/muse-glimmer-30b",
+   "reason": "reachable, but returns null message.content; the adapter reads only that field"
+  },
+  {
+   "model": "nim:deepseek-ai/deepseek-v4-flash-0731",
+   "reason": "untested: timed out at the 30s request budget; excluded pending a raised timeout"
+  }
+ ],
+ "bundles": {},
+ "notes": [
+  "Skeleton. The matrix has not been run: retro-backend#81 fills `bundles` with one directory per row id and flips `status` to \"frozen\" with a `frozenAt` date.",
+  "`minimaxai/minimax-m3` and `moonshotai/kimi-k3` are roster candidates, not exclusions. Adding either here before the first scored run is a plan edit; adding one afterwards requires a new packet id.",
+  "Run the matrix serially: manager and worker draw on one shared rate-limit budget, and two concurrent managed runs have already produced sustained 429s."
+ ]
+}
