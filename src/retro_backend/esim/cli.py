@@ -48,6 +48,12 @@ from retro_backend.esim.managed import (
     ticks_per_round,
     worker_turn_budget,
 )
+from retro_backend.esim.packet import (
+    PacketError,
+    PacketExistsError,
+    load_plan,
+    write_packet,
+)
 from retro_backend.esim.parity import ParityReport, TraceLoadError, check_parity
 from retro_backend.esim.runner import (
     RunnerConfig,
@@ -612,6 +618,39 @@ async def _regrade_command(args: argparse.Namespace) -> int:
     return 0
 
 
+async def _package_command(args: argparse.Namespace) -> int:
+    """Assemble the portable evidence packet for a frozen plan (#80).
+
+    No model is called and no run is made: this walks the bundles that already
+    exist, copies the shareable half of each into one tree, and prints the
+    counts. A plan whose matrix has not been run yet packages cleanly and
+    reports every row as ``planned`` -- that is the state the skeleton is
+    reviewed in, not a failure.
+    """
+    plan = load_plan(Path(args.plan))
+    manifest = write_packet(
+        plan,
+        runs_root=Path(args.runs_root),
+        out_dir=Path(args.output_dir),
+        repo=Path(args.repo),
+        overwrite=args.overwrite,
+    )
+    counts = manifest["counts"]
+    print(f"packet={plan.packet_id} status={plan.status} revision={manifest['repositoryRevision']}")
+    print(f"  -> {Path(args.output_dir) / 'sanitized'}")
+    print(f"  -> {Path(args.output_dir) / 'private' / 'source-index.json'}")
+    print(
+        f"     planned={counts['planned']} completed={counts['completed']}"
+        + f" invalid={counts['invalid']} mismatched={counts['mismatched']}"
+        + f" redacted={counts['redacted']} incomplete={counts['incomplete']}"
+        + f" missingBundle={counts['missingBundle']} notYetRun={counts['notYetRun']}"
+    )
+    for row in manifest["rows"]:
+        if row["status"] != "complete" and row["status"] != "planned":
+            print(f"     {row['status'].upper()} {row['rowId']}: {row['note']}")
+    return 0
+
+
 def _report_parity(report: ParityReport) -> None:
     print(f"episode={report.episode_id} verdict={report.verdict}")
     for difference in report.differences:
@@ -741,6 +780,29 @@ def build_parser() -> argparse.ArgumentParser:
     parity.add_argument("--trace", required=True, help="path to a restaurant-arena-trace/v1 export")
     parity.add_argument("--output", default=None, help="write the parity report here as JSON")
     parity.set_defaults(func=_parity_command)
+
+    package = sub.add_parser(
+        "package",
+        help="assemble the sanitized evidence packet and private source index for a plan",
+    )
+    package.add_argument("--plan", required=True, help="path to a packet plan JSON")
+    package.add_argument(
+        "--runs-root",
+        default=".",
+        help="directory the plan's bundle paths are relative to (default: cwd)",
+    )
+    package.add_argument("--output-dir", required=True, help="directory to write the packet")
+    package.add_argument(
+        "--repo",
+        default=".",
+        help="checkout whose revision is recorded in the packet manifest (default: cwd)",
+    )
+    package.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace an existing packet in --output-dir instead of refusing",
+    )
+    package.set_defaults(func=_package_command)
     return parser
 
 
@@ -760,6 +822,12 @@ def main(argv: list[str] | None = None) -> int:
     except TraceLoadError as exc:
         print(f"unreadable trace: {exc}", file=sys.stderr)
         return 4
+    except PacketExistsError as exc:
+        print(f"refusing to overwrite: {exc}", file=sys.stderr)
+        return 3
+    except PacketError as exc:
+        print(f"packet error: {exc}", file=sys.stderr)
+        return 5
     except ValueError as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2
