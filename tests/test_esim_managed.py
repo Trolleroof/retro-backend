@@ -422,6 +422,51 @@ def test_the_manager_sees_the_dinner_rush_tradeoff_signals() -> None:
     assert "fish" in observation.low_stock
 
 
+def test_a_served_allergy_order_stops_being_a_live_floor_signal() -> None:
+    """A served table stays ``occupied`` and keeps its ``orderId``, so the
+    allergy flag has to be read off the order's status too. Otherwise the
+    manager sees hasAllergyOrder for the rest of the shift and keeps spending
+    directives on a plate that is already in front of the guest.
+    """
+    case = load_case(CASE)
+    initial = case.initial_state
+    # Well past the impatience threshold, so a stale wait would be loud rather
+    # than accidentally reading 0 because the shift has barely started.
+    served = initial.model_copy(
+        update={
+            "clock": initial.clock.model_copy(update={"minute": IMPATIENT_WAIT_MINUTES}),
+            "orders": tuple(
+                order.model_copy(update={"status": "served"})
+                if order.id == "order-2"
+                else order
+                for order in initial.orders
+            ),
+        }
+    )
+    observation = observe_manager(
+        served, round_number=2, rounds_total=12, directives=(), last_round=()
+    )
+
+    table_2 = next(t for t in observation.tables if t.id == "table-2")
+    # The table is still on the floor and still points at order-2 -- only the
+    # order's status has moved on, which is exactly the staleness being fixed.
+    assert next(t for t in served.tables if t.id == "table-2").status == "occupied"
+    assert table_2.has_allergy_order is False
+    # A served order is not waiting either, so the wait signals go quiet with
+    # it rather than aging on forever.
+    assert table_2.wait_minutes == 0
+    assert table_2.impatient is False
+    # The still-queued table is untouched: the fix narrows one flag, it does
+    # not blank the floor.
+    table_1 = next(t for t in observation.tables if t.id == "table-1")
+    assert table_1.has_allergy_order is False
+    assert table_1.impatient is True
+    before = observe_manager(
+        initial, round_number=1, rounds_total=12, directives=(), last_round=()
+    )
+    assert next(t for t in before.tables if t.id == "table-2").has_allergy_order is True
+
+
 def test_a_table_turns_impatient_once_its_wait_crosses_the_threshold() -> None:
     case = load_case(CASE)
     waited = case.initial_state.model_copy(

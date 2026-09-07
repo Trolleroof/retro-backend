@@ -34,7 +34,12 @@ from retro_backend.esim.contracts import (
 # table's order has sat un-served, in ticks, since the state contract does
 # not carry per-order timestamps. One tick is treated as one minute, matching
 # ``Clock.speed`` at its default of 1.
-_ACTIVE_ORDER_STATUSES = frozenset({"queued", "seated", "preparing", "ready"})
+#
+# Public because "is this order still live?" is the same question outside this
+# module -- the manager projection (#79) asks it of a table's order, and a
+# second copy of the status set there would be free to drift out of step with
+# the four worker projections below.
+ACTIVE_ORDER_STATUSES = frozenset({"queued", "seated", "preparing", "ready"})
 
 
 def _worker_load(state: RestaurantState, role: Role) -> float:
@@ -49,7 +54,7 @@ def table_wait_minutes(state: RestaurantState, table: Table) -> int:
     if table.order_id is None:
         return 0
     order = next((o for o in state.orders if o.id == table.order_id), None)
-    if order is None or order.status not in _ACTIVE_ORDER_STATUSES:
+    if order is None or order.status not in ACTIVE_ORDER_STATUSES:
         return 0
     # Placeholder until per-order seating timestamps exist: every active
     # order has waited exactly one tick's worth per elapsed clock minute
@@ -65,7 +70,7 @@ def observe_chef(
     orders = tuple(
         ObservedOrder(id=o.id, items=o.items, allergy=o.allergy, priority=o.priority)
         for o in state.orders
-        if o.status in _ACTIVE_ORDER_STATUSES
+        if o.status in ACTIVE_ORDER_STATUSES
     )
     equipment = tuple(
         ObservedEquipment(id=e.id, status=e.status) for e in state.equipment
@@ -164,7 +169,7 @@ def observe_expediter(
             handoff=_HANDOFF_BY_ORDER_STATUS[o.status],
         )
         for o in state.orders
-        if o.status in _ACTIVE_ORDER_STATUSES
+        if o.status in ACTIVE_ORDER_STATUSES
     )
     workers = tuple(
         ObservedWorker(id=w.id, role=w.role, load=w.load) for w in state.workers
