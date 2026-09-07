@@ -152,6 +152,8 @@ def test_an_unrun_matrix_packages_and_reports_every_row_as_planned(tmp_path: Pat
         "planned": 4,
         "completed": 0,
         "invalid": 0,
+        "mismatched": 0,
+        "redacted": 0,
         "incomplete": 0,
         "missingBundle": 0,
         "notYetRun": 4,
@@ -300,7 +302,8 @@ def test_a_credential_in_a_run_record_is_redacted_and_the_difference_is_visible(
     record = manifest["rows"][0]["artifacts"][0]
     assert record["redactions"] == 1
     assert record["sourceSha256"] != record["sanitizedSha256"]
-    # The bundle was a stub with only one file, so the row is not shippable.
+    # The bundle was a stub with only one file, so the row is incomplete: a
+    # missing artifact outranks a redaction, and either way it does not ship.
     assert manifest["rows"][0]["status"] == "incomplete"
 
 
@@ -394,3 +397,108 @@ def test_the_package_subcommand_builds_the_checked_in_plan(tmp_path: Path) -> No
     # A second build over the same directory is refused, as a run bundle is.
     assert main(argv) == 3
     assert main([*argv, "--overwrite"]) == 0
+
+
+def test_a_redacted_row_is_withheld_until_a_human_has_seen_the_source(tmp_path: Path) -> None:
+    """The shared copy is clean; the source bundle still needs a look.
+
+    Redacting and then publishing normally would leave the only trace of a
+    leaked credential in per-artifact metadata nobody reads.
+    """
+    _run_a_managed_bundle(tmp_path / "runs" / "row-1")
+    summary_path = tmp_path / "runs" / "row-1" / "summary.json"
+    leaked = json.loads(summary_path.read_text())
+    leaked["endpoint"] = "https://integrate.api.nvidia.com/v1 key=nvapi-abcd1234efgh"
+    summary_path.write_text(json.dumps(leaked))
+
+    identifier = row_id(CASE, "stub:vendor/boss")
+    manifest = _package(_plan(bundles={identifier: "runs/row-1"}), tmp_path)
+    row = manifest["rows"][0]
+
+    assert row["status"] == "redacted"
+    assert row["redactions"] == 1
+    assert row["publishedNumbers"] is False
+    assert manifest["counts"]["redacted"] == 1
+    assert manifest["counts"]["completed"] == 0
+    shared = tmp_path / "packet" / "sanitized" / "runs" / identifier / "summary.json"
+    assert "nvapi-" not in shared.read_text()
+
+
+def test_a_bundle_from_another_cell_is_mismatched_not_published(tmp_path: Path) -> None:
+    """A stale path in `bundles` re-grades perfectly and still is not this row."""
+    _run_a_managed_bundle(tmp_path / "runs" / "row-1")
+    plan = _plan(levels=["quiet-tuesday-001"], bundles={
+        row_id("quiet-tuesday-001", "stub:vendor/boss"): "runs/row-1"
+    })
+    manifest = _package(plan, tmp_path)
+    row = manifest["rows"][0]
+
+    assert row["status"] == "mismatched"
+    assert row["regradeMatches"] is True, "the run is intact; it just is not this row's"
+    assert any("caseId" in item for item in row["identityMismatches"])
+    assert manifest["counts"]["mismatched"] == 1
+
+
+def test_a_mismatched_worker_model_or_round_count_is_caught_too(tmp_path: Path) -> None:
+    _run_a_managed_bundle(tmp_path / "runs" / "row-1")
+    identifier = row_id(CASE, "stub:vendor/boss")
+    manifest = _package(
+        _plan(rounds=4, workerModel="stub:vendor/other", bundles={identifier: "runs/row-1"}),
+        tmp_path,
+    )
+    mismatches = manifest["rows"][0]["identityMismatches"]
+    assert any("workerModel" in item for item in mismatches)
+    assert any("budgets.rounds" in item for item in mismatches)
+
+
+def test_a_row_that_is_not_complete_publishes_no_numbers(tmp_path: Path) -> None:
+    """Failures stay visible; their figures do not become results."""
+    _run_a_managed_bundle(tmp_path / "runs" / "row-1", manager_fails=True)
+    identifier = row_id(CASE, "stub:vendor/boss")
+    _package(_plan(bundles={identifier: "runs/row-1"}), tmp_path)
+
+    report = (tmp_path / "packet" / "sanitized" / "REPORT.md").read_text()
+    matrix_row = next(line for line in report.split("\n") if line.startswith(f"| `{identifier}`"))
+    assert "provider_failure" in matrix_row
+    assert matrix_row.count("| -- ") == 6, "every score column is withheld"
+    assert "Numbers withheld" in report
+    # The evidence is still linked, so the failure can be inspected.
+    assert f"runs/{identifier}/grade.json" in report
+
+
+def test_an_artifact_this_build_cannot_read_fails_only_its_own_row(tmp_path: Path) -> None:
+    """One damaged bundle must not abort the packet for every other row."""
+    _run_a_managed_bundle(tmp_path / "runs" / "row-1")
+    _run_a_managed_bundle(tmp_path / "runs" / "row-2")
+    (tmp_path / "runs" / "row-1" / "grade.json").write_bytes(b"\xff\xfe not utf-8")
+
+    plan = _plan(
+        levels=[CASE, "quiet-tuesday-001"],
+        bundles={
+            row_id(CASE, "stub:vendor/boss"): "runs/row-1",
+            row_id("quiet-tuesday-001", "stub:vendor/boss"): "runs/row-2",
+        },
+    )
+    manifest = _package(plan, tmp_path)
+
+    damaged, other = manifest["rows"]
+    assert damaged["status"] == "incomplete"
+    assert damaged["missingFiles"] == ["grade.json"]
+    assert not (
+        tmp_path / "packet" / "sanitized" / "runs" / damaged["rowId"] / "grade.json"
+    ).exists(), "an artifact that cannot be scanned for credentials does not travel"
+    # The second row is a dinner-rush bundle under a quiet-tuesday row, so it is
+    # mismatched -- but it was still collected, which is what this pins.
+    assert other["status"] == "mismatched"
+
+
+def test_a_half_built_packet_is_not_merged_into(tmp_path: Path) -> None:
+    """A build that died leaves runs/ and no report; a retry must not merge."""
+    orphan = tmp_path / "packet" / "sanitized" / "runs" / "left-behind"
+    orphan.mkdir(parents=True)
+    (orphan / "grade.json").write_text("{}")
+
+    with pytest.raises(PacketExistsError, match="runs/"):
+        _package(_plan(), tmp_path)
+    _package(_plan(), tmp_path, overwrite=True)
+    assert not orphan.exists()

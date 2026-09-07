@@ -41,12 +41,14 @@ copies the shareable half of each, re-grades every complete row from the copy it
 just wrote, and prints the counts:
 
 ```
-planned=6 completed=0 invalid=0 incomplete=0 missingBundle=0 notYetRun=6
+planned=6 completed=0 invalid=0 mismatched=0 redacted=0 incomplete=0 missingBundle=0 notYetRun=6
 ```
 
-It refuses to land on an existing packet; `--overwrite` replaces one, and
-clears the run tree with it so a dropped row cannot outlive the report that
-referenced it.
+It refuses to land on an existing packet — including one that is only half
+built, since a run that died during collection leaves a `sanitized/runs/` tree
+and none of the generated files. `--overwrite` replaces a packet, and clears the
+run tree with it, so a dropped row cannot outlive the report that referenced it
+and a retry never merges into the remains of a failed build.
 
 ## 3. What lands
 
@@ -71,7 +73,9 @@ Every shared artifact carries a digest on both sides of the copy. `sourceSha256`
 is the run's own file; `sanitizedSha256` is the shared one. They differ only
 where a redaction fired, and no redaction is expected — the credential patterns
 are defence in depth, and a hit means a secret reached a run record and that
-bundle needs looking at, not that the packet did its job.
+bundle needs looking at, not that the packet did its job. A row where one fired
+is held at `redacted` and publishes no numbers until someone has looked at the
+source bundle.
 
 ## 4. Re-grading offline
 
@@ -100,12 +104,26 @@ quietly dropped and its numbers are not published as results.
 | `planned` | no bundle recorded; the run has not been made |
 | `missing` | a bundle path is recorded but nothing is there |
 | `incomplete` | the bundle exists but a required artifact is absent or unreadable |
+| `mismatched` | the bundle is intact but is not this row's run |
 | `invalid` | the run recorded itself degraded, or its evidence no longer reproduces |
-| `complete` | every artifact present, `runValidity: valid`, re-grade reproduces |
+| `redacted` | credential-shaped content was found; the source needs a human before this ships |
+| `complete` | every artifact present, identity matches, `runValidity: valid`, re-grade reproduces |
 
-`invalid` and `incomplete` are infrastructure and evidence states, not
-statements about a manager model. The counts block keeps them apart from
-`completed` for exactly that reason.
+**Only a `complete` row publishes numbers.** Every other row still appears in
+both tables with its status, its reason and its artifact links — what is
+withheld is the figures, not the failure. A degraded run, a half-copied bundle
+and a bundle belonging to another cell all still carry readable scores, and
+printing those would publish exactly what the status exists to hold back.
+
+`mismatched` is checked against the run's own manifest: case id, manager model,
+worker model, harness shape and round count. A grade reproducing proves the
+trajectory and the grade agree; it says nothing about which cell the run belongs
+to, so a stale path left in `bundles` would otherwise re-grade cleanly and be
+published under the wrong manager.
+
+`invalid`, `incomplete` and `mismatched` are infrastructure, evidence and
+bookkeeping states, not statements about a manager model. The counts block keeps
+them apart from `completed` for exactly that reason.
 
 ## 6. Founder check
 

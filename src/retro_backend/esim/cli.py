@@ -641,11 +641,12 @@ async def _package_command(args: argparse.Namespace) -> int:
     print(f"  -> {Path(args.output_dir) / 'private' / 'source-index.json'}")
     print(
         f"     planned={counts['planned']} completed={counts['completed']}"
-        + f" invalid={counts['invalid']} incomplete={counts['incomplete']}"
+        + f" invalid={counts['invalid']} mismatched={counts['mismatched']}"
+        + f" redacted={counts['redacted']} incomplete={counts['incomplete']}"
         + f" missingBundle={counts['missingBundle']} notYetRun={counts['notYetRun']}"
     )
     for row in manifest["rows"]:
-        if row["status"] in ("invalid", "incomplete", "missing"):
+        if row["status"] != "complete" and row["status"] != "planned":
             print(f"     {row['status'].upper()} {row['rowId']}: {row['note']}")
     return 0
 

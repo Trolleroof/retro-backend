@@ -36,7 +36,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic.alias_generators import to_camel
@@ -87,7 +87,14 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"://[^/\s:@\"]+:[^/\s@\"]+@"), "://[redacted-credentials]@"),
 )
 
-RowStatus = Literal["planned", "missing", "incomplete", "invalid", "complete"]
+# Every value is a different thing for an operator to do about it, which is why
+# they are not collapsed into pass/fail: "not run yet" is work outstanding,
+# "mismatched" is a wrong path in the plan, "redacted" is a bundle a human must
+# look at before it ships, and "invalid" is evidence that must not be read as a
+# result. Only "complete" publishes numbers.
+RowStatus = Literal[
+    "planned", "missing", "incomplete", "mismatched", "invalid", "redacted", "complete"
+]
 
 
 class PacketError(Exception):
@@ -166,7 +173,21 @@ class Row:
     files: tuple[Mapping[str, Any], ...] = ()
     private: tuple[Mapping[str, Any], ...] = ()
     redactions: int = 0
+    identity_mismatches: tuple[str, ...] = ()
     note: str = ""
+
+    @property
+    def publishable(self) -> bool:
+        """Whether this row's numbers may be printed as a result.
+
+        Only a complete row. A degraded run, a bundle that no longer reproduces
+        its own grade, a half-copied bundle and a bundle that belongs to a
+        different cell all still carry readable scores, and printing those in
+        the matrix would publish exactly the figures the status is there to
+        withhold. The row itself stays visible either way -- what is suppressed
+        is the numbers, not the failure.
+        """
+        return self.status == "complete"
 
     @property
     def run_validity(self) -> str:
@@ -234,7 +255,7 @@ def _read_json(path: Path) -> Mapping[str, Any] | None:
     """
     try:
         payload = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
 
@@ -249,7 +270,7 @@ def _regrade(trajectory_path: Path, recorded: Mapping[str, Any] | None) -> Regra
     try:
         payload = json.loads(trajectory_path.read_text())
         trajectory = Trajectory.model_validate(payload)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return RegradeCheck(False, f"trajectory unreadable: {exc}")
     except ValidationError as exc:
         return RegradeCheck(False, f"trajectory does not match this build ({exc.error_count()} field error(s))")
@@ -263,22 +284,36 @@ def _regrade(trajectory_path: Path, recorded: Mapping[str, Any] | None) -> Regra
     return RegradeCheck(True, f"reproduced under {fresh.get('graderVersion')}")
 
 
-def _copy_sanitized(source: Path, destination: Path) -> tuple[list[dict[str, Any]], int]:
+def _copy_sanitized(
+    source: Path, destination: Path
+) -> tuple[list[dict[str, Any]], int, tuple[str, ...]]:
     """Copy the shareable artifacts, recording a digest on each side of the copy.
 
     Both digests are kept even though they are equal whenever nothing was
     redacted. That equality is the check: a reader comparing ``sourceSha256``
     against the private index proves the shared copy is the run's own file,
     and a differing ``sanitizedSha256`` is exactly where a redaction happened.
+
+    A file this cannot read is returned as unreadable rather than raised on,
+    for the same reason :func:`_read_json` swallows its own failures: one
+    damaged bundle in a matrix of eighteen must not abort the packet for the
+    other seventeen. Text that is not UTF-8 counts here too -- an artifact the
+    redaction pass cannot scan is one this cannot certify as clean, so it does
+    not travel.
     """
     destination.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, Any]] = []
+    unreadable: list[str] = []
     redactions = 0
     for name in SANITIZED_FILES:
         origin = source / name
         if not origin.exists():
             continue
-        raw = origin.read_text()
+        try:
+            raw = origin.read_text()
+        except (OSError, UnicodeDecodeError):
+            unreadable.append(name)
+            continue
         cleaned, hits = redact(raw)
         redactions += hits
         target = destination / name
@@ -292,7 +327,7 @@ def _copy_sanitized(source: Path, destination: Path) -> tuple[list[dict[str, Any
                 "redactions": hits,
             }
         )
-    return records, redactions
+    return records, redactions, tuple(unreadable)
 
 
 def _private_records(source: Path) -> list[dict[str, Any]]:
@@ -312,6 +347,44 @@ def _private_records(source: Path) -> list[dict[str, Any]]:
             }
         )
     return records
+
+
+def identity_mismatches(
+    manifest: Mapping[str, Any] | None, *, case_id: str, manager_model: str, plan: PacketPlan
+) -> tuple[str, ...]:
+    """Whether this bundle is the run the row claims it is.
+
+    A grade reproducing proves the trajectory and the grade agree; it says
+    nothing about *which* cell the run belongs to. A stale directory left in
+    ``bundles``, or a copy-paste that points two rows at one run, would
+    otherwise re-grade cleanly and be published under the wrong manager --
+    silently changing the comparison the report makes. The manifest already
+    records every identity the plan fixes, so this is a direct comparison.
+    """
+    if manifest is None:
+        return ()
+    budgets = manifest.get("budgets")
+    harness = manifest.get("harness")
+    expected: list[tuple[str, Any, Any]] = [
+        ("caseId", case_id, manifest.get("caseId")),
+        ("managerModel", manager_model, manifest.get("managerModel")),
+        ("workerModel", plan.worker_model, manifest.get("workerModel")),
+        (
+            "harness.shape",
+            MANAGED_SHAPE,
+            harness.get("shape") if isinstance(harness, Mapping) else None,
+        ),
+        (
+            "budgets.rounds",
+            plan.rounds,
+            budgets.get("rounds") if isinstance(budgets, Mapping) else None,
+        ),
+    ]
+    return tuple(
+        f"{field}: plan says {planned!r}, bundle says {found!r}"
+        for field, planned, found in expected
+        if planned != found
+    )
 
 
 def collect_row(
@@ -339,7 +412,7 @@ def collect_row(
         return replace(base, status="missing", source=source, note=f"no bundle at {source}")
 
     missing = tuple(name for name in REQUIRED_FILES if not (source / name).exists())
-    files, redactions = _copy_sanitized(source, sanitized_runs / identifier)
+    files, redactions, uncopyable = _copy_sanitized(source, sanitized_runs / identifier)
     private = tuple(_private_records(source))
     manifest = _read_json(source / "manifest.json")
     summary = _read_json(source / "summary.json")
@@ -353,7 +426,12 @@ def collect_row(
         )
         if payload is None and name not in missing
     )
-    missing = tuple(sorted({*missing, *unreadable}))
+    # An artifact that could not be copied is as absent from the shared tree as
+    # one that was never written, so it lands in the same list.
+    missing = tuple(sorted({*missing, *unreadable, *uncopyable}))
+    mismatches = identity_mismatches(
+        manifest, case_id=case_id, manager_model=manager_model, plan=plan
+    )
 
     regrade = None
     if not missing:
@@ -362,12 +440,25 @@ def collect_row(
     if missing:
         status: RowStatus = "incomplete"
         note = "bundle is missing or unreadable: " + ", ".join(missing)
+    elif mismatches:
+        status = "mismatched"
+        note = "bundle is not this row's run -- " + "; ".join(mismatches)
     elif summary is not None and summary.get("runValidity") not in (None, "valid"):
         status = "invalid"
         note = f"run recorded runValidity={summary.get('runValidity')}"
     elif regrade is not None and not regrade.matches:
         status = "invalid"
         note = f"offline re-grade failed: {regrade.detail}"
+    elif redactions:
+        # The shared copy is clean -- that is what redaction did -- but a run
+        # record should never have held a credential in the first place, so the
+        # source bundle needs a human before this row ships. Withholding the row
+        # is the only version of that gate a reader cannot miss.
+        status = "redacted"
+        note = (
+            f"{redactions} credential-shaped value(s) redacted from the shared copy;"
+            + " the source bundle needs review before this row ships"
+        )
     else:
         status = "complete"
         note = ""
@@ -387,6 +478,7 @@ def collect_row(
         files=tuple(files),
         private=private,
         redactions=redactions,
+        identity_mismatches=mismatches,
         note=note,
     )
 
@@ -419,13 +511,15 @@ def counts(rows: Sequence[Row]) -> dict[str, int]:
     ``invalid`` because the run recorded itself degraded or because its
     evidence no longer reproduces -- neither is a statement about the model.
     """
-    tally = {status: 0 for status in ("planned", "missing", "incomplete", "invalid", "complete")}
+    tally = dict.fromkeys(get_args(RowStatus), 0)
     for row in rows:
         tally[row.status] += 1
     return {
         "planned": len(rows),
         "completed": tally["complete"],
         "invalid": tally["invalid"],
+        "mismatched": tally["mismatched"],
+        "redacted": tally["redacted"],
         "incomplete": tally["incomplete"],
         "missingBundle": tally["missing"],
         "notYetRun": tally["planned"],
@@ -477,6 +571,11 @@ def build_bundle_manifest(
                 "regradeMatches": None if row.regrade is None else row.regrade.matches,
                 "regradeDetail": None if row.regrade is None else row.regrade.detail,
                 "regradeCommand": row.regrade_command,
+                "identityMismatches": list(row.identity_mismatches),
+                "redactions": row.redactions,
+                # A number is published only from a row that earned it; the
+                # status and the note stay whatever the row's own evidence says.
+                "publishedNumbers": row.publishable,
                 # Cost is not derivable from anything the run records, and a
                 # zero here would read as "free and measured" rather than
                 # "unmeasured". See LIMITATIONS.md.
@@ -650,18 +749,21 @@ def render_report(plan: PacketPlan, rows: Sequence[Row], *, built_at: str) -> st
     for row in rows:
         evidence = (
             f"[`runs/{row.row_id}/`](runs/{row.row_id}/)"
-            if row.status in ("complete", "invalid", "incomplete")
+            if row.status not in ("planned", "missing")
             else "not yet run"
         )
+        # Withheld, not blank: a row that is present but not publishable shows
+        # its status and its link, and no figure a reader could quote.
+        graded = row.graded if row.publishable else None
         lines.append(
             f"| `{row.row_id}` | `{row.case_id}` | `{row.manager_model}` | {row.status} |"
             + f" {row.run_validity} |"
-            + f" {_score(row.graded, 'outcome', 'safety')} |"
-            + f" {_score(row.graded, 'outcome', 'orderCompletion')} |"
-            + f" {_score(row.graded, 'outcome', 'waitTime')} |"
-            + f" {_score(row.graded, 'outcome', 'foodWaste')} |"
-            + f" {_score(row.graded, 'outcome', 'customerSatisfaction')} |"
-            + f" {_score(row.graded, 'behavior', 'coordination')} |"
+            + f" {_score(graded, 'outcome', 'safety')} |"
+            + f" {_score(graded, 'outcome', 'orderCompletion')} |"
+            + f" {_score(graded, 'outcome', 'waitTime')} |"
+            + f" {_score(graded, 'outcome', 'foodWaste')} |"
+            + f" {_score(graded, 'outcome', 'customerSatisfaction')} |"
+            + f" {_score(graded, 'behavior', 'coordination')} |"
             + f" {evidence} |"
         )
     lines += [
@@ -677,7 +779,7 @@ def render_report(plan: PacketPlan, rows: Sequence[Row], *, built_at: str) -> st
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
-        summary = row.summary
+        summary = row.summary if row.publishable else None
         lines.append(
             f"| `{row.row_id}` |"
             + f" {_number(summary, 'manager', 'turns')} |"
@@ -696,6 +798,10 @@ def render_report(plan: PacketPlan, rows: Sequence[Row], *, built_at: str) -> st
         )
     lines += [
         "",
+        "A row that is not `complete` shows `--` in both tables. Its evidence is still"
+        + " linked and its status and reason are still printed: what a failed, mismatched"
+        + " or withheld row must not do is contribute a number a reader can quote.",
+        "",
         "Cost is `unknown` for every row and will stay that way unless an authoritative"
         + " per-model rate is confirmed: these runs fall inside NVIDIA NIM's free developer"
         + " tier, which reports no billed figure. A `0` here would read as measured-and-free.",
@@ -711,6 +817,12 @@ def render_report(plan: PacketPlan, rows: Sequence[Row], *, built_at: str) -> st
             f"- Manager: `{row.manager_model}` · worker: `{row.worker_model}`",
             f"- Status: **{row.status}**" + (f" — {row.note}" if row.note else ""),
         ]
+        if not row.publishable and row.status not in ("planned", "missing"):
+            lines.append(
+                "- Numbers withheld: this row's scores and usage are not published while it"
+                + f" is `{row.status}`. The artifacts below are linked so the failure can be"
+                + " inspected."
+            )
         if row.status == "planned":
             lines += [
                 "- Produced by:",
@@ -858,8 +970,10 @@ def write_packet(
     guard_packet_dir(sanitized, overwrite=overwrite)
     # A rebuild replaces the report wholesale, so the run tree has to go with
     # it: a row dropped from the plan would otherwise survive as an orphaned
-    # directory the new report never mentions.
-    if overwrite and (sanitized / "runs").exists():
+    # directory the new report never mentions. This runs unconditionally --
+    # past the guard, an existing tree is either one --overwrite is replacing
+    # or the remains of a build that died, and neither may be merged into.
+    if (sanitized / "runs").exists():
         shutil.rmtree(sanitized / "runs")
 
     built_at = datetime.now(UTC).isoformat()
@@ -900,6 +1014,11 @@ def guard_packet_dir(sanitized: Path, *, overwrite: bool) -> None:
     if overwrite:
         return
     existing = [name for name in PACKET_FILES if (sanitized / name).exists()]
+    # A build that died during row collection leaves a runs/ tree and none of
+    # the generated files, so checking only those would let a retry merge into
+    # the wreckage and ship rows the new report never mentions.
+    if (sanitized / "runs").exists():
+        existing.append("runs/")
     if existing:
         found = ", ".join(sorted(existing))
         raise PacketExistsError(
