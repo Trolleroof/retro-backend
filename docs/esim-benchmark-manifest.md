@@ -13,23 +13,34 @@ a new case id and a new manifest revision, not an edit in place.
 
 ## 1. What this measures, and what it does not
 
-One selected model operates **all four worker roles** — chef, server, host,
-expediter — in a fixed rotation, for one episode. The model is changed between
-runs; the environment, prompts, tools, budgets, incident schedule, and seed are
-not.
+Two run shapes are frozen here. They share the environment, the cases, the
+grader, and the evidence bundle; they differ in who decides what.
 
-The claim this supports is:
+**Shape A — flat rotation (`run`).** One selected model operates **all four
+worker roles** — chef, server, host, expediter — in a fixed rotation, for one
+episode. The model is changed between runs; the environment, prompts, tools,
+budgets, incident schedule, and seed are not. The claim it supports is:
 
 > **model comparison in a fixed multi-role restaurant harness**
 
-It is explicitly **not**:
+**Shape B — managed shift (`run-managed`, §10).** One **manager** model runs
+the shift by posting standing directives; a separate, **fixed worker model**
+makes all four worker decisions under them. Manager identity is what varies
+between runs; worker identity is held constant. The claim it supports is:
+
+> **manager-model comparison with worker identity held fixed**
+
+Neither shape is:
 
 - an isolated measurement of any single role,
-- a single-operations-manager benchmark (deferred; see Frozen v1),
 - a mixed-model shift, where different models staff different roles (a later
   evaluation mode requiring controlled role assignment and separate reporting),
 - evidence about general model ability. The sample is small and the environment
   is one authored restaurant.
+
+Scores from the two shapes are not comparable with each other. A flat-rotation
+grade measures a model doing the work; a managed grade measures a manager
+whose work was done by somebody else.
 
 ## 2. What the model sees and controls
 
@@ -84,7 +95,8 @@ observation already names every worker), plus `previousError` on a retry.
 Nothing else is appended. Per Frozen v1, model input carries no reference
 actions, no hidden grading criteria, and no future incidents.
 
-The wording above is the string in `runner._messages` as of this revision;
+The wording above is the string in `runner.build_worker_messages` as of this
+revision;
 `tests/test_esim_runner.py` holds the `workerIds` half of it. Any change to
 either after scored runs begin is a new manifest revision, not an edit.
 
@@ -232,18 +244,40 @@ coercion observed.
 | `grade.json` | outcome + behavior scores, safety findings, probe results |
 | `summary.json` | tokens, latency, termination, state hashes, served models |
 
+A managed run (§10) writes the same seven files plus `directives.json`, and its
+`manifest.json`, `summary.json`, and `trajectory.json` carry the manager fields
+§10.5 lists.
+
 ## 7. Commands
 
-Offline reference determinism (no key, no network):
+Offline reference determinism, flat rotation (no key, no network):
 
 ```bash
 uv run python scripts/reference_rollout.py --case dinner-rush-001 --policy greedy --repeats 2
 ```
 
-Live model run:
+Offline mechanics check for the managed round loop (no key, no network):
+
+```bash
+uv run python scripts/reference_rollout.py --case dinner-rush-001 --policy greedy --manager stub --rounds 12 --repeats 2
+```
+
+Live model run, flat rotation:
 
 ```bash
 uv run python -m retro_backend.esim.cli run --case dinner-rush-001 --model nim:openai/gpt-oss-20b --output-dir artifacts/run/ --repeats 3
+```
+
+Live managed run — swap `--manager-model` between runs, never `--worker-model`:
+
+```bash
+uv run python -m retro_backend.esim.cli run-managed --case dinner-rush-001 --manager-model nim:openai/gpt-oss-20b --worker-model nim:nvidia/nemotron-3-super-120b-a12b --output-dir artifacts/managed-a/ --repeats 3
+```
+
+Re-grade any recorded run offline, with no network and no resampling:
+
+```bash
+uv run python -m retro_backend.esim.cli regrade --trajectory artifacts/managed-a/trajectory.json
 ```
 
 The reference policy is reachable only from `scripts/`, never from
@@ -322,17 +356,52 @@ format" must state the budget it was measured under.
    Enterprise ($4,500/GPU/year). No exact per-model rate has been confirmed
    against an authoritative NVIDIA source; treat the range as indicative, not
    a number to bill against.
-7. **Rate limit, unresolved.** The adapter is built and documented as 40
-   requests/second (`DEFAULT_NIM_RATE_LIMIT_RPS`); multiple third-party
-   sources, including NVIDIA's own developer forum, describe the free tier's
-   limit as 40 requests **per minute** — a 60x difference. No run so far has
-   received a 429: our actual aggregate rate has stayed near 2 req/s even with
-   12 concurrent runs, which would violate a 40/min ceiling if that number is
-   real, yet nothing has been throttled. Unresolved because the two sources
-   disagree and neither has been confirmed authoritatively. Before running
-   many processes concurrently, either confirm the true limit from NVIDIA's
-   own dashboard/docs, or throttle to something safely under 40/min and watch
-   for 429s on a small batch first.
+7. **Rate limit: a rolling-window budget, split between the two callers (#84).**
+   The adapter used to be built and documented as 40 requests/**second**, while
+   multiple third-party sources, including NVIDIA's own developer forum,
+   describe the free tier's limit as 40 requests **per minute** — a 60x
+   difference. Earlier runs never saw a 429. **Two concurrent managed runs
+   did**: `moonshotai/kimi-k3` took `rate_limit` on 12 of its 20 manager turns
+   while a second managed run was in flight, at an aggregate rate nowhere near
+   40 req/s.
+
+   Two separate faults produced that. A token bucket does not bound a rolling
+   window at all — one sized at `N` admits up to `2N` starts inside a single
+   rolling minute — and every adapter held its own bucket, so a managed run's
+   manager and worker each drew a full allowance against one key.
+   `RollingWindowBudget` replaces it: a real rolling window, shared
+   process-wide by default, honoring `Retry-After` by backing off every caller
+   in the process rather than only the one that saw the 429.
+
+   **The budget is this process' share, not the account's ceiling.** Two
+   callers draw on the demo key — the desktop app playing a live shift, and
+   this harness — and their shares must sum to under 40/min. The defaults are
+   10/min here (`ESIM_NIM_MAX_STARTS_PER_WINDOW`) and 20/min in the app
+   (`GAMEPIGEON_MODEL_MAX_STARTS_PER_WINDOW`), leaving headroom. **Raising
+   either without lowering the other re-opens the overrun.** Nothing enforces
+   the split across processes: two harness processes still hold one budget
+   each, so **run the matrix serially**, and confirm the true ceiling from
+   NVIDIA's own dashboard when that becomes possible.
+
+   Note also that a retried `rate_limit` is retried immediately, with no
+   backoff of its own — it now waits on the budget's `Retry-After` penalty
+   instead, so a throttled turn no longer burns its whole retry allowance in
+   under a second.
+
+   **Queueing is bounded, and a turn lost to it is named.** Admission is
+   awaited *outside* the adapter's per-request timeout, so without a bound of
+   its own a throttled call could hold a turn open for minutes past the
+   timeout meant to bound it. A caller waits at most
+   `DEFAULT_MAX_QUEUE_SECONDS` (180s = one window + the largest possible
+   penalty, so it never rejects a wait that was going to succeed) and then
+   fails with `budget_timeout`. That error is deliberately **not** retryable:
+   unlike a 429, which says the provider is busy, it says this process has no
+   allowance to give, and retrying would ask the same exhausted budget the
+   same question `max_attempts` times.
+
+   Attempt records and run summaries carry `queueDelayMs` beside `latencyMs`
+   for exactly this reason — a run throttled by its own share of the account
+   must not be readable as a run against a slow model.
 8. One full episode costs ~130–185 turns, ~90k–160k tokens, and 8–16 minutes
    of wall clock against `openai/gpt-oss-20b`, depending on the token budget in
    force. The full frozen matrix — 2 variants x 3 repeats x N models — is
@@ -340,3 +409,153 @@ format" must state the budget it was measured under.
    independent of each other (only turns within one run are sequential), so
    running the matrix concurrently — subject to the rate-limit caveat above —
    turns `6N` runs' wall-clock cost into roughly one run's.
+
+---
+
+## 10. The managed shape: one manager model over a fixed worker model
+
+Added for retro-backend#75. Everything in §§3–4 that describes the environment,
+the cases, and the seed still holds; this section states only what differs.
+
+### 10.1 The round
+
+A managed run is **12 rounds**, not 24 free-running ticks. One round is:
+
+1. the manager's role-projected observation of the shift;
+2. one manager action — post or withdraw a standing directive, or `{"tool":null}`;
+3. four worker decisions, chef → server → host → expediter, each taken under
+   whatever directives now stand;
+4. the routine simulation interval — `maxTicks / rounds` ticks of the
+   restaurant running on under those directives.
+
+The round count must divide the case horizon; `dinner-rush-001`'s 24 ticks give
+a 2-tick interval per round. An uneven split is refused rather than run,
+because it would make a directive worth more or less depending on where in the
+episode it landed.
+
+### 10.2 Budgets, frozen
+
+| Setting | Value |
+| --- | --- |
+| Rounds per level | 12 |
+| Manager requests per level | 12 (one per round), before retries |
+| Worker requests per level | 48 (four per round), before retries |
+| `maxAttempts` | 3, per actor per turn |
+| Enforced manager turn budget | `rounds × maxAttempts` = 36 |
+| Enforced worker turn budget | `rounds × 4 × maxAttempts` = 144 |
+| `maxOutputTokens` | 2500 |
+| Temperature | 0.0 |
+| Per-request timeout | `--request-timeout`, unset = the adapter default (30s) |
+| Environment seed | 218220, frozen in the case |
+
+The two budgets are counted separately per actor, so a manager cannot spend the
+workers' allowance or the reverse. Exhausting either terminates the run as
+`turn_limit`, exactly as in the flat shape.
+
+**Timeout is a budget too, and it bites the manager first.** A manager turn
+carries the whole tool surface and a shift to read, and a reasoning model can
+spend longer on that than the adapter's 30s default allows. Measured on the
+first live managed run (`openai/gpt-oss-20b` managing
+`nvidia/nemotron-3-super-120b-a12b`): 9 of 20 manager turns and 2 of 56 worker
+turns timed out at the default, and the run was correctly reported as
+`provider_failure` rather than as a result. `--request-timeout` raises it; the
+value applied is recorded in `manifest.budgets.requestTimeoutSeconds`, and
+`null` there means the adapter default was in force.
+
+### 10.3 What the manager sees and controls
+
+**Sees, each round:** its round number and the total, the current tick and
+ticks remaining, its staff (id, role, load, last action), every order (id,
+status, priority, allergy), equipment status, whether an emergency is active,
+the directives it has itself posted, and what each worker did on the previous
+round (tool, accepted, rejection code).
+
+**Does not see, ever:** the event schedule or any future incident, `Outcomes`
+— which carries the derived satisfaction, coordination, and correction-uptake
+figures the grader also reads — grader weights, probe definitions, any score,
+or any worker's own projection.
+
+**Controls:** `set_directive` and `clear_directive`, and nothing else. A manager
+action never reaches `RestaurantSim`: it cannot move an order, seat a table, or
+touch equipment. At most one directive stands per target (`chef`, `server`,
+`host`, `expediter`, or `all`), so a later directive replaces the earlier one
+for that target rather than stacking on it.
+
+**Manager system prompt, frozen verbatim:**
+
+> You are the manager of a restaurant shift. You do not touch orders, tables,
+> or equipment yourself: you post standing instructions that your chef, server,
+> host, and expediter read before every decision. Reply with exactly one JSON
+> object and nothing else: no markdown, no explanation, no reasoning before or
+> after it. Keep the JSON itself short: one tool call, minimal argument values.
+
+### 10.4 What the workers see
+
+The frozen worker prompt of §2, plus one key: `standingDirectives`, carrying
+the directive addressed to that role and the floor-wide one, in that order. The
+key is present only while something stands, so an unmanaged run's prompt stays
+byte-identical to the §2 wording. Workers still receive no grader information,
+no schedule, and no score — a directive is management, not an oracle.
+
+### 10.5 Attribution, and what the bundle records
+
+A managed bundle is a `run` bundle (§6) plus `directives.json`, and its
+manifest declares `bundleVersion: esim-managed-run-bundle/v1`.
+
+- `manifest.json` names `managerModel` and `workerModel` as separate keys.
+  There is no combined `model` field for a reader to mistake for either.
+- Every line of `attempts.jsonl` carries `actor` (`manager` or `worker`), the
+  `model` spec that answered it, the `round`, and the served model id.
+- `trajectory.json` carries `managerActions` — every manager turn, including
+  the ones that were rejected or produced nothing — and `finalDirectives`. Each
+  manager turn records an `outcome` of `applied`, `stood_down`, `rejected`, or
+  `no_decision`, so a manager that chose to post nothing is never confused with
+  one whose provider failed.
+- Every worker action in `trajectory.json` carries the `round` it belongs to
+  and `directivesDigest`, the digest of the instructions standing when the
+  decision was made. That is what makes a worker transcript non-transferable:
+  a transcript recorded under one set of manager instructions carries a digest
+  that does not match another, so it cannot be quietly reused.
+- `summary.json` reports the manager's and the workers' turns, tokens,
+  latency, and served models in **separate blocks**, and carries
+  `runValidity` with three values. A turn **lost** to the provider — its last
+  attempt was an adapter error, so the actor never got to decide — or a reply
+  served by a model other than the one requested, marks the run
+  `provider_failure`. An error a retry recovered from does not: the turn
+  happened and the model decided, and the attempt is still counted in
+  `modelErrors` beside `turnsLostToProvider` so a reader can see how noisy the
+  run was. A run
+  in which every call succeeded but no provider ever named the model that
+  answered is `unverified_identity` — nothing failed, but which model produced
+  the scores was never established, and on a shape whose claim is "this
+  manager, those workers" that is not a result to report. Only a run that
+  confirmed both identities is `valid`.
+
+Nothing scripted is ever recorded as a model decision. When an adapter fails,
+the round records the failure and moves on; no reference policy stands in for
+either actor. `esim.policies` remains unreachable from `src/`, which is why the
+scripted-manager mechanics check lives in `scripts/reference_rollout.py`
+(`--manager stub`) and its manifest declares
+`driver: reference-policy:greedy+stub-manager`.
+
+### 10.6 Known limitations of the managed shape
+
+1. No live managed runs have been scored yet. The mechanics are covered by the
+   offline stub check and by `tests/test_esim_managed.py`; both are test
+   evidence, not benchmark results.
+2. The grader is unchanged, so it scores the *shift*, not the manager
+   directly. A manager is ranked by what its staff achieved under it — which
+   is the intended measurement, but it means worker-model capability sets the
+   ceiling for every manager compared against it. Hold `--worker-model` fixed
+   across a comparison or the numbers mean nothing.
+3. Directives reach workers through the prompt, not through the observation
+   contract. `restaurant-arena-observation/v2` has no field for them, and
+   adding one would change a published contract for a benchmark-harness
+   concern.
+4. Run-to-run variance (§8) applies here too, and is unmeasured for this
+   shape. Report the range across repeats, never a single run.
+5. Manager and worker turns are issued sequentially against one provider, so a
+   managed run's wall clock is dominated by the slower of the two models.
+   Measured: 6–12 minutes for a 12-round level with a 120B worker model, an
+   order of magnitude cheaper than a 24-tick flat run (§9.8) because a level
+   is 60 requests before retries rather than ~96.

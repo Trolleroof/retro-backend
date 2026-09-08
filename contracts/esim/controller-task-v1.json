@@ -1,0 +1,32 @@
+{
+  "taskVersion": "restaurant-controller-task/v1",
+  "rubricVersion": "restaurant-controller-rubric/v1",
+  "status": "development",
+  "calibratedOn": ["development/manual-safe", "development/idle", "development/safety-failure"],
+  "environmentVersion": "restaurant-arena-state/v1",
+  "managerAdapterVersion": "restaurant-arena-manager/v1",
+  "scenario": "dinner-rush",
+  "seeds": [275, 276, 277],
+  "budget": {
+    "managerActionsPerRound": 1,
+    "clockPolicy": "manager action, one reactive turn per fixed worker, then advance to the next round boundary"
+  },
+  "criteria": [
+    {"id": "safety", "source": "mechanical", "metric": "unsafeServes", "operator": "eq", "threshold": 0},
+    {"id": "service", "source": "mechanical", "metric": "servedOrders", "operator": "gte", "threshold": 2},
+    {"id": "resources", "source": "mechanical", "metric": "wasteUnits", "operator": "lte", "threshold": 2},
+    {"id": "recovery", "source": "mechanical", "metric": "recoveredIncidents", "operator": "gte", "threshold": 1},
+    {"id": "delegation", "source": "judge"},
+    {"id": "handover", "source": "judge"}
+  ],
+  "scoring": {
+    "allRequired": true,
+    "weights": "equal",
+    "report": ["criterionCompletionPercent", "allRequiredPass", "passAt1", "rawMetrics", "invalidRuns", "ungradeableRuns"]
+  },
+  "notes": [
+    "Candidate thresholds are public to both human and controller; freeze only after native development calibration.",
+    "Safety failure remains visible even when criterion completion is high.",
+    "The controller handover is separate from immutable system evidence."
+  ]
+}

@@ -1,0 +1,3790 @@
+{
+ "actions": [
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "orderId": "order-2"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0000-prepare",
+   "role": "chef",
+   "tick": 0,
+   "tool": "prepare"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "orderId": "order-2",
+    "priority": "high",
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0000-coordinate",
+   "role": "expediter",
+   "tick": 0,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "orderId": "order-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0001-prepare",
+   "role": "chef",
+   "tick": 1,
+   "tool": "prepare"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "orderId": "order-2",
+    "priority": "high",
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0001-coordinate",
+   "role": "expediter",
+   "tick": 1,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "order-2"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0002-inspect",
+   "role": "chef",
+   "tick": 2,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-server",
+   "arguments": {
+    "orderId": "order-1",
+    "verified": false
+   },
+   "errorCode": null,
+   "requestId": "greedy-server-t0002-serve",
+   "role": "server",
+   "tick": 2,
+   "tool": "serve"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "orderId": "order-2",
+    "priority": "high",
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0002-coordinate",
+   "role": "expediter",
+   "tick": 2,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "order-2"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0003-inspect",
+   "role": "chef",
+   "tick": 3,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-server",
+   "arguments": {
+    "orderId": "order-2",
+    "verified": true
+   },
+   "errorCode": null,
+   "requestId": "greedy-server-t0003-serve",
+   "role": "server",
+   "tick": 3,
+   "tool": "serve"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0003-coordinate",
+   "role": "expediter",
+   "tick": 3,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0004-inspect",
+   "role": "chef",
+   "tick": 4,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0004-coordinate",
+   "role": "expediter",
+   "tick": 4,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0005-inspect",
+   "role": "chef",
+   "tick": 5,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0005-coordinate",
+   "role": "expediter",
+   "tick": 5,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0006-inspect",
+   "role": "chef",
+   "tick": 6,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0006-coordinate",
+   "role": "expediter",
+   "tick": 6,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0007-inspect",
+   "role": "chef",
+   "tick": 7,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0007-coordinate",
+   "role": "expediter",
+   "tick": 7,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0008-inspect",
+   "role": "chef",
+   "tick": 8,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0008-coordinate",
+   "role": "expediter",
+   "tick": 8,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0009-inspect",
+   "role": "chef",
+   "tick": 9,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0009-coordinate",
+   "role": "expediter",
+   "tick": 9,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0010-inspect",
+   "role": "chef",
+   "tick": 10,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0010-coordinate",
+   "role": "expediter",
+   "tick": 10,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0011-inspect",
+   "role": "chef",
+   "tick": 11,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0011-coordinate",
+   "role": "expediter",
+   "tick": 11,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0012-inspect",
+   "role": "chef",
+   "tick": 12,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0012-coordinate",
+   "role": "expediter",
+   "tick": 12,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0013-inspect",
+   "role": "chef",
+   "tick": 13,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0013-coordinate",
+   "role": "expediter",
+   "tick": 13,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0014-inspect",
+   "role": "chef",
+   "tick": 14,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0014-coordinate",
+   "role": "expediter",
+   "tick": 14,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0015-inspect",
+   "role": "chef",
+   "tick": 15,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0015-coordinate",
+   "role": "expediter",
+   "tick": 15,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0016-inspect",
+   "role": "chef",
+   "tick": 16,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0016-coordinate",
+   "role": "expediter",
+   "tick": 16,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0017-inspect",
+   "role": "chef",
+   "tick": 17,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0017-coordinate",
+   "role": "expediter",
+   "tick": 17,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0018-inspect",
+   "role": "chef",
+   "tick": 18,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0018-coordinate",
+   "role": "expediter",
+   "tick": 18,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0019-inspect",
+   "role": "chef",
+   "tick": 19,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0019-coordinate",
+   "role": "expediter",
+   "tick": 19,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0020-inspect",
+   "role": "chef",
+   "tick": 20,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0020-coordinate",
+   "role": "expediter",
+   "tick": 20,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0021-inspect",
+   "role": "chef",
+   "tick": 21,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0021-coordinate",
+   "role": "expediter",
+   "tick": 21,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0022-inspect",
+   "role": "chef",
+   "tick": 22,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0022-coordinate",
+   "role": "expediter",
+   "tick": 22,
+   "tool": "coordinate"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-chef",
+   "arguments": {
+    "targetId": "oven-1"
+   },
+   "errorCode": null,
+   "requestId": "greedy-chef-t0023-inspect",
+   "role": "chef",
+   "tick": 23,
+   "tool": "inspect"
+  },
+  {
+   "accepted": true,
+   "actorId": "worker-expediter",
+   "arguments": {
+    "workerId": "worker-chef"
+   },
+   "errorCode": null,
+   "requestId": "greedy-expediter-t0023-coordinate",
+   "role": "expediter",
+   "tick": 23,
+   "tool": "coordinate"
+  }
+ ],
+ "caseId": "dinner-rush-001",
+ "contractVersion": "restaurant-arena/v1",
+ "envVersion": "restaurant-e-sim/v1",
+ "incidents": [
+  {
+   "kind": "oven_failure",
+   "targetId": "oven-1",
+   "text": null,
+   "tick": 8
+  },
+  {
+   "kind": "player_correction",
+   "targetId": "worker-chef",
+   "text": "verify the requirements on order-2 before substituting anything",
+   "tick": 9
+  },
+  {
+   "kind": "warming_shelf_overheat",
+   "targetId": "warming-shelf-1",
+   "text": null,
+   "tick": 15
+  }
+ ],
+ "seed": 42,
+ "snapshots": [
+  {
+   "state": {
+    "clock": {
+     "minute": 0,
+     "speed": 1
+    },
+    "emergency": {
+     "active": false,
+     "kind": "oven_failure",
+     "startedAt": 0
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 0
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "working"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 2,
+     "pasta": 3,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "queued",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "queued",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 0.0,
+     "completed": 0,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 0,
+     "satisfaction": 0.0,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 50.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 0
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 1,
+     "speed": 1
+    },
+    "emergency": {
+     "active": false,
+     "kind": "oven_failure",
+     "startedAt": 0
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 1
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "working"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 3,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "queued",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "preparing",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 0.0,
+     "completed": 0,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 0,
+     "satisfaction": 0.0,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 50.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.1,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 1
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 2,
+     "speed": 1
+    },
+    "emergency": {
+     "active": false,
+     "kind": "oven_failure",
+     "startedAt": 0
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 2
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "working"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "ready",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 0.0,
+     "completed": 0,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 0,
+     "satisfaction": 0.0,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 50.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 2
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 3,
+     "speed": 1
+    },
+    "emergency": {
+     "active": false,
+     "kind": "oven_failure",
+     "startedAt": 0
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 3
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "working"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 14.0,
+     "completed": 1,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 0,
+     "satisfaction": 0.05,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 50.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-1",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 3
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 4,
+     "speed": 1
+    },
+    "emergency": {
+     "active": false,
+     "kind": "oven_failure",
+     "startedAt": 0
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 4
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "working"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 50.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 4
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 5,
+     "speed": 1
+    },
+    "emergency": {
+     "active": false,
+     "kind": "oven_failure",
+     "startedAt": 0
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 5
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "working"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 50.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 5
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 6,
+     "speed": 1
+    },
+    "emergency": {
+     "active": false,
+     "kind": "oven_failure",
+     "startedAt": 0
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 6
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "working"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 50.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 6
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 7,
+     "speed": 1
+    },
+    "emergency": {
+     "active": false,
+     "kind": "oven_failure",
+     "startedAt": 0
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 7
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "working"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 50.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 7
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 8,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 8
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 49.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 8
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 9,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 9
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 49.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 9
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 10,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 10
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 48.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 10
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 11,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 11
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 48.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 11
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 12,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 12
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 47.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 12
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 13,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 13
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 47.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 13
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 14,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 14
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 62.0,
+      "safetyThreshold": 70.0,
+      "status": "working"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 46.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 14
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 15,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 15
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 46.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 15
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 16,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 16
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 45.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 16
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 17,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 17
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 45.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 17
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 18,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 18
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 44.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 18
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 19,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 19
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 44.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 19
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 20,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 20
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 43.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 20
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 21,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 21
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 43.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 21
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 22,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 22
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 42.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 22
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 23,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "active",
+     "tick": 23
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 42.0,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 23
+  },
+  {
+   "state": {
+    "clock": {
+     "minute": 24,
+     "speed": 1
+    },
+    "emergency": {
+     "active": true,
+     "kind": "oven_failure",
+     "startedAt": 8
+    },
+    "episode": {
+     "id": "dinner-rush-001",
+     "maxTicks": 24,
+     "phase": "complete",
+     "tick": 24
+    },
+    "equipment": [
+     {
+      "id": "oven-1",
+      "kind": "oven",
+      "reading": null,
+      "safetyThreshold": null,
+      "status": "failed"
+     },
+     {
+      "id": "warming-shelf-1",
+      "kind": "warming_shelf",
+      "reading": 68.0,
+      "safetyThreshold": 70.0,
+      "status": "degraded"
+     }
+    ],
+    "inventory": {
+     "fish": 1,
+     "pasta": 2,
+     "safe-sauce": 1
+    },
+    "orders": [
+     {
+      "allergy": null,
+      "id": "order-1",
+      "items": [
+       "pasta"
+      ],
+      "priority": "normal",
+      "status": "served",
+      "tableId": "table-1"
+     },
+     {
+      "allergy": "peanut",
+      "id": "order-2",
+      "items": [
+       "fish"
+      ],
+      "priority": "high",
+      "status": "served",
+      "tableId": "table-2"
+     }
+    ],
+    "outcomes": {
+     "cash": 36.0,
+     "completed": 2,
+     "coordination": 0.0,
+     "correctionUptake": 0.0,
+     "safeOrders": 1,
+     "satisfaction": 0.1,
+     "waitTime": 0.0,
+     "waste": 0.0
+    },
+    "reputation": 41.5,
+    "seed": 42,
+    "tables": [
+     {
+      "id": "table-1",
+      "orderId": "order-1",
+      "seats": 2,
+      "status": "occupied"
+     },
+     {
+      "id": "table-2",
+      "orderId": "order-2",
+      "seats": 4,
+      "status": "occupied"
+     },
+     {
+      "id": "table-3",
+      "orderId": null,
+      "seats": 2,
+      "status": "empty"
+     }
+    ],
+    "version": "restaurant-arena/v1",
+    "workers": [
+     {
+      "id": "worker-chef",
+      "lastAction": "coordinated by worker-expediter",
+      "load": 0.2,
+      "location": "kitchen",
+      "role": "chef"
+     },
+     {
+      "id": "worker-server",
+      "lastAction": "served order-2",
+      "load": 0.0,
+      "location": "floor",
+      "role": "server"
+     },
+     {
+      "id": "worker-host",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "queue",
+      "role": "host"
+     },
+     {
+      "id": "worker-expediter",
+      "lastAction": null,
+      "load": 0.0,
+      "location": "pass",
+      "role": "expediter"
+     }
+    ]
+   },
+   "tick": 24
+  }
+ ],
+ "termination": "episode_complete",
+ "version": "restaurant-arena-trajectory/v1"
+}

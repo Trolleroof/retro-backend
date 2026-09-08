@@ -12,6 +12,7 @@ from typing import Protocol, Self, runtime_checkable
 
 __all__ = [
     "ERR_AUTH",
+    "ERR_BUDGET_TIMEOUT",
     "ERR_CONFIGURATION",
     "ERR_HTTP",
     "ERR_MALFORMED",
@@ -28,6 +29,12 @@ __all__ = [
 
 # Standard error category prefixes
 ERR_AUTH = "auth_error"
+# The shared request budget could not admit this call inside its queue
+# deadline. Deliberately kept out of rotation.retryable_model_error: unlike a
+# 429, which says the provider is busy now, this says *this process* has no
+# allowance to give, and an immediate retry asks the same exhausted budget the
+# same question. Retrying it would multiply one long wait by max_attempts.
+ERR_BUDGET_TIMEOUT = "budget_timeout"
 ERR_CONFIGURATION = "configuration_error"
 ERR_HTTP = "http_error"
 ERR_MALFORMED = "malformed_response"
@@ -70,6 +77,12 @@ class ModelReply:
         output_tokens: Number of generated completion tokens consumed.
         latency_ms: Roundtrip wall-clock latency in milliseconds.
         error: Typed error description if call failed, None otherwise.
+        queue_delay_ms: Wall-clock milliseconds this call spent waiting for the
+            request budget to admit it, before any HTTP request was made. Kept
+            apart from ``latency_ms`` because the two have different causes and
+            different remedies: latency is the model thinking, queue delay is
+            this process rationing a shared account. A run that reported them
+            as one number would blame the model for its own throttling.
         served_model: The model id the provider says answered, read back from
             the response body rather than echoed from the request. A benchmark
             claims "model X scored Y", and that claim is only auditable if the
@@ -85,6 +98,7 @@ class ModelReply:
     error: str | None = None
     served_model: str | None = None
     retry_after_seconds: float | None = None
+    queue_delay_ms: float = 0.0
 
     @property
     def ok(self) -> bool:

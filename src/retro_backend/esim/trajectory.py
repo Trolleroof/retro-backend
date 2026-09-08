@@ -43,6 +43,12 @@ from retro_backend.esim.contracts import (
     Role,
     Tool,
 )
+from retro_backend.esim.manager import (
+    DirectiveTarget,
+    ManagerActionEnvelope,
+    ManagerTool,
+    StandingDirective,
+)
 from retro_backend.esim.simulator import ScheduledIncident
 from retro_backend.esim.state_hash import state_hash
 
@@ -50,10 +56,17 @@ TRAJECTORY_VERSION = "restaurant-arena-trajectory/v1"
 
 Termination = Literal["episode_complete", "turn_limit", "provider_invalid"]
 
+# How one manager turn ended. "stood_down" is a decision (``{"tool": null}``);
+# "no_decision" is the absence of one -- the provider failed, or never
+# answered in a shape the parser could use.
+ManagerTurnOutcome = Literal["applied", "stood_down", "rejected", "no_decision"]
+
 __all__ = [
     "TRAJECTORY_VERSION",
+    "ManagerTurnOutcome",
     "ActionRecord",
     "IncidentRecord",
+    "ManagerActionRecord",
     "TickSnapshot",
     "Trajectory",
     "TrajectoryRecorder",
@@ -73,6 +86,44 @@ class ActionRecord(ArenaModel):
     # Set on rejection only. The code, not the message: messages carry entity
     # ids and are not stable enough to grade against.
     error_code: ActionErrorCode | None = None
+    # Both set on a managed run only, and both default to None so a
+    # single-model trajectory recorded before the manager shape existed still
+    # loads and grades unchanged.
+    round: int | None = Field(default=None, ge=1)
+    # The DirectiveBoard digest in force when this decision was made. It is
+    # what says a worker transcript belongs to one set of manager instructions
+    # and may not be replayed under another (#75).
+    directives_digest: str | None = None
+
+
+class ManagerActionRecord(ArenaModel):
+    """One manager turn, and what the directive board did with it.
+
+    Recorded apart from :class:`ActionRecord` because it is a different kind
+    of event: no worker took it, and it never reached ``RestaurantSim``. A
+    reader counting worker decisions must not pick these up, and a reader
+    asking what the manager did must not have to filter them out of the
+    worker log.
+    """
+
+    round: int = Field(ge=1, strict=True)
+    tick: int = Field(ge=0, strict=True)
+    actor_id: ArenaId
+    # None when the manager stood down for the round -- an explicit choice,
+    # not an absent record.
+    tool: ManagerTool | None = None
+    arguments: Mapping[str, object] = {}
+    request_id: ArenaId | None = None
+    # Four distinguishable endings, because "not accepted" would fold three
+    # different things into one: a manager that chose to post nothing, one
+    # whose directive the board refused, and one whose provider never returned
+    # a usable reply at all.
+    outcome: ManagerTurnOutcome
+    error_code: ActionErrorCode | None = None
+    target_role: DirectiveTarget | None = None
+    # The board digest after this turn, so the directive history can be walked
+    # forward without replaying the board.
+    directives_digest: str
 
 
 class IncidentRecord(ArenaModel):
@@ -101,6 +152,11 @@ class Trajectory(ArenaModel):
     seed: int = Field(ge=0, strict=True)
     snapshots: tuple[TickSnapshot, ...] = Field(min_length=1)
     actions: tuple[ActionRecord, ...] = ()
+    manager_actions: tuple[ManagerActionRecord, ...] = ()
+    # The directives standing when the episode ended. Empty on an unmanaged
+    # run, which is also what a managed run whose manager never posted one
+    # honestly records.
+    final_directives: tuple[StandingDirective, ...] = ()
     incidents: tuple[IncidentRecord, ...] = ()
     termination: Termination
 
@@ -164,6 +220,8 @@ class TrajectoryRecorder:
         self._event_schedule = tuple(event_schedule)
         self._snapshots: list[TickSnapshot] = []
         self._actions: list[ActionRecord] = []
+        self._manager_actions: list[ManagerActionRecord] = []
+        self._final_directives: tuple[StandingDirective, ...] = ()
 
     def record_state(self, state: RestaurantState) -> None:
         """Snapshot the state opening a tick.
@@ -179,8 +237,20 @@ class TrajectoryRecorder:
         self._snapshots.append(snapshot)
 
     def record_action(
-        self, envelope: ActionEnvelope, result: RestaurantState | ActionError
+        self,
+        envelope: ActionEnvelope,
+        result: RestaurantState | ActionError,
+        *,
+        round_number: int | None = None,
+        directives_digest: str | None = None,
     ) -> None:
+        """Record one worker decision and the simulator's answer to it.
+
+        ``round_number`` and ``directives_digest`` are the managed run's
+        attribution: which round the decision belongs to, and which manager
+        instructions stood while it was made. An unmanaged driver passes
+        neither and records exactly what it did before.
+        """
         rejected = isinstance(result, ActionError)
         self._actions.append(
             ActionRecord(
@@ -192,8 +262,51 @@ class TrajectoryRecorder:
                 request_id=envelope.request_id,
                 accepted=not rejected,
                 error_code=result.code if isinstance(result, ActionError) else None,
+                round=round_number,
+                directives_digest=directives_digest,
             )
         )
+
+    def record_manager_action(
+        self,
+        envelope: ManagerActionEnvelope | None,
+        result: StandingDirective | None | ActionError,
+        *,
+        outcome: ManagerTurnOutcome,
+        round_number: int,
+        tick: int,
+        actor_id: str,
+        directives_digest: str,
+    ) -> None:
+        """Record one manager turn, including one that produced no decision.
+
+        ``envelope`` is ``None`` when the manager stood down or never
+        returned a usable decision; the round is still recorded, because a
+        round with no manager entry would read as a round that never happened.
+        ``outcome`` is what tells those two apart.
+        """
+        self._manager_actions.append(
+            ManagerActionRecord(
+                round=round_number,
+                tick=tick,
+                actor_id=actor_id,
+                tool=envelope.tool if envelope is not None else None,
+                arguments=dict(envelope.arguments) if envelope is not None else {},
+                request_id=envelope.request_id if envelope is not None else None,
+                outcome=outcome,
+                error_code=result.code if isinstance(result, ActionError) else None,
+                target_role=(
+                    result.target_role if isinstance(result, StandingDirective) else None
+                ),
+                directives_digest=directives_digest,
+            )
+        )
+
+    def record_final_directives(
+        self, directives: Sequence[StandingDirective]
+    ) -> None:
+        """The directives standing when the run ended."""
+        self._final_directives = tuple(directives)
 
     def finish(self, termination: Termination = "episode_complete") -> Trajectory:
         if not self._snapshots:
@@ -216,6 +329,8 @@ class TrajectoryRecorder:
             seed=self._seed,
             snapshots=tuple(self._snapshots),
             actions=tuple(self._actions),
+            manager_actions=tuple(self._manager_actions),
+            final_directives=self._final_directives,
             incidents=incidents,
             termination=termination,
         )

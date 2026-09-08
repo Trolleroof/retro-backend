@@ -12,7 +12,7 @@ import asyncio
 import json
 import re
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, TextIO
@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 from retro_backend.esim.case import ENV_VERSION, load_case
 from retro_backend.esim.contracts import ACTION_VERSION, ActionEnvelope, ActionError, Role
+from retro_backend.esim.manager import StandingDirective
 from retro_backend.esim.providers.base import ERR_MALFORMED, ERR_TIMEOUT, ModelAdapter, ModelReply
 from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import (
@@ -87,9 +88,19 @@ def effective_max_turns(config: RunnerConfig, max_ticks: int) -> int:
     return max_ticks * len(ROLE_ORDER) * config.max_attempts
 
 
-def _record(sink: TextIO | None, record: Mapping[str, object]) -> None:
+def record_jsonl(sink: TextIO | None, record: Mapping[str, object]) -> None:
+    """Append one auditable record, and put it on disk now.
+
+    Flushed per record rather than left to the buffer: the attempt log is
+    written as the run happens precisely so a run that dies mid-episode still
+    leaves behind every raw reply it did get, and an unflushed buffer loses
+    the last several thousand characters of exactly that evidence. A managed
+    episode is tens of minutes long, so this is also what makes the log
+    readable while the run is still going.
+    """
     if sink is not None:
         sink.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+        sink.flush()
 
 
 def _retry_delay(reply: ModelReply, attempt: int, config: RunnerConfig) -> float:
@@ -104,12 +115,13 @@ def _retry_delay(reply: ModelReply, attempt: int, config: RunnerConfig) -> float
     return min(config.max_retry_delay_seconds, max(0.0, requested))
 
 
-def _messages(
+def build_worker_messages(
     role: Role,
     observation: Mapping[str, object],
     feedback: str | None,
     *,
     worker_ids: Mapping[Role, str],
+    directives: Sequence[StandingDirective] = (),
 ) -> list[dict[str, str]]:
     tools = {
         tool: TOOL_ARGS[tool].model_json_schema(by_alias=True)
@@ -130,6 +142,14 @@ def _messages(
     # repeat it there.
     if "workers" not in observation:
         prompt["workerIds"] = dict(sorted(worker_ids.items()))
+    # Only present on a managed run, and only while something stands. The
+    # single-model prompt in docs/esim-benchmark-manifest.md §2 is frozen, so
+    # an empty board must leave it byte-identical rather than adding an empty
+    # key to every turn.
+    if directives:
+        prompt["standingDirectives"] = [
+            directive.model_dump(by_alias=True, mode="json") for directive in directives
+        ]
     if feedback is not None:
         prompt["previousError"] = feedback
     return [
@@ -154,7 +174,7 @@ def _messages(
     ]
 
 
-def _parse_action(
+def parse_worker_action(
     text: str,
     *,
     episode_id: str,
@@ -220,6 +240,10 @@ async def run_case(
     max_turns = effective_max_turns(config, state.episode.max_ticks)
     totals = Counter[str]()
     latency_ms = 0.0
+    # Time spent queued for the shared request budget, kept apart from
+    # latency_ms. Folded together, a run throttled by this process' share of
+    # the account would be indistinguishable from one against a slow model.
+    queue_delay_ms = 0.0
     termination = "episode_complete"
     provider_invalid_reason: str | None = None
     # Every distinct id the provider claimed answered. More than one, or one
@@ -245,7 +269,7 @@ async def run_case(
                 try:
                     reply: ModelReply = await asyncio.wait_for(
                         adapter.generate(
-                            _messages(role, observation, feedback, worker_ids=worker_ids),
+                            build_worker_messages(role, observation, feedback, worker_ids=worker_ids),
                             max_tokens=config.max_output_tokens,
                         ),
                         timeout=config.request_timeout,
@@ -270,6 +294,7 @@ async def run_case(
                 totals["input_tokens"] += reply.input_tokens
                 totals["output_tokens"] += reply.output_tokens
                 latency_ms += reply.latency_ms
+                queue_delay_ms += reply.queue_delay_ms
                 if reply.served_model is not None:
                     served_models.add(reply.served_model)
                 record: dict[str, object] = {
@@ -279,6 +304,7 @@ async def run_case(
                     "attempt": attempt,
                     "servedModel": reply.served_model,
                     "latencyMs": reply.latency_ms,
+                    "queueDelayMs": reply.queue_delay_ms,
                     "inputTokens": reply.input_tokens,
                     "outputTokens": reply.output_tokens,
                 }
@@ -288,7 +314,7 @@ async def run_case(
                         totals["invalid_responses"] += 1
                         record["error"] = error
                         record["modelBehavior"] = True
-                        _record(jsonl, record)
+                        record_jsonl(jsonl, record)
                         break
                     totals["model_errors"] += 1
                     record["error"] = error
@@ -298,7 +324,7 @@ async def run_case(
                     if retryable and attempt < config.max_attempts:
                         delay = _retry_delay(reply, attempt, config)
                         record["retryInSeconds"] = delay
-                    _record(jsonl, record)
+                    record_jsonl(jsonl, record)
                     if retryable and attempt < config.max_attempts:
                         feedback = error
                         if delay:
@@ -308,19 +334,19 @@ async def run_case(
                     break
                 record["response"] = reply.text or ""
                 try:
-                    action = _parse_action(
+                    action = parse_worker_action(
                         reply.text or "", episode_id=state.episode.id, worker_id=worker_id,
                         role=role, tick=state.episode.tick, attempt=attempt,
                     )
                 except ValueError as exc:
                     totals["invalid_responses"] += 1
                     record["error"] = str(exc)
-                    _record(jsonl, record)
+                    record_jsonl(jsonl, record)
                     break
                 if action is None:
                     totals["no_actions"] += 1
                     record["action"] = None
-                    _record(jsonl, record)
+                    record_jsonl(jsonl, record)
                     break
                 result = sim.act(action)
                 recorder.record_action(action, result)
@@ -328,11 +354,11 @@ async def run_case(
                 if isinstance(result, ActionError):
                     totals["rejected_actions"] += 1
                     record["actionError"] = result.model_dump(by_alias=True)
-                    _record(jsonl, record)
+                    record_jsonl(jsonl, record)
                     break
                 state = result
                 totals["accepted_actions"] += 1
-                _record(jsonl, record)
+                record_jsonl(jsonl, record)
                 break
             if provider_invalid_reason is not None:
                 termination = "provider_invalid"
@@ -367,12 +393,13 @@ async def run_case(
         "inputTokens": totals["input_tokens"],
         "outputTokens": totals["output_tokens"],
         "latencyMs": latency_ms,
+        "queueDelayMs": queue_delay_ms,
         "outcomes": state.outcomes.model_dump(by_alias=True),
         "finalStateHash": state_hash(state.model_dump(by_alias=True)),
         "runValidity": "provider_invalid" if provider_invalid_reason is not None else "valid",
         "providerInvalidReason": provider_invalid_reason,
     }
-    _record(jsonl, summary)
+    record_jsonl(jsonl, summary)
     return RunResult(summary=summary, trajectory=trajectory)
 
 
