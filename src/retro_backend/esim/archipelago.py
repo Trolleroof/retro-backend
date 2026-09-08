@@ -22,12 +22,12 @@ def _snapshot(path: Path, files: dict[str, str]) -> None:
 
 def prepare_packet(task: Task, evidence: NativeEvidence, output: Path, *, judge_model: str) -> None:
     """Write official-grader inputs; this does not claim the judge was run."""
-    output.mkdir(parents=True, exist_ok=False)
-    task_json = task.model_dump_json(by_alias=True, indent=2)
-    evidence_json = evidence.model_dump_json(by_alias=True, indent=2)
     mechanical = mechanical_precheck(task, evidence)
     if mechanical["status"] != "ready_for_archipelago":
         raise ValueError(f"evidence is not ready for Archipelago: {mechanical['reason']}")
+    output.mkdir(parents=True, exist_ok=False)
+    task_json = task.model_dump_json(by_alias=True, indent=2)
+    evidence_json = evidence.model_dump_json(by_alias=True, indent=2)
     _snapshot(output / "initial_snapshot.zip", {"task.json": task_json})
     _snapshot(
         output / "final_snapshot.zip",

@@ -2,6 +2,8 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from retro_backend.esim.archipelago import ARCHIPELAGO_REVISION, prepare_packet
 from retro_backend.esim.controller import (
     EVIDENCE_VERSION,
@@ -101,3 +103,15 @@ def test_archipelago_packet_keeps_system_evidence_and_handover_separate(tmp_path
     assert {row["verifier_values"]["artifacts_to_reference"][0] for row in verifiers} == {
         "evidence.json"
     }
+
+
+def test_invalid_packet_attempt_leaves_output_available_for_retry(tmp_path: Path) -> None:
+    task, run = evidence()
+    output = tmp_path / "packet"
+    with pytest.raises(ValueError, match="not ready for Archipelago"):
+        prepare_packet(task, run, output, judge_model="openai/gpt-5")
+    assert not output.exists()
+
+    frozen = task.model_copy(update={"status": "frozen"})
+    prepare_packet(frozen, run, output, judge_model="openai/gpt-5")
+    assert (output / "archipelago-manifest.json").is_file()
