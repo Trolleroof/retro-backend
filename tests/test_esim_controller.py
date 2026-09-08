@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from retro_backend.esim import archipelago as archipelago_module
 from retro_backend.esim.archipelago import ARCHIPELAGO_REVISION, prepare_packet
 from retro_backend.esim.controller import (
     EVIDENCE_VERSION,
@@ -114,4 +115,25 @@ def test_invalid_packet_attempt_leaves_output_available_for_retry(tmp_path: Path
 
     frozen = task.model_copy(update={"status": "frozen"})
     prepare_packet(frozen, run, output, judge_model="openai/gpt-5")
+    assert (output / "archipelago-manifest.json").is_file()
+
+
+def test_failed_packet_write_leaves_output_available_for_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    task, run = evidence()
+    task = task.model_copy(update={"status": "frozen"})
+    output = tmp_path / "packet"
+    original_json = archipelago_module._json
+
+    def fail_once(path: Path, value: object) -> None:
+        monkeypatch.setattr(archipelago_module, "_json", original_json)
+        raise OSError("simulated write failure")
+
+    monkeypatch.setattr(archipelago_module, "_json", fail_once)
+    with pytest.raises(OSError, match="simulated write failure"):
+        prepare_packet(task, run, output, judge_model="openai/gpt-5")
+    assert not output.exists()
+
+    prepare_packet(task, run, output, judge_model="openai/gpt-5")
     assert (output / "archipelago-manifest.json").is_file()
