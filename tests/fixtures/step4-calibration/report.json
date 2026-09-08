@@ -1,0 +1,337 @@
+{
+  "generatedAt": "2026-09-08T20:15:14.568Z",
+  "developmentInstances": {
+    "quiet-tuesday": [
+      1,
+      5
+    ],
+    "dinner-rush": [
+      2,
+      5
+    ],
+    "saturday-night": [
+      1,
+      2
+    ]
+  },
+  "byPolicy": [
+    {
+      "policy": "passive",
+      "meanComposite": 54.9,
+      "meanService": 72.9,
+      "meanResources": 58.5,
+      "meanRecovery": 0,
+      "safetyFailures": 0,
+      "episodes": [
+        {
+          "level": "quiet-tuesday",
+          "seed": 1,
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "raw": {
+            "eligibleOrders": 6,
+            "onTimeOrders": 6,
+            "netOperatingReturn": 162,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "quiet-tuesday",
+          "seed": 5,
+          "service": 100,
+          "resources": 99.28571428571429,
+          "recovery": null,
+          "safety": 100,
+          "composite": 99.64285714285714,
+          "raw": {
+            "eligibleOrders": 6,
+            "onTimeOrders": 6,
+            "netOperatingReturn": 139,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "dinner-rush",
+          "seed": 2,
+          "service": 62.5,
+          "resources": 47.89473684210526,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 36.79824561403509,
+          "raw": {
+            "eligibleOrders": 8,
+            "onTimeOrders": 5,
+            "netOperatingReturn": 91,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "dinner-rush",
+          "seed": 5,
+          "service": 62.5,
+          "resources": 45.26315789473684,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 35.92105263157895,
+          "raw": {
+            "eligibleOrders": 8,
+            "onTimeOrders": 5,
+            "netOperatingReturn": 86,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "saturday-night",
+          "seed": 1,
+          "service": 62.5,
+          "resources": 36.5625,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 33.020833333333336,
+          "raw": {
+            "eligibleOrders": 8,
+            "onTimeOrders": 5,
+            "netOperatingReturn": 117,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "saturday-night",
+          "seed": 2,
+          "service": 50,
+          "resources": 21.875,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 23.95833333333333,
+          "raw": {
+            "eligibleOrders": 8,
+            "onTimeOrders": 4,
+            "netOperatingReturn": 70,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        }
+      ]
+    },
+    {
+      "policy": "cautious",
+      "meanComposite": 60.1,
+      "meanService": 96.7,
+      "meanResources": 51.2,
+      "meanRecovery": 0,
+      "safetyFailures": 0,
+      "episodes": [
+        {
+          "level": "quiet-tuesday",
+          "seed": 1,
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "raw": {
+            "eligibleOrders": 6,
+            "onTimeOrders": 6,
+            "netOperatingReturn": 146,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "quiet-tuesday",
+          "seed": 5,
+          "service": 100,
+          "resources": 87.85714285714286,
+          "recovery": null,
+          "safety": 100,
+          "composite": 93.92857142857143,
+          "raw": {
+            "eligibleOrders": 6,
+            "onTimeOrders": 6,
+            "netOperatingReturn": 123,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "dinner-rush",
+          "seed": 2,
+          "service": 100,
+          "resources": 39.473684210526315,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 46.49122807017543,
+          "raw": {
+            "eligibleOrders": 5,
+            "onTimeOrders": 5,
+            "netOperatingReturn": 75,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "dinner-rush",
+          "seed": 5,
+          "service": 100,
+          "resources": 36.84210526315789,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 45.614035087719294,
+          "raw": {
+            "eligibleOrders": 5,
+            "onTimeOrders": 5,
+            "netOperatingReturn": 70,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "saturday-night",
+          "seed": 1,
+          "service": 100,
+          "resources": 26.5625,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 42.1875,
+          "raw": {
+            "eligibleOrders": 5,
+            "onTimeOrders": 5,
+            "netOperatingReturn": 85,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "saturday-night",
+          "seed": 2,
+          "service": 80,
+          "resources": 16.25,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 32.083333333333336,
+          "raw": {
+            "eligibleOrders": 5,
+            "onTimeOrders": 4,
+            "netOperatingReturn": 52,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        }
+      ]
+    },
+    {
+      "policy": "adaptive",
+      "meanComposite": 92,
+      "meanService": 100,
+      "meanResources": 84.3,
+      "meanRecovery": 87.5,
+      "safetyFailures": 0,
+      "episodes": [
+        {
+          "level": "quiet-tuesday",
+          "seed": 1,
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "raw": {
+            "eligibleOrders": 6,
+            "onTimeOrders": 6,
+            "netOperatingReturn": 162,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "quiet-tuesday",
+          "seed": 5,
+          "service": 100,
+          "resources": 99.28571428571429,
+          "recovery": null,
+          "safety": 100,
+          "composite": 99.64285714285714,
+          "raw": {
+            "eligibleOrders": 6,
+            "onTimeOrders": 6,
+            "netOperatingReturn": 139,
+            "recoveryTime": null,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "dinner-rush",
+          "seed": 2,
+          "service": 100,
+          "resources": 73.15789473684211,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 91.05263157894734,
+          "raw": {
+            "eligibleOrders": 8,
+            "onTimeOrders": 8,
+            "netOperatingReturn": 139,
+            "recoveryTime": 3,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "dinner-rush",
+          "seed": 5,
+          "service": 100,
+          "resources": 72.63157894736842,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 90.87719298245615,
+          "raw": {
+            "eligibleOrders": 8,
+            "onTimeOrders": 8,
+            "netOperatingReturn": 138,
+            "recoveryTime": 3,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "saturday-night",
+          "seed": 1,
+          "service": 100,
+          "resources": 77.1875,
+          "recovery": 75,
+          "safety": 100,
+          "composite": 84.0625,
+          "raw": {
+            "eligibleOrders": 15,
+            "onTimeOrders": 15,
+            "netOperatingReturn": 247,
+            "recoveryTime": 5,
+            "safetyViolations": 0
+          }
+        },
+        {
+          "level": "saturday-night",
+          "seed": 2,
+          "service": 100,
+          "resources": 83.75,
+          "recovery": 75,
+          "safety": 100,
+          "composite": 86.25,
+          "raw": {
+            "eligibleOrders": 13,
+            "onTimeOrders": 13,
+            "netOperatingReturn": 268,
+            "recoveryTime": 5,
+            "safetyViolations": 0
+          }
+        }
+      ]
+    }
+  ]
+}
