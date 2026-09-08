@@ -1,5 +1,9 @@
 """Focused orchestration checks; no provider calls are made here."""
 
+# Callback doubles are deliberately structural and private helpers are tested
+# directly here; keep the production typecheck strict without noisy fixture warnings.
+# pyright: reportPrivateUsage=false, reportUnknownParameterType=false, reportMissingParameterType=false, reportUnusedParameter=false, reportUnknownLambdaType=false
+
 import asyncio
 import json
 from dataclasses import replace

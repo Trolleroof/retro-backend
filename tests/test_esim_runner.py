@@ -1,5 +1,9 @@
 """Focused checks for the frozen E-Sim benchmark runner (#70)."""
 
+# Test doubles intentionally keep the adapter protocol loose; production code
+# is checked strictly, while these helpers only need to model call behavior.
+# pyright: reportImplicitOverride=false, reportMissingParameterType=false, reportUnknownParameterType=false
+
 import asyncio
 import io
 import json
