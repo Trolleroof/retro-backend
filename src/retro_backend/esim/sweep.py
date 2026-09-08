@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from retro_backend.esim.case import load_case
+from retro_backend.esim.case import CaseError, load_case
 from retro_backend.esim.cli import _run_once  # pyright: ignore[reportPrivateUsage]
 from retro_backend.esim.runner import RunnerConfig
 
@@ -106,7 +106,8 @@ def validate_sweep_inputs(config: SweepConfig) -> tuple[tuple[str, ...], tuple[s
 
 
 def _component(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9._-]+", "__", value)
+    component = re.sub(r"[^A-Za-z0-9._-]+", "__", value)
+    return "__" if component in {".", ".."} else component
 
 
 def _attempt_dirs(case_dir: Path) -> list[Path]:
@@ -216,7 +217,12 @@ def _all_requirements(grade: Mapping[str, Any]) -> bool | None:
 
 
 def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_version: str) -> dict[str, Any]:
-    valid = [entry for entry in entries if entry.get("summary", {}).get("runValidity") == "valid"]
+    valid = [
+        entry
+        for entry in entries
+        if entry.get("summary", {}).get("runValidity") == "valid"
+        and entry.get("summary", {}).get("termination") == "episode_complete"
+    ]
     served = sorted({served for entry in valid for served in entry.get("summary", {}).get("servedModels", [])})
     grades = [entry["grade"] for entry in valid if isinstance(entry.get("grade"), Mapping)]
     calls = sum(int(entry.get("summary", {}).get("turns", 0)) for entry in entries)
@@ -311,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return asyncio.run(_main(args))
-    except ValueError as exc:
+    except (CaseError, ValueError) as exc:
         print(f"sweep configuration error: {exc}")
         return 2
 

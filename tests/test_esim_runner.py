@@ -63,6 +63,22 @@ async def test_runner_keeps_malformed_json_as_model_behavior() -> None:
 
 
 @pytest.mark.asyncio
+async def test_runner_keeps_adapter_reported_malformed_completion_as_model_behavior() -> None:
+    output = io.StringIO()
+    result = await run_case(
+        RunnerConfig("dinner-rush-001", "nim:test", max_turns=1),
+        Replies([_reply(None, "malformed_response: invalid model completion")]),
+        jsonl=output,
+    )
+
+    assert result.summary["runValidity"] == "valid"
+    assert result.summary["invalidResponses"] == 1
+    record = json.loads(output.getvalue().splitlines()[0])
+    assert record["modelBehavior"] is True
+    assert "providerError" not in record
+
+
+@pytest.mark.asyncio
 async def test_runner_keeps_illegal_action_as_model_behavior() -> None:
     adapter = Replies([_reply('{"tool":"seat","arguments":{"tableId":"table-3","partySize":2}}')])
 

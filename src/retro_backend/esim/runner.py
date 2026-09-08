@@ -21,7 +21,7 @@ from pydantic import ValidationError
 
 from retro_backend.esim.case import ENV_VERSION, load_case
 from retro_backend.esim.contracts import ACTION_VERSION, ActionEnvelope, ActionError, Role
-from retro_backend.esim.providers.base import ERR_TIMEOUT, ModelAdapter, ModelReply
+from retro_backend.esim.providers.base import ERR_MALFORMED, ERR_TIMEOUT, ModelAdapter, ModelReply
 from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import (
     ROLE_ORDER,
@@ -284,6 +284,12 @@ async def run_case(
                 }
                 if not reply.ok:
                     error = reply.error or "unknown_model_error"
+                    if error.startswith(ERR_MALFORMED):
+                        totals["invalid_responses"] += 1
+                        record["error"] = error
+                        record["modelBehavior"] = True
+                        _record(jsonl, record)
+                        break
                     totals["model_errors"] += 1
                     record["error"] = error
                     record["providerError"] = True

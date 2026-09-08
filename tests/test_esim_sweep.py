@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from retro_backend.esim.sweep import SweepConfig, run_sweep
+from retro_backend.esim.sweep import SweepConfig, _component, main, run_sweep
 
 
 def _inputs(tmp_path: Path, *, models: list[str] | None = None, version: str = "bench/v1") -> SweepConfig:
@@ -122,6 +122,44 @@ async def test_fewer_than_eight_valid_episodes_is_not_publishable(tmp_path: Path
     report = await run_sweep(config, episode_runner=fake_runner)
     assert report["models"][0]["valid_episodes"] == 0
     assert report["models"][0]["Service"] == "N/A"
+
+
+@pytest.mark.asyncio
+async def test_turn_limited_episode_is_not_valid_for_aggregation(tmp_path: Path) -> None:
+    config = _inputs(tmp_path, models=["nim:model-a"])
+
+    async def fake_runner(model, case_id, out_dir, attempt, sweep_config):
+        _write_bundle(out_dir, model=model, version=sweep_config.benchmark_version, valid=True, attempt=attempt)
+        summary_path = out_dir / "summary.json"
+        summary = json.loads(summary_path.read_text())
+        summary["termination"] = "turn_limit"
+        summary_path.write_text(json.dumps(summary))
+
+    report = await run_sweep(config, episode_runner=fake_runner)
+    assert report["models"][0]["valid_episodes"] == 0
+    assert report["models"][0]["Service"] == "N/A"
+
+
+def test_sweep_component_rejects_dot_segments() -> None:
+    assert _component(".") == "__"
+    assert _component("..") == "__"
+
+
+def test_sweep_cli_reports_missing_frozen_case_without_traceback(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = _inputs(tmp_path, models=["nim:model-a"])
+    registry = json.loads(config.registry_path.read_text())
+    registry["cases"][0]["caseId"] = "not-a-real-case"
+    config.registry_path.write_text(json.dumps(registry))
+
+    result = main([
+        "--benchmark-version", config.benchmark_version,
+        "--case-registry", str(config.registry_path),
+        "--model-roster", str(config.roster_path),
+        "--output-dir", str(config.output_dir),
+    ])
+
+    assert result == 2
+    assert "sweep configuration error:" in capsys.readouterr().out
 
 
 @pytest.mark.asyncio
