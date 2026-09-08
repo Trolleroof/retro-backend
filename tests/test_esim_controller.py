@@ -1,6 +1,7 @@
 import json
 import zipfile
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -118,21 +119,22 @@ def test_invalid_packet_attempt_leaves_output_available_for_retry(tmp_path: Path
     assert (output / "archipelago-manifest.json").is_file()
 
 
-def test_failed_packet_write_leaves_output_available_for_retry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_failed_packet_write_leaves_output_available_for_retry(tmp_path: Path) -> None:
     task, run = evidence()
     task = task.model_copy(update={"status": "frozen"})
     output = tmp_path / "packet"
-    original_json = archipelago_module._json
+    module_globals = cast(dict[str, object], archipelago_module.__dict__)
+    original_json = module_globals["_json"]
 
-    def fail_once(path: Path, value: object) -> None:
-        monkeypatch.setattr(archipelago_module, "_json", original_json)
+    def fail_once(_path: Path, _value: object) -> None:
         raise OSError("simulated write failure")
 
-    monkeypatch.setattr(archipelago_module, "_json", fail_once)
-    with pytest.raises(OSError, match="simulated write failure"):
-        prepare_packet(task, run, output, judge_model="openai/gpt-5")
+    module_globals["_json"] = fail_once
+    try:
+        with pytest.raises(OSError, match="simulated write failure"):
+            prepare_packet(task, run, output, judge_model="openai/gpt-5")
+    finally:
+        module_globals["_json"] = original_json
     assert not output.exists()
 
     prepare_packet(task, run, output, judge_model="openai/gpt-5")
