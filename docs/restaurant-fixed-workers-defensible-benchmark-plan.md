@@ -39,7 +39,7 @@ Use one stronger model for decisions that define the benchmark and cheaper model
 | --- | --- | --- | --- | --- |
 | 1 | Correct measurements and causal state transitions | `tui-gamepigeon` | `gpt-5.6-terra` | **DONE**; finish line verified |
 | 2 | Remove answer leakage and validate observations/actions | `tui-gamepigeon` | `gpt-5.6-luna` | **DONE**; finish line verified |
-| 3 | Prove actions are causal with development replays | `tui-gamepigeon` + `retro-backend` | `gpt-5.6-terra` | `tui-gamepigeon` half merged (development-replay tests); `retro-backend` held-out replay work not started |
+| 3 | Prove actions are causal with development replays | `tui-gamepigeon` + `retro-backend` | `gpt-5.6-terra` | **DONE** in both repositories; finish line verified |
 | 4 | Calibrate passive, cautious, and adaptive policies | `retro-backend` | `gpt-5.6-terra` | Not started; requires Step 3 causal gate |
 | 5 | Freeze held-out cases and benchmark version | Both | `gpt-6-astra` | Not started; requires Step 4 separation gate |
 | Cross-cutting | Freeze score contract, legal actions, and level purposes | Both | `gpt-6-astra` | Review throughout; final freeze before model runs |
@@ -178,12 +178,16 @@ Finish line: no observation field directly tells a policy which legal option to 
 
 ### Step 3: prove actions are causal
 
-Status: `tui-gamepigeon` half merged. `src/games/restaurant-arena/causal-replay.test.ts` replays each intervention on two distinct seeded development instances, each seed twice (treatment vs. no-op), and asserts the score delta from `scoreBenchmarkEvents`:
+Status: **DONE** in both repositories; finish line verified. `src/games/restaurant-arena/causal-replay.test.ts` replays each intervention on two distinct seeded development instances, each seed twice (treatment vs. no-op), and asserts the score delta from `scoreBenchmarkEvents`:
 
 - Dinner Rush, seeds 2 and 5: answering the oven-failure decision with `repair` versus leaving it unanswered moves Recovery from 0 to 100 and Service by at least 10 points on both seeds, with `netOperatingReturn` diverging between runs.
 - Quiet Tuesday, seeds 1 and 5: buying the unneeded second stove versus not moves Resources down by at least 10 points on both seeds (27–43 points across seeds 1–8), and the ledger reflects the full $60 cost every time.
 
-Finding: `raiseDecision` only ever holds one decision open at a time and never re-raises a decision id once used (`decisionsRaised`), so an incident's decision can silently never surface at all if an earlier decision (e.g. `allergy_ticket`, which opens on tick 1 of every level) is still unanswered when the incident fires. The replay tests work around this by answering the blocking decision the same way in both arms, but the underlying serialization means a slow-to-answer manager — human or model — can lose the ability to earn Recovery points through no fault of the choice quality. This affects benchmark fairness across models with different pacing and needs a product decision (queue decisions instead of dropping them, or something else) before Step 5 freezes the case set.
+Finding (resolved): `raiseDecision` used to hold only one decision open at a time and never re-raise a decision id once used (`decisionsRaised`), so an incident's decision could silently never surface at all if an earlier decision (e.g. `allergy_ticket`, which opens on tick 1 of every level) was still unanswered when the incident fired. A slow-to-answer manager — human or model — could lose the ability to earn Recovery points through no fault of choice quality, which was a benchmark fairness bug, not a scoring signal. Fix: a decision raised while another is already open is now queued (`decisionQueue`) instead of dropped, and is promoted the instant the current decision is answered (`promoteQueuedDecision`), so every decision a level triggers eventually surfaces regardless of manager pacing. See `decision-fairness.test.ts` for the regression coverage: an oven-failure decision that arrives while the allergy ticket is still open is queued rather than lost, and the manager can still answer it and reach Recovery = 100 once the allergy ticket clears.
+
+`retro-backend`'s held-out-case replay work is done: `scripts/export-benchmark-causal-fixtures.ts` replays the same eight seed/level/intervention runs `causal-replay.test.ts` covers and exports each run's raw measurement events plus this engine's `scoreBenchmarkEvents` result to `retro-backend`'s `tests/fixtures/traces/benchmark-causal/*.json` — the held-out case registry for this gate (development instances, not the frozen Step 5 suite). `retro-backend/tests/test_esim_benchmark_causal_parity.py` replays every fixture's events through the Python grader (`grade_benchmark_events`) and asserts, per case, that its score matches this engine's recorded score field for field, and separately re-proves the same treatment-vs-no-op deltas above using only the Python-computed scores.
+
+That replay surfaced one real cross-engine mismatch, since fixed: `grade_benchmark_events` rejected a served order whose `order_created` measurement had `eligible: false` (an order created too close to the shift's end for its own deadline to fit, e.g. a walk-in seated near closing — ordinary fixed-worker behavior, since workers do not consult the scoring window). `scoreBenchmarkEvents` already excludes such orders from the count without erroring; the Python grader now does the same, tracking referential order-created integrity separately from score eligibility instead of conflating the two.
 
 For each development instance, replay the same seed with one intended intervention and with no intervention. The targeted raw metric must change in the expected direction, and its tradeoff must appear in another raw metric when the action has a cost.
 
@@ -192,7 +196,7 @@ Minimum gate:
 - the intended action changes its targeted component by at least 10 points in two development instances; and
 - unsupported staffing, purchase, or recovery choices are removed rather than scored as meaningful.
 
-Finish line: every decision presented as important has a measurable consequence in the simulator. `retro-backend`'s held-out-case replay work is still required before this finish line is fully met.
+Finish line: every decision presented as important has a measurable consequence in the simulator, and `retro-backend` reproduces the same causal result and the same score from the same events. Met in both repositories.
 
 ### Step 4: calibrate three non-model policies
 

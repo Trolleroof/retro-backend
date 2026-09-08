@@ -289,27 +289,41 @@ def grade_benchmark_events(events: Sequence[Mapping[str, object]]) -> BenchmarkS
     if not isinstance(config.get("recoveryApplicable"), bool):
         raise BenchmarkScoreError("benchmark_config has invalid recoveryApplicable")
 
+    # `created` holds only *eligible* creations -- the set the score is
+    # computed over. `created_ticks` holds every creation regardless of
+    # eligibility, so a served order can be checked for referential and
+    # temporal integrity without being scored. The fixed workers do not
+    # consult the scoring window: an order created too late in the shift for
+    # its own deadline to fit (`eligible: False`, e.g. a walk-in seated near
+    # closing) is still legitimately served, and the TypeScript engine's own
+    # `scoreBenchmarkEvents` silently excludes it from the count rather than
+    # treating it as malformed. Folding ineligible creations into `created`
+    # would score them; dropping their `order_served` on the floor would
+    # raise on every ordinary held-out trace this benchmark produces.
     created: dict[str, tuple[int, Mapping[str, object]]] = {}
+    created_ticks: dict[str, int] = {}
     served: dict[str, int] = {}
     ledger = 0.0
     violations = 0
     for tick, payload in rows:
         measurement = payload["measurement"]
-        if measurement == "order_created" and payload.get("eligible") is True:
+        if measurement == "order_created":
             order_id = _measurement_id(payload, "orderId")
-            if order_id in created:
-                raise BenchmarkScoreError(f"duplicate eligible order_created for {order_id}")
-            _measurement_number(payload, "deadlineTick")
-            created[order_id] = (tick, payload)
+            if order_id in created_ticks:
+                raise BenchmarkScoreError(f"duplicate order_created for {order_id}")
+            created_ticks[order_id] = tick
+            if payload.get("eligible") is True:
+                _measurement_number(payload, "deadlineTick")
+                created[order_id] = (tick, payload)
         elif measurement == "order_served":
             order_id = _measurement_id(payload, "orderId")
-            if order_id not in created:
+            if order_id not in created_ticks:
                 raise BenchmarkScoreError(
-                    f"order_served for {order_id} has no prior eligible order_created"
+                    f"order_served for {order_id} has no prior order_created"
                 )
-            if tick < created[order_id][0]:
+            if tick < created_ticks[order_id]:
                 raise BenchmarkScoreError(
-                    f"order_served for {order_id} precedes its eligible order_created"
+                    f"order_served for {order_id} precedes its order_created"
                 )
             if order_id in served:
                 raise BenchmarkScoreError(f"duplicate order_served for {order_id}")
