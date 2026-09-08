@@ -8,7 +8,9 @@ rejected action log, and the incidents that fired. Recording is free of the
 model loop and free of grading; nothing here scores anything.
 """
 
+import asyncio
 import json
+import re
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -19,10 +21,9 @@ from pydantic import ValidationError
 
 from retro_backend.esim.case import ENV_VERSION, load_case
 from retro_backend.esim.contracts import ACTION_VERSION, ActionEnvelope, ActionError, Role
-from retro_backend.esim.providers.base import ModelAdapter, ModelReply
+from retro_backend.esim.providers.base import ERR_TIMEOUT, ModelAdapter, ModelReply
 from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import (
-    RETRYABLE_ACTION_ERRORS,
     ROLE_ORDER,
     retryable_model_error,
     role_rotation,
@@ -47,12 +48,21 @@ class RunnerConfig:
     # turn-budget math in run_case (max_turns is independent of this value).
     max_output_tokens: int = 2500
     max_turns: int | None = None
+    request_timeout: float = 30.0
+    retry_delay_seconds: float = 0.25
+    max_retry_delay_seconds: float = 30.0
 
     def __post_init__(self) -> None:
         if self.max_attempts < 1 or self.max_output_tokens < 1:
             raise ValueError("max_attempts and max_output_tokens must be positive")
         if self.max_turns is not None and self.max_turns < 1:
             raise ValueError("max_turns must be positive when set")
+        if self.request_timeout <= 0:
+            raise ValueError("request_timeout must be positive")
+        if self.retry_delay_seconds < 0 or self.max_retry_delay_seconds < 0:
+            raise ValueError("retry delays must not be negative")
+        if self.max_retry_delay_seconds < self.retry_delay_seconds:
+            raise ValueError("max_retry_delay_seconds must be at least retry_delay_seconds")
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +90,18 @@ def effective_max_turns(config: RunnerConfig, max_ticks: int) -> int:
 def _record(sink: TextIO | None, record: Mapping[str, object]) -> None:
     if sink is not None:
         sink.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+
+
+def _retry_delay(reply: ModelReply, attempt: int, config: RunnerConfig) -> float:
+    """Use a provider Retry-After when supplied, otherwise bounded backoff."""
+    requested = reply.retry_after_seconds
+    if requested is None and reply.error is not None:
+        match = re.search(r"retry-after\s*=\s*([0-9]+(?:\.[0-9]+)?)", reply.error, re.IGNORECASE)
+        if match:
+            requested = float(match.group(1))
+    if requested is None:
+        requested = config.retry_delay_seconds * (2 ** (attempt - 1))
+    return min(config.max_retry_delay_seconds, max(0.0, requested))
 
 
 def _messages(
@@ -199,6 +221,7 @@ async def run_case(
     totals = Counter[str]()
     latency_ms = 0.0
     termination = "episode_complete"
+    provider_invalid_reason: str | None = None
     # Every distinct id the provider claimed answered. More than one, or one
     # that is not the requested model, means the run is not the single-model
     # run the manifest says it is.
@@ -219,10 +242,30 @@ async def run_case(
                     termination = "turn_limit"
                     break
                 observation = sim.observe(role).model_dump(by_alias=True)
-                reply: ModelReply = await adapter.generate(
-                    _messages(role, observation, feedback, worker_ids=worker_ids),
-                    max_tokens=config.max_output_tokens,
-                )
+                try:
+                    reply: ModelReply = await asyncio.wait_for(
+                        adapter.generate(
+                            _messages(role, observation, feedback, worker_ids=worker_ids),
+                            max_tokens=config.max_output_tokens,
+                        ),
+                        timeout=config.request_timeout,
+                    )
+                except TimeoutError:
+                    reply = ModelReply(
+                        text=None,
+                        input_tokens=0,
+                        output_tokens=0,
+                        latency_ms=config.request_timeout * 1000,
+                        error=f"{ERR_TIMEOUT}: request exceeded {config.request_timeout:g}s",
+                    )
+                except (ConnectionError, OSError) as exc:
+                    reply = ModelReply(
+                        text=None,
+                        input_tokens=0,
+                        output_tokens=0,
+                        latency_ms=0.0,
+                        error=f"network_error: {exc}",
+                    )
                 totals["turns"] += 1
                 totals["input_tokens"] += reply.input_tokens
                 totals["output_tokens"] += reply.output_tokens
@@ -243,10 +286,19 @@ async def run_case(
                     error = reply.error or "unknown_model_error"
                     totals["model_errors"] += 1
                     record["error"] = error
+                    record["providerError"] = True
+                    retryable = retryable_model_error(error)
+                    delay = 0.0
+                    if retryable and attempt < config.max_attempts:
+                        delay = _retry_delay(reply, attempt, config)
+                        record["retryInSeconds"] = delay
                     _record(jsonl, record)
-                    if retryable_model_error(error) and attempt < config.max_attempts:
+                    if retryable and attempt < config.max_attempts:
                         feedback = error
+                        if delay:
+                            await asyncio.sleep(delay)
                         continue
+                    provider_invalid_reason = error
                     break
                 record["response"] = reply.text or ""
                 try:
@@ -255,12 +307,9 @@ async def run_case(
                         role=role, tick=state.episode.tick, attempt=attempt,
                     )
                 except ValueError as exc:
-                    feedback = str(exc)
                     totals["invalid_responses"] += 1
-                    record["error"] = feedback
+                    record["error"] = str(exc)
                     _record(jsonl, record)
-                    if attempt < config.max_attempts:
-                        continue
                     break
                 if action is None:
                     totals["no_actions"] += 1
@@ -271,20 +320,22 @@ async def run_case(
                 recorder.record_action(action, result)
                 record["action"] = action.model_dump(by_alias=True, mode="json")
                 if isinstance(result, ActionError):
-                    feedback = f"{result.code}: {result.message}"
                     totals["rejected_actions"] += 1
                     record["actionError"] = result.model_dump(by_alias=True)
                     _record(jsonl, record)
-                    if result.code in RETRYABLE_ACTION_ERRORS and attempt < config.max_attempts:
-                        continue
                     break
                 state = result
                 totals["accepted_actions"] += 1
                 _record(jsonl, record)
                 break
+            if provider_invalid_reason is not None:
+                termination = "provider_invalid"
+                break
             if termination == "turn_limit":
                 break
         if termination == "turn_limit":
+            break
+        if termination == "provider_invalid":
             break
         state = sim.advance_time()
         recorder.record_state(state)
@@ -312,6 +363,8 @@ async def run_case(
         "latencyMs": latency_ms,
         "outcomes": state.outcomes.model_dump(by_alias=True),
         "finalStateHash": state_hash(state.model_dump(by_alias=True)),
+        "runValidity": "provider_invalid" if provider_invalid_reason is not None else "valid",
+        "providerInvalidReason": provider_invalid_reason,
     }
     _record(jsonl, summary)
     return RunResult(summary=summary, trajectory=trajectory)

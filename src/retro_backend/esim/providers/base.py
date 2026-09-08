@@ -16,6 +16,7 @@ __all__ = [
     "ERR_HTTP",
     "ERR_MALFORMED",
     "ERR_NETWORK",
+    "ERR_PROVIDER_UNAVAILABLE",
     "ERR_RATE_LIMIT",
     "ERR_TIMEOUT",
     "ERR_TRUNCATED",
@@ -30,6 +31,7 @@ ERR_CONFIGURATION = "configuration_error"
 ERR_HTTP = "http_error"
 ERR_MALFORMED = "malformed_response"
 ERR_NETWORK = "network_error"
+ERR_PROVIDER_UNAVAILABLE = "provider_unavailable"
 ERR_RATE_LIMIT = "rate_limit"
 ERR_TIMEOUT = "timeout"
 # The budget ran out before the model wrote an answer. Kept distinct from
@@ -80,6 +82,7 @@ class ModelReply:
     latency_ms: float
     error: str | None = None
     served_model: str | None = None
+    retry_after_seconds: float | None = None
 
     @property
     def ok(self) -> bool:

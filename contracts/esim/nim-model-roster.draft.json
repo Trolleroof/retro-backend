@@ -1,0 +1,24 @@
+{
+  "status": "probe_only",
+  "provider": "nvidia-nim",
+  "probedAt": "2026-09-08",
+  "probe": {
+    "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "temperature": 0.0,
+    "maxTokens": 512,
+    "requiredResponse": "{\"tool\":null}",
+    "note": "A successful probe proves reachability and one exact JSON response only; it does not prove benchmark validity or stable availability."
+  },
+  "models": [
+    { "model": "nim:openai/gpt-oss-20b", "servedModel": "openai/gpt-oss-20b", "probeStatus": "usable_exact_json" },
+    { "model": "nim:nvidia/nemotron-3-super-120b-a12b", "servedModel": "nvidia/nemotron-3-super-120b-a12b", "probeStatus": "usable_exact_json" },
+    { "model": "nim:minimaxai/minimax-m3", "servedModel": "minimaxai/minimax-m3", "probeStatus": "usable_exact_json" }
+  ],
+  "excludedProbeResults": [
+    { "model": "nim:moonshotai/kimi-k3", "reason": "request timeout" },
+    { "model": "nim:deepseek-ai/deepseek-v4-flash-0731", "reason": "request timeout" },
+    { "model": "nim:nvidia/nemotron-3.5-lightning-30b-a3b", "reason": "returned prose reasoning instead of exact JSON" },
+    { "model": "nim:mistralai/mistral-nemotron", "reason": "wrapped JSON in markdown fences" },
+    { "model": "nim:meta/muse-glimmer-30b", "reason": "returned null content" }
+  ]
+}

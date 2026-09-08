@@ -48,7 +48,7 @@ from retro_backend.esim.state_hash import state_hash
 
 TRAJECTORY_VERSION = "restaurant-arena-trajectory/v1"
 
-Termination = Literal["episode_complete", "turn_limit"]
+Termination = Literal["episode_complete", "turn_limit", "provider_invalid"]
 
 __all__ = [
     "TRAJECTORY_VERSION",

@@ -18,6 +18,8 @@ import asyncio
 import os
 import time
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import override
 
 import httpx
@@ -27,6 +29,7 @@ from retro_backend.esim.providers.base import (
     ERR_HTTP,
     ERR_MALFORMED,
     ERR_NETWORK,
+    ERR_PROVIDER_UNAVAILABLE,
     ERR_RATE_LIMIT,
     ERR_TIMEOUT,
     ERR_TRUNCATED,
@@ -53,6 +56,18 @@ DEFAULT_NIM_TIMEOUT_SECONDS = 30.0
 # something safely under 40/min, before relying on this value under
 # meaningful concurrent load. See docs/esim-benchmark-manifest.md §9.
 DEFAULT_NIM_RATE_LIMIT_RPS = 40.0  # 40 requests/second (see caveat above)
+
+
+def _retry_after_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        try:
+            return max(0.0, (parsedate_to_datetime(value) - datetime.now(UTC)).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return None
 
 
 class AsyncRateLimiter:
@@ -230,6 +245,7 @@ class NimAdapter(ModelAdapter):
                     output_tokens=0,
                     latency_ms=latency_ms,
                     error=msg,
+                    retry_after_seconds=_retry_after_seconds(retry_after),
                 )
 
             # 401/403 Authentication Error
@@ -244,12 +260,13 @@ class NimAdapter(ModelAdapter):
 
             # Other HTTP errors
             if response.status_code >= 400:
+                error_prefix = ERR_PROVIDER_UNAVAILABLE if response.status_code == 503 else ERR_HTTP
                 return ModelReply(
                     text=None,
                     input_tokens=0,
                     output_tokens=0,
                     latency_ms=latency_ms,
-                    error=f"{ERR_HTTP}: {response.status_code} {response.text.strip()}",
+                    error=f"{error_prefix}: {response.status_code} {response.text.strip()}",
                 )
 
             # Parse JSON body
