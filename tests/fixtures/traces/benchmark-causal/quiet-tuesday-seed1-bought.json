@@ -21,7 +21,7 @@
     {
       "tick": 0,
       "kind": "observation",
-      "timestamp": "2026-09-08T20:12:59.104Z",
+      "timestamp": "2026-09-05T18:00:00.000Z",
       "stateHash": "sha256:c76a4f814280f19dc12c6d59cc80c49e2d4fa7cd35cd59ed0ec4400987c4da7c",
       "actorId": "system",
       "text": "Shift started. Tables seated and queue active.",
@@ -37,7 +37,7 @@
     {
       "tick": 0,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:12:59.104Z",
+      "timestamp": "2026-09-05T18:00:00.000Z",
       "stateHash": "sha256:9aaf22a720e2c363cb712e690a1a200782560c0820badd4e6e2c249ef71a8b30",
       "actorId": "system",
       "payload": {
@@ -53,7 +53,7 @@
     {
       "tick": 0,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:12:59.104Z",
+      "timestamp": "2026-09-05T18:00:00.000Z",
       "stateHash": "sha256:74500060f646fef4753c394455ffa4448f3aee42b97ce2515f27519afd27e14b",
       "actorId": "system",
       "subject": {
@@ -72,7 +72,7 @@
     {
       "tick": 0,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:12:59.104Z",
+      "timestamp": "2026-09-05T18:00:00.000Z",
       "stateHash": "sha256:45e904867b1ef75c1ec46279814a39bc462ce97d11eedfbd5bf2fc54ce969126",
       "actorId": "system",
       "subject": {
@@ -91,7 +91,7 @@
     {
       "tick": 1,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:02.104Z",
+      "timestamp": "2026-09-05T18:00:03.000Z",
       "stateHash": "sha256:20d8439b39ff2b0fdb30e3f8ca7ded29091bd0742ec77b5b7af2aa50783f69c1",
       "actorId": "worker-chef",
       "role": "chef",
@@ -107,7 +107,7 @@
     {
       "tick": 1,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:02.104Z",
+      "timestamp": "2026-09-05T18:00:03.000Z",
       "stateHash": "sha256:c0a04749498ef34883fc08916c16d81de4f6fea7de2924077809f8b128aaf445",
       "actorId": "worker-chef",
       "role": "chef",
@@ -125,7 +125,7 @@
     {
       "tick": 1,
       "kind": "player_correction",
-      "timestamp": "2026-09-08T20:13:02.104Z",
+      "timestamp": "2026-09-05T18:00:03.000Z",
       "stateHash": "sha256:4c10e04d127eaf93900f80ddefd7e9e408e5f345fdc85f82af2f3f2d85779802",
       "actorId": "player",
       "targetRole": "chef",
@@ -139,7 +139,7 @@
     {
       "tick": 1,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:02.104Z",
+      "timestamp": "2026-09-05T18:00:03.000Z",
       "stateHash": "sha256:e02611973dd9ab0b812f46fbeaecffb8c677faef4a1cb4dbacf9095826401a79",
       "actorId": "worker-chef",
       "role": "chef",
@@ -161,7 +161,7 @@
     {
       "tick": 2,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:05.104Z",
+      "timestamp": "2026-09-05T18:00:06.000Z",
       "stateHash": "sha256:44060ebcf3a52dc25379cf27131118261d20866cf74a5307ceac5c6da3c90be0",
       "actorId": "system",
       "subject": {
@@ -180,7 +180,7 @@
     {
       "tick": 2,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:05.104Z",
+      "timestamp": "2026-09-05T18:00:06.000Z",
       "stateHash": "sha256:f292e8a594cca6202e9537071f0a28e0fa438da7087d2e29131aaac8761a835b",
       "actorId": "worker-chef",
       "role": "chef",
@@ -196,7 +196,7 @@
     {
       "tick": 3,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:08.104Z",
+      "timestamp": "2026-09-05T18:00:09.000Z",
       "stateHash": "sha256:c0daa9d2d158c82c1556af951b3832ecc1c10001d4601b3e3f6dc825d2ec893a",
       "actorId": "worker-chef",
       "role": "chef",
@@ -212,7 +212,7 @@
     {
       "tick": 4,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:11.104Z",
+      "timestamp": "2026-09-05T18:00:12.000Z",
       "stateHash": "sha256:8c3b735ca866dbcd7c736e66bcd7109d4a4c982666fee7dd9785b894c8f2710f",
       "actorId": "system",
       "payload": {
@@ -226,7 +226,7 @@
     {
       "tick": 4,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:11.104Z",
+      "timestamp": "2026-09-05T18:00:12.000Z",
       "stateHash": "sha256:a0a5b1df337fc5aba357781e224de9af05844bb255572701174bdf431b19b96f",
       "actorId": "system",
       "subject": {
@@ -242,7 +242,7 @@
     {
       "tick": 4,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:11.104Z",
+      "timestamp": "2026-09-05T18:00:12.000Z",
       "stateHash": "sha256:49e2eeeaae1a9082dd421a614b0df7740ba17fda7316b423e77d36c340bbc1b4",
       "actorId": "system",
       "payload": {
@@ -256,7 +256,7 @@
     {
       "tick": 4,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:11.104Z",
+      "timestamp": "2026-09-05T18:00:12.000Z",
       "stateHash": "sha256:b4f8b53c38d6b70166ae89ff0d7ed25d50df43e5b24707d56643a7a4d582ca73",
       "actorId": "worker-server",
       "role": "server",
@@ -272,7 +272,7 @@
     {
       "tick": 5,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:14.104Z",
+      "timestamp": "2026-09-05T18:00:15.000Z",
       "stateHash": "sha256:8b1dab17ebe2aadc1764715e71a3c95ee582dde423e539fc57fec799dc48cfd4",
       "actorId": "system",
       "subject": {
@@ -291,7 +291,7 @@
     {
       "tick": 5,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:14.104Z",
+      "timestamp": "2026-09-05T18:00:15.000Z",
       "stateHash": "sha256:5b665c7208e7d831e1f023b540b3f2e3140ff17558339983d3a5ac2403e87461",
       "actorId": "worker-chef",
       "role": "chef",
@@ -307,7 +307,7 @@
     {
       "tick": 5,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:14.104Z",
+      "timestamp": "2026-09-05T18:00:15.000Z",
       "stateHash": "sha256:027e7169912686ebf8f4a9a407a9a057a1632f9196f2b91e815b4114f04bda6e",
       "actorId": "system",
       "payload": {
@@ -321,7 +321,7 @@
     {
       "tick": 5,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:14.104Z",
+      "timestamp": "2026-09-05T18:00:15.000Z",
       "stateHash": "sha256:f1a831116a2626c972c469c860169341f4f156ba634069cc944af4dca9af54f7",
       "actorId": "system",
       "subject": {
@@ -337,7 +337,7 @@
     {
       "tick": 5,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:14.104Z",
+      "timestamp": "2026-09-05T18:00:15.000Z",
       "stateHash": "sha256:491ff50155674c821a3a12288aadf56b996ad6deeb8c6400a721c365d0f9ede8",
       "actorId": "system",
       "payload": {
@@ -351,7 +351,7 @@
     {
       "tick": 5,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:14.104Z",
+      "timestamp": "2026-09-05T18:00:15.000Z",
       "stateHash": "sha256:ace3e8854f6d141435337b1182128168ec3d93e4806704b4e5ccab3a07aba323",
       "actorId": "worker-server",
       "role": "server",
@@ -367,7 +367,7 @@
     {
       "tick": 6,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:17.104Z",
+      "timestamp": "2026-09-05T18:00:18.000Z",
       "stateHash": "sha256:1e7be5a0568c959b2110e921bfb0e76481144a634556664b897b9dcbea13f289",
       "actorId": "system",
       "payload": {
@@ -381,7 +381,7 @@
     {
       "tick": 6,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:17.104Z",
+      "timestamp": "2026-09-05T18:00:18.000Z",
       "stateHash": "sha256:e5c3ab5c770df78b6dc30eeddebc255d3e91a4f4553c6f0ae3d1978224b522ae",
       "actorId": "system",
       "subject": {
@@ -397,7 +397,7 @@
     {
       "tick": 6,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:17.104Z",
+      "timestamp": "2026-09-05T18:00:18.000Z",
       "stateHash": "sha256:988f98579d391c607a4bdb1050e5367416bbb5475cf45ed9b54d1db2939c3e1f",
       "actorId": "system",
       "payload": {
@@ -411,7 +411,7 @@
     {
       "tick": 6,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:17.104Z",
+      "timestamp": "2026-09-05T18:00:18.000Z",
       "stateHash": "sha256:3566d471b4f5aade896e4bfb231b12a235ba09718a760727db80e6ff49e5c55d",
       "actorId": "worker-server",
       "role": "server",
@@ -427,7 +427,7 @@
     {
       "tick": 6,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:17.104Z",
+      "timestamp": "2026-09-05T18:00:18.000Z",
       "stateHash": "sha256:06212654ba24d7ceaff9bbff2830da48fcd3fddbc278530f8ef008b9c0edead3",
       "actorId": "system",
       "payload": {
@@ -441,7 +441,7 @@
     {
       "tick": 7,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:20.104Z",
+      "timestamp": "2026-09-05T18:00:21.000Z",
       "stateHash": "sha256:13a8bd6e3b73759c8c6d99ba7253e4910dd5c3dc9c0a158835356727a3930cd0",
       "actorId": "system",
       "payload": {
@@ -455,7 +455,7 @@
     {
       "tick": 7,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:20.104Z",
+      "timestamp": "2026-09-05T18:00:21.000Z",
       "stateHash": "sha256:ec62da11da3a862e21038a7035b055c42acbf932d25320f7b8f72a1b09986a05",
       "actorId": "system",
       "subject": {
@@ -471,7 +471,7 @@
     {
       "tick": 7,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:20.104Z",
+      "timestamp": "2026-09-05T18:00:21.000Z",
       "stateHash": "sha256:25d4d4b23a2e073a8fcba2473237c39c438bac76078175e0a7dac0127afd2f59",
       "actorId": "system",
       "payload": {
@@ -485,7 +485,7 @@
     {
       "tick": 7,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:20.104Z",
+      "timestamp": "2026-09-05T18:00:21.000Z",
       "stateHash": "sha256:18c03946c41a313761e3a5271274e672ba4e23dbca8d37a2103ecebce4c72d7f",
       "actorId": "worker-server",
       "role": "server",
@@ -501,7 +501,7 @@
     {
       "tick": 8,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:23.104Z",
+      "timestamp": "2026-09-05T18:00:24.000Z",
       "stateHash": "sha256:21053e4abcc4c773e55a3eef92aa74f862235121d038423a8116e9187aca2d7c",
       "actorId": "system",
       "subject": {
@@ -520,7 +520,7 @@
     {
       "tick": 8,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:23.104Z",
+      "timestamp": "2026-09-05T18:00:24.000Z",
       "stateHash": "sha256:11d48fad3d4230d9bb59201e07b985fcb248381cc4d307e409465758423b4804",
       "actorId": "worker-chef",
       "role": "chef",
@@ -536,7 +536,7 @@
     {
       "tick": 9,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:26.104Z",
+      "timestamp": "2026-09-05T18:00:27.000Z",
       "stateHash": "sha256:6bd1d9c721866e83166957a27b8ca8f9f34cfebd21e6180ed85ea839301606ce",
       "actorId": "system",
       "payload": {
@@ -550,7 +550,7 @@
     {
       "tick": 9,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:26.104Z",
+      "timestamp": "2026-09-05T18:00:27.000Z",
       "stateHash": "sha256:4cc1b7c150d7877a36874a2eaf63f82a2e4ff9d6c4cd4530b0ad5a8231a4d977",
       "actorId": "system",
       "subject": {
@@ -566,7 +566,7 @@
     {
       "tick": 9,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:26.104Z",
+      "timestamp": "2026-09-05T18:00:27.000Z",
       "stateHash": "sha256:2128d02d10f4db3765fcc1a60ce147c6f37c12ccc5638e453a8fb0707b320b18",
       "actorId": "system",
       "payload": {
@@ -580,7 +580,7 @@
     {
       "tick": 9,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:26.104Z",
+      "timestamp": "2026-09-05T18:00:27.000Z",
       "stateHash": "sha256:9df2274e659d2ad3c4d6828083d1e9c565047bf4132e06fe15e705294b78c7b5",
       "actorId": "worker-server",
       "role": "server",
@@ -596,7 +596,7 @@
     {
       "tick": 12,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:35.104Z",
+      "timestamp": "2026-09-05T18:00:36.000Z",
       "stateHash": "sha256:b1597be463a7234ce6cae7a2d6296270cc1fdb89f86fdac1d699caca2e0a5da1",
       "actorId": "system",
       "subject": {
@@ -615,7 +615,7 @@
     {
       "tick": 12,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:35.104Z",
+      "timestamp": "2026-09-05T18:00:36.000Z",
       "stateHash": "sha256:b8d3ed5a7cd9d7c3ddba7e18793b9712d0e9519c2aba463745c341745a575943",
       "actorId": "worker-chef",
       "role": "chef",
@@ -631,7 +631,7 @@
     {
       "tick": 13,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:38.104Z",
+      "timestamp": "2026-09-05T18:00:39.000Z",
       "stateHash": "sha256:340d4bd901a5c483d410ca8844a3e4aebde3fc1995954cd2a83897e3e1b790c0",
       "actorId": "system",
       "payload": {
@@ -645,7 +645,7 @@
     {
       "tick": 13,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:38.104Z",
+      "timestamp": "2026-09-05T18:00:39.000Z",
       "stateHash": "sha256:5a2d0a0b258b9a9b11d642df51c90e578d60164122c532db6bff2fa8037f65d6",
       "actorId": "system",
       "subject": {
@@ -661,7 +661,7 @@
     {
       "tick": 13,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:38.104Z",
+      "timestamp": "2026-09-05T18:00:39.000Z",
       "stateHash": "sha256:b83235ea96a18647fd9aec612cf93dcb6681d25870b140a8753152ce143048c4",
       "actorId": "system",
       "payload": {
@@ -675,7 +675,7 @@
     {
       "tick": 13,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:38.104Z",
+      "timestamp": "2026-09-05T18:00:39.000Z",
       "stateHash": "sha256:9b5f9bded55fb7b672f80e7ef544ab81fcf329d2b8c6f2e6a80764e7d25194b4",
       "actorId": "worker-server",
       "role": "server",
@@ -691,7 +691,7 @@
     {
       "tick": 15,
       "kind": "inspection",
-      "timestamp": "2026-09-08T20:13:44.104Z",
+      "timestamp": "2026-09-05T18:00:45.000Z",
       "stateHash": "sha256:e51a97156d683559868428f2f02155d5d3d4cefc43c5867eb309885011bf8951",
       "actorId": "system",
       "requestId": "evt-probe-shelf-1",
@@ -715,7 +715,7 @@
     {
       "tick": 15,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:44.104Z",
+      "timestamp": "2026-09-05T18:00:45.000Z",
       "stateHash": "sha256:94d8b8a7c0dd37c0cbeb73a07029e98fa7eecf0edeeb778f8d8523802455cf1d",
       "actorId": "system",
       "subject": {
@@ -734,7 +734,7 @@
     {
       "tick": 15,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:44.104Z",
+      "timestamp": "2026-09-05T18:00:45.000Z",
       "stateHash": "sha256:fb76923054fcd1d84ad05611081b4886933f8fb09bb5ed25534d3453a5c4f5e1",
       "actorId": "worker-chef",
       "role": "chef",
@@ -750,7 +750,7 @@
     {
       "tick": 16,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:47.104Z",
+      "timestamp": "2026-09-05T18:00:48.000Z",
       "stateHash": "sha256:053a2aa7852955f7ad6539c836e264e3220baa88eec02a93374403d59f99f35a",
       "actorId": "system",
       "payload": {
@@ -764,7 +764,7 @@
     {
       "tick": 16,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:47.104Z",
+      "timestamp": "2026-09-05T18:00:48.000Z",
       "stateHash": "sha256:76a02991c760d5c00a209e58a176ff73fe00bed5548ac0491dc36d956e80d4a9",
       "actorId": "system",
       "subject": {
@@ -780,7 +780,7 @@
     {
       "tick": 16,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:47.104Z",
+      "timestamp": "2026-09-05T18:00:48.000Z",
       "stateHash": "sha256:3e453abda97f45a14ed5c30e90397e11a0700e83841f48aa2c7d4dfbbdfa3355",
       "actorId": "system",
       "payload": {
@@ -794,7 +794,7 @@
     {
       "tick": 16,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:47.104Z",
+      "timestamp": "2026-09-05T18:00:48.000Z",
       "stateHash": "sha256:6305736541e9bcb7c5fb1808a6856d8168b872a0a75a67fa5f1181c6649c164d",
       "actorId": "worker-server",
       "role": "server",
@@ -810,7 +810,7 @@
     {
       "tick": 18,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:53.104Z",
+      "timestamp": "2026-09-05T18:00:54.000Z",
       "stateHash": "sha256:5b2c6591626f72c88f9c1b48de444d6eda3ab56d0758c60ef0c3db83eaa8d648",
       "actorId": "system",
       "subject": {
@@ -829,7 +829,7 @@
     {
       "tick": 18,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:53.104Z",
+      "timestamp": "2026-09-05T18:00:54.000Z",
       "stateHash": "sha256:cec4f8243ef78bc405868791f1399c4a5375d1ce53d45ecce0da614d89442406",
       "actorId": "worker-chef",
       "role": "chef",
@@ -845,7 +845,7 @@
     {
       "tick": 19,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:56.104Z",
+      "timestamp": "2026-09-05T18:00:57.000Z",
       "stateHash": "sha256:fc9ce1679912ad6ff469c4551a63a5b939619742e28c87ebb7ba16abd45857a7",
       "actorId": "system",
       "payload": {
@@ -859,7 +859,7 @@
     {
       "tick": 19,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:56.104Z",
+      "timestamp": "2026-09-05T18:00:57.000Z",
       "stateHash": "sha256:96bef1849b636c6a5da908e89f4f9cb8a44453ac0419280efb8e493613ec939a",
       "actorId": "system",
       "subject": {
@@ -875,7 +875,7 @@
     {
       "tick": 19,
       "kind": "measurement",
-      "timestamp": "2026-09-08T20:13:56.104Z",
+      "timestamp": "2026-09-05T18:00:57.000Z",
       "stateHash": "sha256:63836b4334dfb9e9a873ea84ce7a0f91ff536c69e30c0543fd40f227a734dc73",
       "actorId": "system",
       "payload": {
@@ -889,7 +889,7 @@
     {
       "tick": 19,
       "kind": "action",
-      "timestamp": "2026-09-08T20:13:56.104Z",
+      "timestamp": "2026-09-05T18:00:57.000Z",
       "stateHash": "sha256:d9baf4bef1e205e187650d071dd37de655f2c0f3606cfccb1be260a74c9c6296",
       "actorId": "worker-server",
       "role": "server",
@@ -905,7 +905,7 @@
     {
       "tick": 24,
       "kind": "outcome",
-      "timestamp": "2026-09-08T20:14:11.104Z",
+      "timestamp": "2026-09-05T18:01:12.000Z",
       "stateHash": "sha256:bd3676d28c84ab015c51e0ff37b41225d3062426a8294aa5285074ac4660bde4",
       "actorId": "system",
       "text": "Shift outcome: $102 takings, 8 covers served, 8 safe plates.",
