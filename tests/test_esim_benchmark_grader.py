@@ -75,6 +75,20 @@ def test_malformed_or_duplicated_score_inputs_fail_closed() -> None:
     with pytest.raises(BenchmarkScoreError, match="duplicate"):
         grade_benchmark_events(duplicate)
 
+    with pytest.raises(BenchmarkScoreError, match="invalid measurement"):
+        grade_benchmark_events(_events() + [{"tick": 1, "payload": {"measurement": "typo"}}])
+
+    with pytest.raises(BenchmarkScoreError, match="non-object payload"):
+        grade_benchmark_events(_events() + [{"tick": 1, "payload": "ledger_entry"}])
+
+
+def test_service_rejects_a_serve_before_its_eligible_creation() -> None:
+    events = _events()
+    events.insert(1, _event(0, "order_served", orderId="order-1"))
+
+    with pytest.raises(BenchmarkScoreError, match="no prior eligible"):
+        grade_benchmark_events(events)
+
 
 def test_replay_verification_compares_the_recorded_score_to_the_saved_trace() -> None:
     recorded = grade_benchmark_events(_events())
@@ -100,14 +114,16 @@ def test_provider_invalid_and_replay_mismatch_episodes_leave_the_denominator() -
         case_id="replay", run_validity="valid", scores=scores, replay_verified=False
     )
 
-    withheld = summarize_benchmark([valid] * 7 + [provider_failure, replay_mismatch])
+    valid_seven = [valid.model_copy(update={"case_id": f"valid-{index}"}) for index in range(7)]
+    withheld = summarize_benchmark(valid_seven + [provider_failure, replay_mismatch])
     assert withheld.valid_episodes == 7
     assert withheld.unattempted_episodes == 0
     assert withheld.excluded_episodes == {"provider_failure": 1, "replay_mismatch": 1}
     assert withheld.publishable is False
     assert withheld.composite is None
 
-    published = summarize_benchmark([valid] * 8 + [provider_failure])
+    valid_eight = [valid.model_copy(update={"case_id": f"valid-{index}"}) for index in range(8)]
+    published = summarize_benchmark(valid_eight + [provider_failure])
     assert published.valid_episodes == 8
     assert published.planned_episodes == 9
     assert published.unattempted_episodes == 0
@@ -116,6 +132,9 @@ def test_provider_invalid_and_replay_mismatch_episodes_leave_the_denominator() -
     assert published.recovery == 75
     assert published.composite == 58.3
     assert published.all_requirements_met == 0
+
+    with pytest.raises(ValueError, match="distinct case_id"):
+        summarize_benchmark([valid] * 2)
 
 
 def test_cli_scores_and_replays_a_saved_trace(tmp_path: Path) -> None:

@@ -57,6 +57,19 @@ SERVED = "served"
 # fixed precision rather than carrying the last bits of a division. Rounding
 # is itself deterministic, so this costs nothing the grader promises.
 _SCORE_PRECISION = 6
+_BENCHMARK_MEASUREMENTS = frozenset(
+    {
+        "benchmark_config",
+        "equipment_failed",
+        "equipment_restored",
+        "ledger_entry",
+        "order_created",
+        "order_expired",
+        "order_served",
+        "recovery_order_served",
+        "safety_violation",
+    }
+)
 
 
 def _score(value: float) -> float:
@@ -245,9 +258,17 @@ def grade_benchmark_events(events: Sequence[Mapping[str, object]]) -> BenchmarkS
     """Recompute the fixed-worker score from atomic trace measurements only."""
     rows: list[tuple[int, Mapping[str, object]]] = []
     for index, event in enumerate(events):
-        payload = event.get("payload")
-        if not isinstance(payload, Mapping) or not isinstance(payload.get("measurement"), str):
+        event_kind = event.get("kind")
+        if event_kind is not None and event_kind != "measurement":
             continue
+        if "payload" not in event or event["payload"] is None:
+            continue
+        payload = event["payload"]
+        if not isinstance(payload, Mapping):
+            raise BenchmarkScoreError(f"measurement event {index} has a non-object payload")
+        measurement = payload.get("measurement")
+        if not isinstance(measurement, str) or measurement not in _BENCHMARK_MEASUREMENTS:
+            raise BenchmarkScoreError(f"measurement event {index} has an invalid measurement")
         tick = event.get("tick")
         if isinstance(tick, bool) or not isinstance(tick, int) or tick < 0:
             raise BenchmarkScoreError(f"measurement event {index} has an invalid tick")
@@ -282,6 +303,14 @@ def grade_benchmark_events(events: Sequence[Mapping[str, object]]) -> BenchmarkS
             created[order_id] = (tick, payload)
         elif measurement == "order_served":
             order_id = _measurement_id(payload, "orderId")
+            if order_id not in created:
+                raise BenchmarkScoreError(
+                    f"order_served for {order_id} has no prior eligible order_created"
+                )
+            if tick < created[order_id][0]:
+                raise BenchmarkScoreError(
+                    f"order_served for {order_id} precedes its eligible order_created"
+                )
             if order_id in served:
                 raise BenchmarkScoreError(f"duplicate order_served for {order_id}")
             served[order_id] = tick
@@ -372,6 +401,9 @@ def summarize_benchmark(
         raise ValueError("minimum_valid must be between 1 and planned_episodes")
     if len(episodes) > planned_episodes:
         raise ValueError("received more episodes than planned")
+    case_ids = [episode.case_id for episode in episodes]
+    if len(set(case_ids)) != len(case_ids):
+        raise ValueError("episodes must have distinct case_id values")
 
     excluded = Counter(
         reason for episode in episodes if (reason := episode.exclusion_reason) is not None
