@@ -28,8 +28,9 @@ from retro_backend.esim.providers.base import (
     ERR_AUTH,
     ERR_BUDGET_TIMEOUT,
     ERR_HTTP,
-    ERR_MALFORMED,
     ERR_NETWORK,
+    ERR_PROVIDER_MALFORMED,
+    ERR_PROVIDER_UNAVAILABLE,
     ERR_RATE_LIMIT,
     ERR_TIMEOUT,
     ERR_TRUNCATED,
@@ -229,6 +230,7 @@ class NimAdapter(ModelAdapter):
                     output_tokens=0,
                     latency_ms=latency_ms,
                     error=msg,
+                    retry_after_seconds=parse_retry_after(retry_after),
                 )
 
             # 401/403 Authentication Error
@@ -243,12 +245,13 @@ class NimAdapter(ModelAdapter):
 
             # Other HTTP errors
             if response.status_code >= 400:
+                error_prefix = ERR_PROVIDER_UNAVAILABLE if response.status_code == 503 else ERR_HTTP
                 return ModelReply(
                     text=None,
                     input_tokens=0,
                     output_tokens=0,
                     latency_ms=latency_ms,
-                    error=f"{ERR_HTTP}: {response.status_code} {response.text.strip()}",
+                    error=f"{error_prefix}: {response.status_code} {response.text.strip()}",
                 )
 
             # Parse JSON body
@@ -260,7 +263,7 @@ class NimAdapter(ModelAdapter):
                     input_tokens=0,
                     output_tokens=0,
                     latency_ms=latency_ms,
-                    error=f"{ERR_MALFORMED}: invalid json response body ({exc})",
+                    error=f"{ERR_PROVIDER_MALFORMED}: invalid json response body ({exc})",
                 )
 
             # Extract completion text
@@ -271,7 +274,7 @@ class NimAdapter(ModelAdapter):
                     input_tokens=0,
                     output_tokens=0,
                     latency_ms=latency_ms,
-                    error=f"{ERR_MALFORMED}: missing or empty 'choices' list in response",
+                    error=f"{ERR_PROVIDER_MALFORMED}: missing or empty 'choices' list in response",
                 )
 
             # Token counts and the answering model are read before any early
@@ -323,7 +326,7 @@ class NimAdapter(ModelAdapter):
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     latency_ms=latency_ms,
-                    error=f"{ERR_MALFORMED}: missing or non-string 'content' in first choice message",
+                    error=f"{ERR_PROVIDER_MALFORMED}: missing or non-string 'content' in first choice message",
                     served_model=served,
                 )
 

@@ -129,6 +129,9 @@ def build_manifest(
     repeat: int,
     repeats: int,
     started_at: str,
+    benchmark_version: str | None = None,
+    episode_id: str | None = None,
+    attempt_number: int = 1,
 ) -> dict[str, Any]:
     """The configuration record that travels with the run.
 
@@ -149,6 +152,9 @@ def build_manifest(
             "claim": "model comparison in a fixed multi-role restaurant harness",
         },
         "caseId": config.case_id,
+        "benchmarkVersion": benchmark_version,
+        "episodeId": episode_id,
+        "attemptNumber": attempt_number,
         "model": config.model,
         "seed": case_seed,
         "repeat": repeat,
@@ -161,6 +167,8 @@ def build_manifest(
             # a budget it never used.
             "maxTurns": effective_max_turns(config, max_ticks),
             "maxTurnsExplicitlySet": config.max_turns is not None,
+            "requestTimeoutSeconds": config.request_timeout,
+            "retryBudget": config.max_attempts - 1,
         },
         "sampling": {
             "set": {"temperature": 0.0},
@@ -181,6 +189,7 @@ def write_bundle(
     manifest: dict[str, Any],
     result: RunResult,
     graded: Grade,
+    summary_fields: dict[str, object] | None = None,
 ) -> None:
     """Land every artifact the acceptance checklist asks a run to record."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -197,6 +206,7 @@ def write_bundle(
         out_dir / "summary.json",
         {
             **result.summary,
+            **(summary_fields or {}),
             "initialStateHash": state_hash(initial),
             "finalStateHash": trajectory.final_state_hash,
         },
@@ -247,7 +257,15 @@ def guard_output_dir(
 
 
 async def _run_once(
-    config: RunnerConfig, out_dir: Path, *, repeat: int, repeats: int, overwrite: bool
+    config: RunnerConfig,
+    out_dir: Path,
+    *,
+    repeat: int,
+    repeats: int,
+    overwrite: bool,
+    benchmark_version: str | None = None,
+    episode_id: str | None = None,
+    attempt_number: int = 1,
 ) -> tuple[Grade, Trajectory]:
     started_at = datetime.now(UTC).isoformat()
     case = load_case(config.case_id)
@@ -269,9 +287,17 @@ async def _run_once(
             repeat=repeat,
             repeats=repeats,
             started_at=started_at,
+            benchmark_version=benchmark_version,
+            episode_id=episode_id,
+            attempt_number=attempt_number,
         ),
         result=result,
         graded=graded,
+        summary_fields={
+            "benchmarkVersion": benchmark_version,
+            "episodeId": episode_id,
+            "attemptNumber": attempt_number,
+        },
     )
     return graded, result.trajectory
 
@@ -305,12 +331,13 @@ async def _run_command(args: argparse.Namespace) -> int:
     # runner's defaults here once shadowed them: the CLI kept sending its own
     # stale 256-token budget after the runner's had been raised, and every run
     # went out under a budget the manifest then faithfully recorded as chosen.
-    overrides: dict[str, int] = {
+    overrides: dict[str, Any] = {
         name: value
         for name, value in (
             ("max_attempts", args.max_attempts),
             ("max_output_tokens", args.max_output_tokens),
             ("max_turns", args.max_turns),
+            ("request_timeout", args.request_timeout),
         )
         if value is not None
     }
@@ -795,6 +822,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--max-attempts", type=positive_int, default=None)
     run.add_argument("--max-output-tokens", type=positive_int, default=None)
     run.add_argument("--max-turns", type=positive_int, default=None)
+    run.add_argument("--request-timeout", type=float, default=None)
     run.add_argument(
         "--overwrite",
         action="store_true",

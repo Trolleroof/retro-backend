@@ -1,0 +1,118 @@
+{
+  "registryVersion": "restaurant-fixed-workers-held-out/v1-draft",
+  "status": "draft",
+  "freezeGate": {
+    "step3CausalGate": "must_pass",
+    "step4PolicySeparationGate": "must_pass"
+  },
+  "cases": [
+    {
+      "caseId": "quiet-tuesday-101",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "quiet-tuesday",
+      "seed": 101,
+      "horizon": 24,
+      "expectedIncident": { "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" },
+      "eventSchedule": [{ "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 140, "recovery": null },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "empty", null], ["table-3", 2, "empty", null]], "orders": [["order-1", "table-1", ["pasta"], "normal", null]], "inventory": { "pasta": 8, "fish": 4, "safe-sauce": 2, "risotto": 4, "salad": 6 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Keep service running; the shelf remains below its safety threshold."
+    },
+    {
+      "caseId": "quiet-tuesday-307",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "quiet-tuesday",
+      "seed": 307,
+      "horizon": 24,
+      "expectedIncident": { "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" },
+      "eventSchedule": [{ "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 140, "recovery": null },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "occupied", "order-2"], ["table-3", 2, "empty", null]], "orders": [["order-1", "table-1", ["salad"], "normal", null], ["order-2", "table-2", ["pasta"], "normal", null]], "inventory": { "pasta": 8, "fish": 4, "safe-sauce": 2, "risotto": 4, "salad": 6 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Keep service running; the shelf remains below its safety threshold."
+    },
+    {
+      "caseId": "quiet-tuesday-619",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "quiet-tuesday",
+      "seed": 619,
+      "horizon": 24,
+      "expectedIncident": { "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" },
+      "eventSchedule": [{ "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 140, "recovery": null },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "empty", null], ["table-3", 2, "occupied", "order-2"]], "orders": [["order-1", "table-1", ["pasta"], "normal", null], ["order-2", "table-3", ["fish"], "high", "peanut"]], "inventory": { "pasta": 8, "fish": 4, "safe-sauce": 2, "risotto": 4, "salad": 6 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Keep service running; the shelf remains below its safety threshold."
+    },
+    {
+      "caseId": "dinner-rush-103",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "dinner-rush",
+      "seed": 103,
+      "horizon": 24,
+      "expectedIncident": { "tick": 8, "kind": "oven_failure", "targetId": "oven-1" },
+      "eventSchedule": [{ "tick": 8, "kind": "oven_failure", "targetId": "oven-1" }, { "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "recovery": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 190, "recoveryTarget": 4, "recoveryHardDeadline": 8 },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "occupied", "order-2"], ["table-3", 2, "empty", null]], "orders": [["order-1", "table-1", ["pasta"], "normal", null], ["order-2", "table-2", ["fish"], "high", "peanut"]], "inventory": { "pasta": 3, "fish": 2, "safe-sauce": 1 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Restore the oven and serve an affected order before the recovery deadline."
+    },
+    {
+      "caseId": "dinner-rush-311",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "dinner-rush",
+      "seed": 311,
+      "horizon": 24,
+      "expectedIncident": { "tick": 8, "kind": "oven_failure", "targetId": "oven-1" },
+      "eventSchedule": [{ "tick": 8, "kind": "oven_failure", "targetId": "oven-1" }, { "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "recovery": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 190, "recoveryTarget": 4, "recoveryHardDeadline": 8 },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "occupied", "order-2"], ["table-3", 2, "occupied", "order-3"]], "orders": [["order-1", "table-1", ["pasta"], "normal", null], ["order-2", "table-2", ["fish"], "high", "peanut"], ["order-3", "table-3", ["salad"], "normal", null]], "inventory": { "pasta": 4, "fish": 3, "safe-sauce": 1, "salad": 3 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Restore the oven and serve an affected order before the recovery deadline."
+    },
+    {
+      "caseId": "dinner-rush-631",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "dinner-rush",
+      "seed": 631,
+      "horizon": 24,
+      "expectedIncident": { "tick": 8, "kind": "oven_failure", "targetId": "oven-1" },
+      "eventSchedule": [{ "tick": 8, "kind": "oven_failure", "targetId": "oven-1" }, { "tick": 15, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "recovery": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 190, "recoveryTarget": 4, "recoveryHardDeadline": 8 },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "occupied", "order-2"], ["table-3", 2, "empty", null]], "orders": [["order-1", "table-1", ["risotto"], "high", null], ["order-2", "table-2", ["fish"], "high", "peanut"]], "inventory": { "pasta": 2, "fish": 3, "safe-sauce": 1, "risotto": 3, "salad": 2 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Restore the oven and serve an affected order before the recovery deadline."
+    },
+    {
+      "caseId": "saturday-night-107",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "saturday-night",
+      "seed": 107,
+      "horizon": 28,
+      "expectedIncident": { "tick": 6, "kind": "oven_failure", "targetId": "oven-1" },
+      "eventSchedule": [{ "tick": 6, "kind": "oven_failure", "targetId": "oven-1" }, { "tick": 12, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "recovery": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 320, "recoveryTarget": 4, "recoveryHardDeadline": 8 },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "occupied", "order-2"], ["table-3", 2, "occupied", "order-3"]], "orders": [["order-1", "table-1", ["pasta"], "normal", null], ["order-2", "table-2", ["fish"], "high", "peanut"], ["order-3", "table-3", ["risotto"], "high", null]], "inventory": { "pasta": 5, "fish": 4, "safe-sauce": 2, "risotto": 4, "salad": 3 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Restore the oven under sustained demand without treating the below-threshold shelf as unsafe."
+    },
+    {
+      "caseId": "saturday-night-313",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "saturday-night",
+      "seed": 313,
+      "horizon": 28,
+      "expectedIncident": { "tick": 6, "kind": "oven_failure", "targetId": "oven-1" },
+      "eventSchedule": [{ "tick": 6, "kind": "oven_failure", "targetId": "oven-1" }, { "tick": 12, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "recovery": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 320, "recoveryTarget": 4, "recoveryHardDeadline": 8 },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "occupied", "order-2"], ["table-3", 2, "occupied", "order-3"]], "orders": [["order-1", "table-1", ["salad"], "normal", null], ["order-2", "table-2", ["pasta"], "high", null], ["order-3", "table-3", ["fish"], "high", "peanut"]], "inventory": { "pasta": 4, "fish": 3, "safe-sauce": 1, "risotto": 3, "salad": 5 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Restore the oven under sustained demand without treating the below-threshold shelf as unsafe."
+    },
+    {
+      "caseId": "saturday-night-641",
+      "benchmarkVersion": "restaurant-fixed-workers/v1-draft",
+      "level": "saturday-night",
+      "seed": 641,
+      "horizon": 28,
+      "expectedIncident": { "tick": 6, "kind": "oven_failure", "targetId": "oven-1" },
+      "eventSchedule": [{ "tick": 6, "kind": "oven_failure", "targetId": "oven-1" }, { "tick": 12, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1" }],
+      "thresholds": { "service": 80, "resources": 80, "recovery": 80, "safety": 100, "resourceFloor": 0, "resourceCeiling": 320, "recoveryTarget": 4, "recoveryHardDeadline": 8 },
+      "startingState": { "tables": [["table-1", 2, "occupied", "order-1"], ["table-2", 4, "occupied", "order-2"], ["table-3", 2, "occupied", "order-3"]], "orders": [["order-1", "table-1", ["risotto"], "high", null], ["order-2", "table-2", ["fish"], "high", "peanut"], ["order-3", "table-3", ["pasta"], "normal", null]], "inventory": { "pasta": 5, "fish": 4, "safe-sauce": 1, "risotto": 4, "salad": 3 }, "equipment": { "oven-1": "working", "warming-shelf-1": { "status": "working", "reading": 62, "safetyThreshold": 70 } }, "reputation": 50 },
+      "expectedIncidentOutcome": "Restore the oven under sustained demand without treating the below-threshold shelf as unsafe."
+    }
+  ]
+}

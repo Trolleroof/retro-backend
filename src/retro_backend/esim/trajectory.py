@@ -54,7 +54,7 @@ from retro_backend.esim.state_hash import state_hash
 
 TRAJECTORY_VERSION = "restaurant-arena-trajectory/v1"
 
-Termination = Literal["episode_complete", "turn_limit"]
+Termination = Literal["episode_complete", "turn_limit", "provider_invalid"]
 
 # How one manager turn ended. "stood_down" is a decision (``{"tool": null}``);
 # "no_decision" is the absence of one -- the provider failed, or never

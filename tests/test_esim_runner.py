@@ -1,5 +1,10 @@
 """Focused checks for the frozen E-Sim benchmark runner (#70)."""
 
+# Test doubles intentionally keep the adapter protocol loose; production code
+# is checked strictly, while these helpers only need to model call behavior.
+# pyright: reportImplicitOverride=false, reportMissingParameterType=false, reportUnknownParameterType=false
+
+import asyncio
 import io
 import json
 from collections.abc import Mapping, Sequence
@@ -44,36 +49,48 @@ def _reply(text: str | None, error: str | None = None) -> ModelReply:
 
 
 @pytest.mark.asyncio
-async def test_runner_retries_malformed_json_then_applies_action() -> None:
-    adapter = Replies([_reply("not json"), _reply('{"tool":"prepare","arguments":{"orderId":"order-2"}}')])
+async def test_runner_keeps_malformed_json_as_model_behavior() -> None:
+    adapter = Replies([_reply("not json")])
     output = io.StringIO()
 
     result = await run_case(
-        RunnerConfig("dinner-rush-001", "nim:test", max_turns=2), adapter, jsonl=output
+        RunnerConfig("dinner-rush-001", "nim:test", max_turns=1), adapter, jsonl=output
     )
 
     assert result.summary["invalidResponses"] == 1
-    assert result.summary["acceptedActions"] == 1
+    assert result.summary["acceptedActions"] == 0
+    assert result.summary["runValidity"] == "valid"
     assert result.summary["termination"] == "turn_limit"
     records = [json.loads(line) for line in output.getvalue().splitlines()]
     assert records[0]["error"].startswith("invalid_json")
-    assert records[1]["action"]["tool"] == "prepare"
+    assert records[0].get("providerError") is None
 
 
 @pytest.mark.asyncio
-async def test_runner_retries_invalid_tool_call_for_same_role() -> None:
-    adapter = Replies([
-        _reply('{"tool":"seat","arguments":{"tableId":"table-3","partySize":2}}'),
-        _reply('{"tool":"prepare","arguments":{"orderId":"order-2"}}'),
-    ])
+async def test_runner_keeps_adapter_reported_malformed_completion_as_model_behavior() -> None:
+    output = io.StringIO()
+    result = await run_case(
+        RunnerConfig("dinner-rush-001", "nim:test", max_turns=1),
+        Replies([_reply(None, "malformed_response: invalid model completion")]),
+        jsonl=output,
+    )
 
-    result = await run_case(RunnerConfig("dinner-rush-001", "nim:test", max_turns=2), adapter)
+    assert result.summary["runValidity"] == "valid"
+    assert result.summary["invalidResponses"] == 1
+    record = json.loads(output.getvalue().splitlines()[0])
+    assert record["modelBehavior"] is True
+    assert "providerError" not in record
+
+
+@pytest.mark.asyncio
+async def test_runner_keeps_illegal_action_as_model_behavior() -> None:
+    adapter = Replies([_reply('{"tool":"seat","arguments":{"tableId":"table-3","partySize":2}}')])
+
+    result = await run_case(RunnerConfig("dinner-rush-001", "nim:test", max_turns=1), adapter)
 
     assert result.summary["rejectedActions"] == 1
-    assert result.summary["acceptedActions"] == 1
-    assert len(adapter.messages) == 2
-    second_prompt = json.loads(adapter.messages[1][1]["content"])
-    assert second_prompt["previousError"].startswith("role_not_permitted")
+    assert result.summary["acceptedActions"] == 0
+    assert len(adapter.messages) == 1
 
 
 @pytest.mark.asyncio
@@ -107,6 +124,94 @@ async def test_runner_retries_a_transient_provider_failure() -> None:
     assert result.summary["modelErrors"] == 1
     assert result.summary["turns"] == 2
     assert result.summary["noActions"] == 1
+
+
+@pytest.mark.asyncio
+async def test_runner_times_out_twice_then_marks_episode_provider_invalid() -> None:
+    class SlowReplies(Replies):
+        async def generate(self, messages, *, max_tokens=None):
+            del messages, max_tokens
+            await asyncio.sleep(0.02)
+            return _reply('{"tool":null}')
+
+    output = io.StringIO()
+    result = await run_case(
+        RunnerConfig(
+            "dinner-rush-001",
+            "nim:test",
+            max_attempts=3,
+            max_turns=10,
+            request_timeout=0.001,
+            retry_delay_seconds=0,
+        ),
+        SlowReplies([]),
+        jsonl=output,
+    )
+
+    assert result.summary["runValidity"] == "provider_invalid"
+    assert result.summary["termination"] == "provider_invalid"
+    assert result.summary["turns"] == 3
+    reason = result.summary["providerInvalidReason"]
+    assert isinstance(reason, str)
+    assert reason.startswith("timeout:")
+    assert sum(1 for line in output.getvalue().splitlines() if '"providerError":true' in line) == 3
+
+
+@pytest.mark.asyncio
+async def test_runner_honors_bounded_retry_after() -> None:
+    delays: list[float] = []
+    original_sleep = asyncio.sleep
+
+    async def capture_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    asyncio.sleep = capture_sleep  # type: ignore[assignment]
+    try:
+        result = await run_case(
+            RunnerConfig(
+                "dinner-rush-001",
+                "nim:test",
+                max_turns=2,
+                max_retry_delay_seconds=0.01,
+                retry_delay_seconds=0.01,
+            ),
+            Replies([
+                ModelReply(None, 0, 0, 1, "rate_limit: 429 Too Many Requests", retry_after_seconds=99),
+                _reply('{"tool":null}'),
+            ]),
+        )
+    finally:
+        asyncio.sleep = original_sleep  # type: ignore[assignment]
+
+    assert result.summary["runValidity"] == "valid"
+    assert delays == [0.01]
+
+
+@pytest.mark.asyncio
+async def test_runner_retries_http_500_then_scores_success() -> None:
+    result = await run_case(
+        RunnerConfig("dinner-rush-001", "nim:test", max_turns=2, retry_delay_seconds=0),
+        Replies([_reply(None, "http_error: 500 Internal Gateway Error"), _reply('{"tool":null}')]),
+    )
+
+    assert result.summary["runValidity"] == "valid"
+    assert result.summary["modelErrors"] == 1
+    assert result.summary["noActions"] == 1
+
+
+@pytest.mark.asyncio
+async def test_runner_records_all_failed_provider_attempts() -> None:
+    output = io.StringIO()
+    result = await run_case(
+        RunnerConfig("dinner-rush-001", "nim:test", max_attempts=3, max_turns=3, retry_delay_seconds=0),
+        Replies([_reply(None, "http_error: 500 one"), _reply(None, "http_error: 502 two"), _reply(None, "http_error: 503 three")]),
+        jsonl=output,
+    )
+
+    records = [json.loads(line) for line in output.getvalue().splitlines()]
+    assert result.summary["runValidity"] == "provider_invalid"
+    assert [record["attempt"] for record in records if record["event"] == "model_attempt"] == [1, 2, 3]
+    assert all(record.get("providerError") is True for record in records[:3])
 
 
 def test_safety_rejections_are_not_retryable() -> None:

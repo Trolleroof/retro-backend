@@ -5,8 +5,9 @@ from collections.abc import Iterator
 from retro_backend.esim.contracts import ActionErrorCode, RestaurantState, Role
 from retro_backend.esim.providers.base import (
     ERR_HTTP,
-    ERR_MALFORMED,
     ERR_NETWORK,
+    ERR_PROVIDER_MALFORMED,
+    ERR_PROVIDER_UNAVAILABLE,
     ERR_RATE_LIMIT,
     ERR_TIMEOUT,
     ERR_TRUNCATED,
@@ -44,7 +45,13 @@ def retryable_model_error(error: str | None) -> bool:
     """
     if error is None:
         return False
-    if error.startswith((ERR_TIMEOUT, ERR_NETWORK, ERR_RATE_LIMIT, ERR_MALFORMED, ERR_TRUNCATED)):
+    lowered = error.lower()
+    if any(
+        phrase in lowered
+        for phrase in ("provider unavailable", "service unavailable", "temporarily overloaded")
+    ):
+        return True
+    if error.startswith((ERR_TIMEOUT, ERR_NETWORK, ERR_RATE_LIMIT, ERR_PROVIDER_MALFORMED, ERR_TRUNCATED, ERR_PROVIDER_UNAVAILABLE)):
         return True
     if not error.startswith(ERR_HTTP):
         return False
