@@ -33,12 +33,23 @@ import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic import ValidationError
 
 from retro_backend.esim.case import ENV_VERSION, CaseError, load_case
-from retro_backend.esim.grader import GRADER_VERSION, SERVED, Grade, grade
+from retro_backend.esim.grader import (
+    GRADER_VERSION,
+    SERVED,
+    BenchmarkEpisode,
+    BenchmarkScoreError,
+    BenchmarkScores,
+    Grade,
+    grade,
+    grade_benchmark_events,
+    summarize_benchmark,
+    verify_benchmark_replay,
+)
 from retro_backend.esim.managed import (
     DEFAULT_ROUNDS,
     MANAGED_SHAPE,
@@ -447,7 +458,9 @@ async def _run_managed_once(
     return graded, result.trajectory
 
 
-def _report_managed(graded: Grade, summary: dict[str, Any], out_dir: Path, trajectory: Trajectory) -> None:
+def _report_managed(
+    graded: Grade, summary: dict[str, Any], out_dir: Path, trajectory: Trajectory
+) -> None:
     manager = summary.get("manager", {})
     workers = summary.get("workers", {})
     print(f"  -> {out_dir}")
@@ -618,6 +631,77 @@ async def _regrade_command(args: argparse.Namespace) -> int:
     return 0
 
 
+async def _score_benchmark_command(args: argparse.Namespace) -> int:
+    """Score a saved fixed-worker trace and optionally verify its recorded score."""
+    path = Path(args.trace)
+    payload = _read_json(path)
+    if not isinstance(payload, dict) or not isinstance(payload.get("events"), list):
+        raise BenchmarkScoreError(f"{path}: expected an object with an events array")
+    if not all(isinstance(event, dict) for event in payload["events"]):
+        raise BenchmarkScoreError(f"{path}: every event must be an object")
+    events = cast(list[dict[str, object]], payload["events"])
+    scored = grade_benchmark_events(events)
+    replay_verified: bool | None = None
+    if args.recorded_score is not None:
+        recorded_path = Path(args.recorded_score)
+        try:
+            recorded = BenchmarkScores.model_validate(_read_json(recorded_path))
+        except ValidationError as exc:
+            raise BenchmarkScoreError(
+                f"{recorded_path}: not a fixed-worker score ({exc.error_count()} field error(s))"
+            ) from exc
+        replay_verified = verify_benchmark_replay(events, recorded)
+
+    recovery = "N/A" if scored.recovery is None else f"{scored.recovery:.1f}"
+    print(
+        " ".join(
+            (
+                f"service={scored.service:.1f}",
+                f"resources={scored.resources:.1f}",
+                f"recovery={recovery}",
+                f"safety={scored.safety:.1f}",
+                f"composite={scored.composite:.1f}",
+            )
+        )
+    )
+    if replay_verified is not None:
+        print(f"replayVerified={str(replay_verified).lower()}")
+    if args.output is not None:
+        destination = Path(args.output)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(destination, scored.model_dump(by_alias=True, mode="json"))
+        print(f"  -> {destination}")
+    return 0 if replay_verified is not False else 7
+
+
+async def _summarize_benchmark_command(args: argparse.Namespace) -> int:
+    """Apply validity accounting to saved per-episode benchmark records."""
+    episodes: list[BenchmarkEpisode] = []
+    for value in args.episodes:
+        path = Path(value)
+        try:
+            episodes.append(BenchmarkEpisode.model_validate(_read_json(path)))
+        except ValidationError as exc:
+            raise BenchmarkScoreError(
+                f"{path}: not a benchmark episode ({exc.error_count()} field error(s))"
+            ) from exc
+    summary = summarize_benchmark(
+        episodes,
+        planned_episodes=args.planned_episodes,
+        minimum_valid=args.minimum_valid,
+    )
+    print(
+        f"validEpisodes={summary.valid_episodes}/{summary.planned_episodes}"
+        + f" publishable={str(summary.publishable).lower()}"
+    )
+    if args.output is not None:
+        destination = Path(args.output)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(destination, summary.model_dump(by_alias=True, mode="json"))
+        print(f"  -> {destination}")
+    return 0
+
+
 async def _package_command(args: argparse.Namespace) -> int:
     """Assemble the portable evidence packet for a frozen plan (#80).
 
@@ -733,7 +817,9 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="provider spec for the fixed staff; hold this constant across managers",
     )
-    managed.add_argument("--output-dir", required=True, help="directory to write the evidence bundle")
+    managed.add_argument(
+        "--output-dir", required=True, help="directory to write the evidence bundle"
+    )
     managed.add_argument(
         "--rounds",
         type=positive_int,
@@ -772,6 +858,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="write the new grade here; prints to stdout only when omitted",
     )
     regrade.set_defaults(func=_regrade_command)
+
+    score_benchmark = sub.add_parser(
+        "score-benchmark",
+        help="score fixed-worker measurement events from a saved trace",
+    )
+    score_benchmark.add_argument("--trace", required=True, help="path to the saved trace JSON")
+    score_benchmark.add_argument(
+        "--recorded-score",
+        default=None,
+        help="score JSON to verify by replaying the saved trace; mismatch exits 7",
+    )
+    score_benchmark.add_argument("--output", default=None, help="write the score here as JSON")
+    score_benchmark.set_defaults(func=_score_benchmark_command)
+
+    summarize = sub.add_parser(
+        "summarize-benchmark",
+        help="aggregate valid fixed-worker episodes under the publication gate",
+    )
+    summarize.add_argument(
+        "--episodes", nargs="+", required=True, help="benchmark episode JSON files"
+    )
+    summarize.add_argument("--planned-episodes", type=positive_int, default=9)
+    summarize.add_argument("--minimum-valid", type=positive_int, default=8)
+    summarize.add_argument("--output", default=None, help="write the summary here as JSON")
+    summarize.set_defaults(func=_summarize_benchmark_command)
 
     parity = sub.add_parser(
         "parity",

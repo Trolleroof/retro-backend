@@ -124,9 +124,10 @@ def test_failed_packet_write_leaves_output_available_for_retry(
     task, run = evidence()
     task = task.model_copy(update={"status": "frozen"})
     output = tmp_path / "packet"
-    original_json = archipelago_module._json
+    original_json = archipelago_module._json  # pyright: ignore[reportPrivateUsage]
 
     def fail_once(path: Path, value: object) -> None:
+        del path, value
         monkeypatch.setattr(archipelago_module, "_json", original_json)
         raise OSError("simulated write failure")
 
