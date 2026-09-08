@@ -82,12 +82,31 @@ def test_malformed_or_duplicated_score_inputs_fail_closed() -> None:
         grade_benchmark_events(_events() + [{"tick": 1, "payload": "ledger_entry"}])
 
 
-def test_service_rejects_a_serve_before_its_eligible_creation() -> None:
+def test_service_rejects_a_serve_before_its_creation() -> None:
     events = _events()
     events.insert(1, _event(0, "order_served", orderId="order-1"))
 
-    with pytest.raises(BenchmarkScoreError, match="no prior eligible"):
+    with pytest.raises(BenchmarkScoreError, match="no prior order_created"):
         grade_benchmark_events(events)
+
+
+def test_a_served_order_created_too_late_to_be_eligible_is_excluded_not_rejected() -> None:
+    """A fixed worker does not consult the scoring window: an order created
+    too close to the end of the shift for its own deadline to fit
+    (`eligible: False`) can still be served. tui-gamepigeon's own
+    `scoreBenchmarkEvents` treats that as ordinary and simply excludes the
+    order from the count -- this engine must agree, not fail closed on a
+    trace the other engine accepts. See restaurant-fixed-workers-defensible-
+    benchmark-plan.md Step 3 (retro-backend's held-out-case replay work)."""
+    events = _events() + [
+        _event(6, "order_created", orderId="order-late", deadlineTick=200, eligible=False),
+        _event(6, "order_served", orderId="order-late"),
+    ]
+
+    scored = grade_benchmark_events(events)
+
+    assert scored.eligible_orders == 2
+    assert scored.on_time_orders == 1
 
 
 def test_replay_verification_compares_the_recorded_score_to_the_saved_trace() -> None:
