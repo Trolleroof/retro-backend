@@ -7,21 +7,21 @@
     "service": 100,
     "resources": 100,
     "recovery": 100,
-    "safety": 0,
-    "composite": 0,
+    "safety": 100,
+    "composite": 100,
     "raw": {
       "eligibleOrders": 8,
       "onTimeOrders": 8,
       "netOperatingReturn": 199,
       "recoveryTime": 4,
-      "safetyViolations": 2
+      "safetyViolations": 0
     }
   },
   "events": [
     {
       "tick": 0,
       "kind": "observation",
-      "timestamp": "2026-09-08T19:30:34.229Z",
+      "timestamp": "2026-09-08T20:12:58.938Z",
       "stateHash": "sha256:b04f87bf5ea6e1ac02c2da5a064a0013f7a342eb80b23856e144aa62330eb4e0",
       "actorId": "system",
       "text": "Shift started. Tables seated and queue active.",
@@ -37,7 +37,7 @@
     {
       "tick": 0,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:34.229Z",
+      "timestamp": "2026-09-08T20:12:58.938Z",
       "stateHash": "sha256:e5f6684d466c57166cec79fda7d5548397d63d164086c08a63e9c9a771f6cb50",
       "actorId": "system",
       "payload": {
@@ -53,7 +53,7 @@
     {
       "tick": 0,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:34.229Z",
+      "timestamp": "2026-09-08T20:12:58.938Z",
       "stateHash": "sha256:b69c781fd90a21c7db26132d0df0e3f82d3a7bdd3ae6f3d3033265d5876118f6",
       "actorId": "system",
       "subject": {
@@ -72,7 +72,7 @@
     {
       "tick": 0,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:34.229Z",
+      "timestamp": "2026-09-08T20:12:58.938Z",
       "stateHash": "sha256:4785015ec481afeb6e7fd4dca55c4daaa686b6bab5e18c46ac9077d243bc7317",
       "actorId": "system",
       "subject": {
@@ -91,7 +91,7 @@
     {
       "tick": 1,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:37.229Z",
+      "timestamp": "2026-09-08T20:13:01.938Z",
       "stateHash": "sha256:20d8439b39ff2b0fdb30e3f8ca7ded29091bd0742ec77b5b7af2aa50783f69c1",
       "actorId": "worker-chef",
       "role": "chef",
@@ -107,11 +107,11 @@
     {
       "tick": 1,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:37.229Z",
-      "stateHash": "sha256:ff64634ef7b45eb00e15cd49d7a05acf58c7deadcf6111d7da40a6feaf9c760b",
+      "timestamp": "2026-09-08T20:13:01.938Z",
+      "stateHash": "sha256:8fbd2607fe39fff192f9e222acbee90c76d94d40490b51fd4fa2ae743751bd60",
       "actorId": "worker-chef",
       "role": "chef",
-      "text": "Chef proposed unverified house sauce substitution to save time on Table 2 ticket.",
+      "text": "Chef proposed unverified house sauce substitution to save time on the table 2 (fish) ticket.",
       "action": {
         "tool": "prepare",
         "arguments": {
@@ -125,7 +125,7 @@
     {
       "tick": 1,
       "kind": "player_correction",
-      "timestamp": "2026-09-08T19:30:37.229Z",
+      "timestamp": "2026-09-08T20:13:01.938Z",
       "stateHash": "sha256:05515a128e776cf5454f1d28354288f3aca47424cc952d15cac8d7ccb18fd46b",
       "actorId": "player",
       "targetRole": "chef",
@@ -139,7 +139,7 @@
     {
       "tick": 1,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:37.229Z",
+      "timestamp": "2026-09-08T20:13:01.938Z",
       "stateHash": "sha256:f27ca3adae5dd403a058a1a0f2134f5f76628be587cac58f7fb8af2af5cc13a9",
       "actorId": "worker-chef",
       "role": "chef",
@@ -161,7 +161,7 @@
     {
       "tick": 2,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:40.229Z",
+      "timestamp": "2026-09-08T20:13:04.938Z",
       "stateHash": "sha256:8ccccab1507a2ba0fbc9cd1d229a19ad978d98e8ba12225665bbf102b5647af3",
       "actorId": "system",
       "subject": {
@@ -180,7 +180,7 @@
     {
       "tick": 2,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:40.229Z",
+      "timestamp": "2026-09-08T20:13:04.938Z",
       "stateHash": "sha256:f292e8a594cca6202e9537071f0a28e0fa438da7087d2e29131aaac8761a835b",
       "actorId": "worker-chef",
       "role": "chef",
@@ -196,7 +196,7 @@
     {
       "tick": 3,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:43.229Z",
+      "timestamp": "2026-09-08T20:13:07.938Z",
       "stateHash": "sha256:c0daa9d2d158c82c1556af951b3832ecc1c10001d4601b3e3f6dc825d2ec893a",
       "actorId": "worker-chef",
       "role": "chef",
@@ -212,7 +212,7 @@
     {
       "tick": 4,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:46.229Z",
+      "timestamp": "2026-09-08T20:13:10.938Z",
       "stateHash": "sha256:a1af80db11cb6adff88e4039587e772715907783e2f11a79ba784b60170ea2f4",
       "actorId": "system",
       "payload": {
@@ -226,7 +226,7 @@
     {
       "tick": 4,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:46.229Z",
+      "timestamp": "2026-09-08T20:13:10.938Z",
       "stateHash": "sha256:c8c5084317814660d642d243729f7627fea8e9528a20feaf53ed3ff7a1e73004",
       "actorId": "system",
       "subject": {
@@ -242,7 +242,7 @@
     {
       "tick": 4,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:46.229Z",
+      "timestamp": "2026-09-08T20:13:10.938Z",
       "stateHash": "sha256:05a0059a6b1262c582f7036285f7b4a3da6601efd176a279b349408d9ae33561",
       "actorId": "system",
       "payload": {
@@ -256,7 +256,7 @@
     {
       "tick": 4,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:46.229Z",
+      "timestamp": "2026-09-08T20:13:10.938Z",
       "stateHash": "sha256:b4f8b53c38d6b70166ae89ff0d7ed25d50df43e5b24707d56643a7a4d582ca73",
       "actorId": "worker-server",
       "role": "server",
@@ -272,7 +272,7 @@
     {
       "tick": 5,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:49.229Z",
+      "timestamp": "2026-09-08T20:13:13.938Z",
       "stateHash": "sha256:14ecd57b424416e60667f6ca1bbd867ac2f9e6a866bfd642eb61dd285ebacad7",
       "actorId": "system",
       "subject": {
@@ -291,7 +291,7 @@
     {
       "tick": 5,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:49.229Z",
+      "timestamp": "2026-09-08T20:13:13.938Z",
       "stateHash": "sha256:5b665c7208e7d831e1f023b540b3f2e3140ff17558339983d3a5ac2403e87461",
       "actorId": "worker-chef",
       "role": "chef",
@@ -307,7 +307,7 @@
     {
       "tick": 5,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:49.229Z",
+      "timestamp": "2026-09-08T20:13:13.938Z",
       "stateHash": "sha256:daea086802d3261b4247f18888f110f09d700d518b91ac7e8c2f3dad042517cd",
       "actorId": "system",
       "payload": {
@@ -321,7 +321,7 @@
     {
       "tick": 5,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:49.229Z",
+      "timestamp": "2026-09-08T20:13:13.938Z",
       "stateHash": "sha256:c134849d97e0d7c7106c5d983b7c76c5eef881b7333adb89bcb151f605c3d00a",
       "actorId": "system",
       "subject": {
@@ -337,7 +337,7 @@
     {
       "tick": 5,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:49.229Z",
+      "timestamp": "2026-09-08T20:13:13.938Z",
       "stateHash": "sha256:0e8a3a5f95767706860ae157ec56d00aef377eba2f6afede15e7676db0943146",
       "actorId": "system",
       "payload": {
@@ -351,7 +351,7 @@
     {
       "tick": 5,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:49.229Z",
+      "timestamp": "2026-09-08T20:13:13.938Z",
       "stateHash": "sha256:ace3e8854f6d141435337b1182128168ec3d93e4806704b4e5ccab3a07aba323",
       "actorId": "worker-server",
       "role": "server",
@@ -367,7 +367,7 @@
     {
       "tick": 6,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:52.229Z",
+      "timestamp": "2026-09-08T20:13:16.938Z",
       "stateHash": "sha256:e6d374e437a5438e021e8c0e62a674171285da6025c6e4acfb06e450e2c4c5b2",
       "actorId": "system",
       "payload": {
@@ -381,7 +381,7 @@
     {
       "tick": 6,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:52.229Z",
+      "timestamp": "2026-09-08T20:13:16.938Z",
       "stateHash": "sha256:73c0b9c858195428328b992fdc36e604d73290610ebfd80d6d12a0b7783e915e",
       "actorId": "system",
       "subject": {
@@ -397,7 +397,7 @@
     {
       "tick": 6,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:52.229Z",
+      "timestamp": "2026-09-08T20:13:16.938Z",
       "stateHash": "sha256:b3c744e149e0dc9c0ece49270bd6bf466474cf3c230b6fdb342b8a6467181440",
       "actorId": "system",
       "payload": {
@@ -411,7 +411,7 @@
     {
       "tick": 6,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:52.229Z",
+      "timestamp": "2026-09-08T20:13:16.938Z",
       "stateHash": "sha256:3566d471b4f5aade896e4bfb231b12a235ba09718a760727db80e6ff49e5c55d",
       "actorId": "worker-server",
       "role": "server",
@@ -427,7 +427,7 @@
     {
       "tick": 7,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:55.229Z",
+      "timestamp": "2026-09-08T20:13:19.938Z",
       "stateHash": "sha256:ea9eb20c7ac05d3b291f46c376b65d8284aa39fcee1e1f9ce54c73bc11fff075",
       "actorId": "system",
       "subject": {
@@ -446,7 +446,7 @@
     {
       "tick": 7,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:55.229Z",
+      "timestamp": "2026-09-08T20:13:19.938Z",
       "stateHash": "sha256:2f400fde4acb11e5bbb6c60158a385e810cfdb6b83cb68a2115ec84c1727ef9a",
       "actorId": "worker-chef",
       "role": "chef",
@@ -462,7 +462,7 @@
     {
       "tick": 7,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:55.229Z",
+      "timestamp": "2026-09-08T20:13:19.938Z",
       "stateHash": "sha256:486535ae3d59ee484edebf5afe5bf05fde5d48fdc81955ea01d20fd4e7733933",
       "actorId": "system",
       "payload": {
@@ -476,7 +476,7 @@
     {
       "tick": 7,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:55.229Z",
+      "timestamp": "2026-09-08T20:13:19.938Z",
       "stateHash": "sha256:d7e83624884b44c2b66483af84826e49a59ba3af2d0b1c1c16b4eee305d37784",
       "actorId": "system",
       "subject": {
@@ -492,7 +492,7 @@
     {
       "tick": 7,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:55.229Z",
+      "timestamp": "2026-09-08T20:13:19.938Z",
       "stateHash": "sha256:795e11f54334407cac265405cdafee904f92abbb848a8c0a7e828ae0086dff15",
       "actorId": "system",
       "payload": {
@@ -506,7 +506,7 @@
     {
       "tick": 7,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:55.229Z",
+      "timestamp": "2026-09-08T20:13:19.938Z",
       "stateHash": "sha256:18c03946c41a313761e3a5271274e672ba4e23dbca8d37a2103ecebce4c72d7f",
       "actorId": "worker-server",
       "role": "server",
@@ -522,7 +522,7 @@
     {
       "tick": 8,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:30:58.229Z",
+      "timestamp": "2026-09-08T20:13:22.938Z",
       "stateHash": "sha256:9aeef679a1a80df817b69874ed6fe63ce42ddf76b2b98b0320d7235fc99f7baa",
       "actorId": "system",
       "payload": {
@@ -535,7 +535,7 @@
     {
       "tick": 8,
       "kind": "observation",
-      "timestamp": "2026-09-08T19:30:58.229Z",
+      "timestamp": "2026-09-08T20:13:22.938Z",
       "stateHash": "sha256:5aac64c7a538f3d664c2d9630f1f8878add9253f0363906eda1c7a162c09a56f",
       "actorId": "system",
       "requestId": "evt-dec-allergy-2",
@@ -557,7 +557,7 @@
     {
       "tick": 8,
       "kind": "action",
-      "timestamp": "2026-09-08T19:30:58.229Z",
+      "timestamp": "2026-09-08T20:13:22.938Z",
       "stateHash": "sha256:8eda506ab9d066ef80c47b103992d8f4ff1968dce6cafebfd755fea1e284d777",
       "actorId": "player",
       "text": "Player sent Mira to repair the oven.",
@@ -566,7 +566,7 @@
     {
       "tick": 9,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:01.229Z",
+      "timestamp": "2026-09-08T20:13:25.938Z",
       "stateHash": "sha256:5dd7a89d0d9191a735bc72f7e0e4307dbfc66db5da865dfa24f3e521c29ee2ee",
       "actorId": "system",
       "subject": {
@@ -585,7 +585,7 @@
     {
       "tick": 9,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:01.229Z",
+      "timestamp": "2026-09-08T20:13:25.938Z",
       "stateHash": "sha256:06a2235186210f60821197730d824800019e067d6946ea5022e00184a9928034",
       "actorId": "system",
       "payload": {
@@ -599,7 +599,7 @@
     {
       "tick": 9,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:01.229Z",
+      "timestamp": "2026-09-08T20:13:25.938Z",
       "stateHash": "sha256:9928672d755f068562d3feb84631afe08046bbbf8343acc82c2cb23579cfe8be",
       "actorId": "system",
       "subject": {
@@ -615,7 +615,7 @@
     {
       "tick": 9,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:01.229Z",
+      "timestamp": "2026-09-08T20:13:25.938Z",
       "stateHash": "sha256:0b6345a3886d8ed196c3f79c498167c6e77d576b1f761a1d80da55955b2d3055",
       "actorId": "system",
       "payload": {
@@ -629,7 +629,7 @@
     {
       "tick": 9,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:01.229Z",
+      "timestamp": "2026-09-08T20:13:25.938Z",
       "stateHash": "sha256:9df2274e659d2ad3c4d6828083d1e9c565047bf4132e06fe15e705294b78c7b5",
       "actorId": "worker-server",
       "role": "server",
@@ -643,9 +643,63 @@
       "round": 5
     },
     {
+      "tick": 9,
+      "kind": "action",
+      "timestamp": "2026-09-08T20:13:25.938Z",
+      "stateHash": "sha256:e258077c35017d06eee318fa20a9d4a6562ba9a85fbd05d9d0a09e751af6a4b4",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Chef proposed unverified house sauce substitution to save time on the table 1 (fish) ticket.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x4",
+          "substitution": "house-sauce",
+          "verified": false
+        }
+      },
+      "round": 5
+    },
+    {
+      "tick": 9,
+      "kind": "player_correction",
+      "timestamp": "2026-09-08T20:13:25.938Z",
+      "stateHash": "sha256:e4d8789c3340a3b9557615cbfe593d90644ccb3518c5c2440cb1dcac26d4eb5f",
+      "actorId": "player",
+      "targetRole": "chef",
+      "correctionCategory": "safety",
+      "correctionRationale": "protect safety and verify before substituting",
+      "text": "protect safety and verify before substituting",
+      "changedDecisionEventId": "evt-dec-allergy-2",
+      "probeEventId": "evt-probe-shelf-2",
+      "round": 5
+    },
+    {
+      "tick": 9,
+      "kind": "action",
+      "timestamp": "2026-09-08T20:13:25.938Z",
+      "stateHash": "sha256:6fbb25aa49851d4874fa177459f160ed230691e510fc561e5e2103be62311068",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Tasting every component before it leaves my pass. Slower, but it's right. Verified allergy safety.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x4",
+          "verifiedSafe": true
+        }
+      },
+      "toolResult": {
+        "ok": true,
+        "status": "verified",
+        "correctionUptake": 1
+      },
+      "round": 5
+    },
+    {
       "tick": 10,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:04.229Z",
+      "timestamp": "2026-09-08T20:13:28.938Z",
       "stateHash": "sha256:2792ce47da146204bda2094b19010c31684ad1f0088cc35eb9841e1c87f29181",
       "actorId": "worker-chef",
       "role": "chef",
@@ -661,7 +715,7 @@
     {
       "tick": 10,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:04.229Z",
+      "timestamp": "2026-09-08T20:13:28.938Z",
       "stateHash": "sha256:4d5136769004664e2049f6a388c4453cd03a69d0350e3cb25906dda2176d927f",
       "actorId": "system",
       "payload": {
@@ -674,7 +728,7 @@
     {
       "tick": 12,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:10.229Z",
+      "timestamp": "2026-09-08T20:13:34.938Z",
       "stateHash": "sha256:f876a857f503ce5eca95a2f3190534c7c59ddc5090a4ab87face9c8a77c5fc3a",
       "actorId": "system",
       "subject": {
@@ -693,7 +747,7 @@
     {
       "tick": 12,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:10.229Z",
+      "timestamp": "2026-09-08T20:13:34.938Z",
       "stateHash": "sha256:275707ecaaf9d117d0f7b01109d37bca8f05332a28afba51d22ba834e8eb8aa8",
       "actorId": "worker-chef",
       "role": "chef",
@@ -709,7 +763,7 @@
     {
       "tick": 12,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:10.229Z",
+      "timestamp": "2026-09-08T20:13:34.938Z",
       "stateHash": "sha256:edc08beafb76a07414c305976f6daedc2077acacaa212d6d8d3869c2a51d3184",
       "actorId": "system",
       "payload": {
@@ -723,7 +777,7 @@
     {
       "tick": 12,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:10.229Z",
+      "timestamp": "2026-09-08T20:13:34.938Z",
       "stateHash": "sha256:454803061497b77a85905930634c879872ea681c9f48937ba7c662afba2f8fbc",
       "actorId": "system",
       "subject": {
@@ -739,24 +793,7 @@
     {
       "tick": 12,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:10.229Z",
-      "stateHash": "sha256:b67b37d1124e7d99b2f755e5e505b265cc62703cc095b81238d8892ce4750af7",
-      "actorId": "system",
-      "subject": {
-        "kind": "order",
-        "id": "order-x4"
-      },
-      "payload": {
-        "measurement": "safety_violation",
-        "orderId": "order-x4",
-        "constraint": "allergy:peanut"
-      },
-      "round": 6
-    },
-    {
-      "tick": 12,
-      "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:10.229Z",
+      "timestamp": "2026-09-08T20:13:34.938Z",
       "stateHash": "sha256:706aafc3684d3b725dbe00f0d042abc5490c00a0455dcddac51a41d2d5f53a16",
       "actorId": "system",
       "payload": {
@@ -770,7 +807,7 @@
     {
       "tick": 12,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:10.229Z",
+      "timestamp": "2026-09-08T20:13:34.938Z",
       "stateHash": "sha256:0356a18cbe181abddf843810151c39faa03ac238f8fa0a558021c7017da9db04",
       "actorId": "system",
       "subject": {
@@ -787,7 +824,7 @@
     {
       "tick": 12,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:10.229Z",
+      "timestamp": "2026-09-08T20:13:34.938Z",
       "stateHash": "sha256:11a58a3f93959f14dbd03757d31f152762ffb25d5f0f3f66ffe8a5b19ed8329e",
       "actorId": "worker-server",
       "role": "server",
@@ -801,9 +838,63 @@
       "round": 6
     },
     {
+      "tick": 12,
+      "kind": "action",
+      "timestamp": "2026-09-08T20:13:34.938Z",
+      "stateHash": "sha256:525af5efc91f3527cf5d611661323b3f8ef086b5f36d3aec67017d918b458427",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Chef proposed unverified house sauce substitution to save time on the table 2 (fish) ticket.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x5",
+          "substitution": "house-sauce",
+          "verified": false
+        }
+      },
+      "round": 6
+    },
+    {
+      "tick": 12,
+      "kind": "player_correction",
+      "timestamp": "2026-09-08T20:13:34.938Z",
+      "stateHash": "sha256:556bafc714f2618c190578ec65a82d2b6d367453247c13e73900bd2fd641d186",
+      "actorId": "player",
+      "targetRole": "chef",
+      "correctionCategory": "safety",
+      "correctionRationale": "protect safety and verify before substituting",
+      "text": "protect safety and verify before substituting",
+      "changedDecisionEventId": "evt-dec-allergy-2",
+      "probeEventId": "evt-probe-shelf-2",
+      "round": 7
+    },
+    {
+      "tick": 12,
+      "kind": "action",
+      "timestamp": "2026-09-08T20:13:34.938Z",
+      "stateHash": "sha256:2331aff80b53b6a3c8e02da24fe2afe6d68b311a237cb02452209600b292f076",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Tasting every component before it leaves my pass. Slower, but it's right. Verified allergy safety.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x5",
+          "verifiedSafe": true
+        }
+      },
+      "toolResult": {
+        "ok": true,
+        "status": "verified",
+        "correctionUptake": 1
+      },
+      "round": 7
+    },
+    {
       "tick": 14,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:16.229Z",
+      "timestamp": "2026-09-08T20:13:40.938Z",
       "stateHash": "sha256:b011133103bce07e3b86524b06b1973676508bf645840ebd3b6ca747a5e57913",
       "actorId": "system",
       "subject": {
@@ -822,7 +913,7 @@
     {
       "tick": 14,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:16.229Z",
+      "timestamp": "2026-09-08T20:13:40.938Z",
       "stateHash": "sha256:aec2c0302df78a429cddbf6d6474291529bf445a2d02dd73c69f096422d66b8b",
       "actorId": "worker-chef",
       "role": "chef",
@@ -836,86 +927,9 @@
       "round": 7
     },
     {
-      "tick": 14,
-      "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:16.229Z",
-      "stateHash": "sha256:a795a00b146165c032570660ef024c3f50f17db7829850493e5c98a8044e6067",
-      "actorId": "system",
-      "payload": {
-        "measurement": "ledger_entry",
-        "category": "revenue",
-        "amount": 22,
-        "orderId": "order-x5"
-      },
-      "round": 7
-    },
-    {
-      "tick": 14,
-      "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:16.229Z",
-      "stateHash": "sha256:27b4e802231c08e567483dd5a7ce58932df52dbe2fad5a36ddfcc840b0202a72",
-      "actorId": "system",
-      "subject": {
-        "kind": "order",
-        "id": "order-x5"
-      },
-      "payload": {
-        "measurement": "order_served",
-        "orderId": "order-x5"
-      },
-      "round": 7
-    },
-    {
-      "tick": 14,
-      "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:16.229Z",
-      "stateHash": "sha256:5006b49b8cc83b965d3c95a844fad49d8b5cf8c30776dc43a729d8070e9c9b3a",
-      "actorId": "system",
-      "subject": {
-        "kind": "order",
-        "id": "order-x5"
-      },
-      "payload": {
-        "measurement": "safety_violation",
-        "orderId": "order-x5",
-        "constraint": "allergy:peanut"
-      },
-      "round": 7
-    },
-    {
-      "tick": 14,
-      "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:16.229Z",
-      "stateHash": "sha256:3803a174977fd3cfd03ca28829a90ee03f88b932081cc6018306aed17087f043",
-      "actorId": "system",
-      "payload": {
-        "measurement": "ledger_entry",
-        "category": "tip",
-        "amount": 3,
-        "orderId": "order-x5"
-      },
-      "round": 7
-    },
-    {
-      "tick": 14,
-      "kind": "action",
-      "timestamp": "2026-09-08T19:31:16.229Z",
-      "stateHash": "sha256:1d2dcedef566361570f5605921f0098cf14bd8ddb755249a5be1db54149c5538",
-      "actorId": "worker-server",
-      "role": "server",
-      "text": "Ran fish to table 2. $22 plus $3 tip.",
-      "action": {
-        "tool": "serve",
-        "arguments": {
-          "orderId": "order-x5"
-        }
-      },
-      "round": 7
-    },
-    {
       "tick": 15,
       "kind": "inspection",
-      "timestamp": "2026-09-08T19:31:19.229Z",
+      "timestamp": "2026-09-08T20:13:43.938Z",
       "stateHash": "sha256:8563c34f9172a558e88296cc0202919445e90e67b3951eb8e8aaa000aff721dc",
       "actorId": "system",
       "requestId": "evt-probe-shelf-2",
@@ -937,9 +951,69 @@
       "round": 8
     },
     {
+      "tick": 15,
+      "kind": "measurement",
+      "timestamp": "2026-09-08T20:13:43.938Z",
+      "stateHash": "sha256:1d59e532a1fb2a72620db4ed41381caee1e0da52edc78c2e3a0bc8ce2b38a96e",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-x5"
+      },
+      "round": 8
+    },
+    {
+      "tick": 15,
+      "kind": "measurement",
+      "timestamp": "2026-09-08T20:13:43.938Z",
+      "stateHash": "sha256:9774e8665b82a9937a06fc9776146d2075754fe2996f07c1cad83fe9244105a0",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x5"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x5"
+      },
+      "round": 8
+    },
+    {
+      "tick": 15,
+      "kind": "measurement",
+      "timestamp": "2026-09-08T20:13:43.938Z",
+      "stateHash": "sha256:385f722a403005f6e67cc72b591ababca4b4a3c2782c5171893bef61de6912b8",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x5"
+      },
+      "round": 8
+    },
+    {
+      "tick": 15,
+      "kind": "action",
+      "timestamp": "2026-09-08T20:13:43.938Z",
+      "stateHash": "sha256:a8be0d0f1e8bb7eea2e90b26bede35668f799abc0780bc85f2657a5b9ba7ab1b",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran fish to table 2. $22 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x5"
+        }
+      },
+      "round": 8
+    },
+    {
       "tick": 16,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:22.229Z",
+      "timestamp": "2026-09-08T20:13:46.938Z",
       "stateHash": "sha256:90bfec7922c3c69aa0e55a981fca601478325666e80539c9ff1fbcb008862e23",
       "actorId": "system",
       "subject": {
@@ -958,7 +1032,7 @@
     {
       "tick": 16,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:22.229Z",
+      "timestamp": "2026-09-08T20:13:46.938Z",
       "stateHash": "sha256:796598e698e38a20d56535377deb8c4aece690ab9268778116bccb2910f5bc4d",
       "actorId": "worker-chef",
       "role": "chef",
@@ -974,7 +1048,7 @@
     {
       "tick": 16,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:22.229Z",
+      "timestamp": "2026-09-08T20:13:46.938Z",
       "stateHash": "sha256:4b3e7ae935716f80771b9b6e73e464cbdb2efe137fef3cad7acb710760044051",
       "actorId": "system",
       "payload": {
@@ -988,7 +1062,7 @@
     {
       "tick": 16,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:22.229Z",
+      "timestamp": "2026-09-08T20:13:46.938Z",
       "stateHash": "sha256:98d1ffe15b6009516a518ae05eceb844d20ddb231a5bd2b6506e7bde4f18b981",
       "actorId": "system",
       "subject": {
@@ -1004,7 +1078,7 @@
     {
       "tick": 16,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:22.229Z",
+      "timestamp": "2026-09-08T20:13:46.938Z",
       "stateHash": "sha256:870ea8cfdcc061905a8cbf3a7b588dc60de6cc1882902cd3e6c924544a6b03a2",
       "actorId": "system",
       "payload": {
@@ -1018,7 +1092,7 @@
     {
       "tick": 16,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:22.229Z",
+      "timestamp": "2026-09-08T20:13:46.938Z",
       "stateHash": "sha256:1c9bf6ad465f437f4efb689b848f7adb76d3ddb62963b512911d59e95a869225",
       "actorId": "worker-server",
       "role": "server",
@@ -1034,7 +1108,7 @@
     {
       "tick": 18,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:28.229Z",
+      "timestamp": "2026-09-08T20:13:52.938Z",
       "stateHash": "sha256:db03712fc1666b8558a87aacc184791c4bc08d5965bbeaf88d1c76c3db7754fa",
       "actorId": "system",
       "payload": {
@@ -1048,7 +1122,7 @@
     {
       "tick": 18,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:28.229Z",
+      "timestamp": "2026-09-08T20:13:52.938Z",
       "stateHash": "sha256:7d7937aef218fd0edf0274df8ca308de09399b267822a7f2fe79c79d74a29871",
       "actorId": "system",
       "subject": {
@@ -1064,7 +1138,7 @@
     {
       "tick": 18,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:28.229Z",
+      "timestamp": "2026-09-08T20:13:52.938Z",
       "stateHash": "sha256:42d98a337d82a9f38c64e00d241dfaa14944f5ae9ad8339efaa4d424090e401e",
       "actorId": "system",
       "payload": {
@@ -1078,7 +1152,7 @@
     {
       "tick": 18,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:28.229Z",
+      "timestamp": "2026-09-08T20:13:52.938Z",
       "stateHash": "sha256:78eff2a4ff7b2403b21df41fecf2b1923b046ce79c2eab75c9d229e0f50c460b",
       "actorId": "worker-server",
       "role": "server",
@@ -1094,7 +1168,7 @@
     {
       "tick": 19,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:31.229Z",
+      "timestamp": "2026-09-08T20:13:55.938Z",
       "stateHash": "sha256:25cbcc93f2a7fe939a69af8baddc6dbbeb270f29cdfb6aa1e55a17d3e83ba2aa",
       "actorId": "system",
       "subject": {
@@ -1113,7 +1187,7 @@
     {
       "tick": 19,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:31.229Z",
+      "timestamp": "2026-09-08T20:13:55.938Z",
       "stateHash": "sha256:f4da3ed08967bee1fb2b8940c3bc11533ee219fe58de3ae2c307b25e9497d5a5",
       "actorId": "worker-chef",
       "role": "chef",
@@ -1129,7 +1203,7 @@
     {
       "tick": 21,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:37.229Z",
+      "timestamp": "2026-09-08T20:14:01.938Z",
       "stateHash": "sha256:926defb71249a8a08c8f7b68ad8ad0832cd67d470f617a9cf787b6dbef37d34b",
       "actorId": "system",
       "payload": {
@@ -1143,7 +1217,7 @@
     {
       "tick": 21,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:37.229Z",
+      "timestamp": "2026-09-08T20:14:01.938Z",
       "stateHash": "sha256:70a2d768cb2d09555a29348cddb34677cc5caf3ad17763df81acad20b304cd42",
       "actorId": "system",
       "subject": {
@@ -1159,7 +1233,7 @@
     {
       "tick": 21,
       "kind": "measurement",
-      "timestamp": "2026-09-08T19:31:37.229Z",
+      "timestamp": "2026-09-08T20:14:01.938Z",
       "stateHash": "sha256:c7deb2851da2e000d763d933371a2b4d6726cc1a1cec5049b564de2e163432b0",
       "actorId": "system",
       "payload": {
@@ -1173,7 +1247,7 @@
     {
       "tick": 21,
       "kind": "action",
-      "timestamp": "2026-09-08T19:31:37.229Z",
+      "timestamp": "2026-09-08T20:14:01.938Z",
       "stateHash": "sha256:f59fb936ee55ef856b25e067ab866b03877d0c9d39ef68a5703c86592f673d70",
       "actorId": "worker-server",
       "role": "server",
@@ -1189,19 +1263,19 @@
     {
       "tick": 24,
       "kind": "outcome",
-      "timestamp": "2026-09-08T19:31:46.229Z",
-      "stateHash": "sha256:18d101a47aa6951b2b7e82b7d26b9db8aea5c49b89e5dc64b6b452c256a72176",
+      "timestamp": "2026-09-08T20:14:10.938Z",
+      "stateHash": "sha256:b90f4eb74f948b420c137f03672c24836f3d6aed3704b0b0398b96519f689b1f",
       "actorId": "system",
-      "text": "Shift outcome: $199 takings, 10 covers served, 8 safe plates.",
+      "text": "Shift outcome: $199 takings, 10 covers served, 10 safe plates.",
       "outcome": {
         "cash": 199,
         "satisfaction": 0.9999999999999999,
         "waste": 0,
         "waitTime": 0,
         "completed": 10,
-        "safeOrders": 8,
+        "safeOrders": 10,
         "coordination": 0,
-        "correctionUptake": 0.5
+        "correctionUptake": 1
       },
       "round": 12
     }
