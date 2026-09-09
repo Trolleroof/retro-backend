@@ -34,6 +34,7 @@ class FixedWorkersV2Config:
     request_timeout: float = 30.0
     nim_api_keys_file: Path | None = None
     openrouter_api_key_file: Path | None = None
+    openrouter_provider_order: tuple[str, ...] = ()
 
 
 class _RotatingAdapter:
@@ -71,7 +72,7 @@ def _adapter(config: FixedWorkersV2Config) -> ModelAdapter:
         keys = [line.strip() for line in key_path.read_text().splitlines() if line.strip()]
         if len(keys) != 1:
             raise ValueError("OpenRouter key file must contain exactly one nonblank key")
-        return OpenRouterAdapter(model, api_key=keys[0], timeout=config.request_timeout)
+        return OpenRouterAdapter(model, api_key=keys[0], timeout=config.request_timeout, provider_order=config.openrouter_provider_order)
     if provider != "nim":
         raise ValueError("--nim-api-keys-file may only be used with nim: models")
     nim_key_path = cast(Path, config.nim_api_keys_file)
@@ -293,6 +294,7 @@ async def run_fixed_workers_v2(
         "graderVersion": case.grader_version, "episodeId": episode_id,
         "attemptNumber": attempt_number, "caseId": case.case_id, "seed": case.seed,
         "model": config.model, "engineRepo": str(config.engine_repo.resolve()),
+        "openrouterProviderOrder": list(config.openrouter_provider_order),
     }
     grade = episode.model_dump(by_alias=True, mode="json") | {"allRequirementsMet": episode.all_requirements_met}
     summary = {

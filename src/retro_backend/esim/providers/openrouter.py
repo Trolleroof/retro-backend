@@ -24,10 +24,14 @@ class OpenRouterAdapter(NimAdapter):
         budget: RollingWindowBudget | None = None,
         client: httpx.AsyncClient | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        provider_order: tuple[str, ...] = (),
     ) -> None:
         resolved_key = api_key or os.environ.get("OPENROUTER_API_KEY")
         if not resolved_key or not resolved_key.strip():
             raise ValueError("OpenRouter API key is required. Set OPENROUTER_API_KEY or pass api_key explicitly.")
+        provider: dict[str, object] = {"allow_fallbacks": False}
+        if provider_order:
+            provider["order"] = list(provider_order)
         super().__init__(
             model,
             api_key=resolved_key,
@@ -36,5 +40,5 @@ class OpenRouterAdapter(NimAdapter):
             budget=budget,
             client=client,
             transport=transport,
-            request_options={"provider": {"allow_fallbacks": False}},
+            request_options={"provider": provider},
         )
