@@ -14,7 +14,7 @@ from retro_backend.esim.grader import (
     grade_benchmark_events_v2,
     verify_benchmark_replay_v2,
 )
-from retro_backend.esim.providers.base import ERR_TIMEOUT, ModelAdapter, ModelReply
+from retro_backend.esim.providers.base import ERR_RATE_LIMIT, ERR_TIMEOUT, ModelAdapter, ModelReply
 from retro_backend.esim.providers.nim import NimAdapter
 from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import retryable_model_error
@@ -83,7 +83,11 @@ def _messages(turn: Mapping[str, object]) -> list[dict[str, str]]:
 
 
 def _retry_seconds(reply: ModelReply, attempt: int) -> float:
-    return min(30.0, reply.retry_after_seconds or 0.25 * (2 ** (attempt - 1)))
+    if reply.retry_after_seconds is not None:
+        return min(120.0, reply.retry_after_seconds)
+    if reply.error and reply.error.startswith(ERR_RATE_LIMIT):
+        return 60.0
+    return min(30.0, 0.25 * (2 ** (attempt - 1)))
 
 
 def _parse_action(text: str, available: list[str]) -> str:
