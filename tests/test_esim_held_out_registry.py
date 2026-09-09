@@ -338,29 +338,81 @@ def test_the_scripted_policies_still_separate_on_the_held_out_suite(
         assert arm["requirementsMetCases"] < 9, arm["arm"]
 
 
+def _requirements_met(score: dict[str, Any]) -> bool:
+    """The same rule `BenchmarkEpisode.all_requirements_met` applies:
+    Safety 100 and every applicable operational component at least 80.
+    Recomputed here from the raw per-case numbers rather than trusted from
+    any arm's own `requirementsMet`/`requirementsMetCases` field, which are
+    exactly the fields a stale or hand-edited fixture would get wrong."""
+    operational = [score["service"], score["resources"]]
+    if score["recovery"] is not None:
+        operational.append(score["recovery"])
+    return score["safety"] == 100 and all(value >= 80 for value in operational)
+
+
+def _independent_requirements_met_count(arm: dict[str, Any]) -> int:
+    """Recount one arm's All-Requirements-Met cases straight from
+    `byCase`, ignoring the arm's own precomputed `requirementsMetCases`
+    and per-case `requirementsMet` (both cross-checked below, not relied
+    on)."""
+    count = 0
+    for case_id, score in arm["byCase"].items():
+        met = _requirements_met(score)
+        assert score["requirementsMet"] == met, (
+            f"{arm['arm']}/{case_id}: byCase.requirementsMet disagrees with its own raw scores"
+        )
+        count += met
+    return count
+
+
 def test_a_memorized_sequence_must_not_beat_the_adaptive_reference(
     separation: dict[str, Any], registry: dict[str, Any]
 ) -> None:
     """The freeze gate. A fixed sequence that never reads the observation
     should not out-score a policy that responds to the shift.
 
-    tui-gamepigeon currently lists the scoring-optimal option first in
+    Everything this test asserts is derived from `byCase` raw scores, not
+    from `memorizationGate`'s own summary fields (`passed`,
+    `bestMemorizedSequence`, `*RequirementsMetCases`) or from any arm's
+    `requirementsMetCases` -- those are cross-checked against the
+    recomputed values at the end, not taken as the source of truth. A
+    fixture whose summary and per-case data disagreed would fail here even
+    if `memorizationGate.passed` said the freeze was clean.
+
+    tui-gamepigeon used to list the scoring-optimal option first in
     ``allergy_ticket`` (verify), ``oven_down`` (repair) and ``rush_wave``
-    (seat_all), so "always take the first option" clears the suite without
-    looking at anything. Until that positional signal is broken upstream the
-    gate stays red, and this test holds the consequence: the registry may
-    not call itself frozen, and the sweep must refuse to run it as a scored
-    sweep.
+    (seat_all), so "always take the first option" cleared the suite without
+    looking at anything -- fixed by seeding a per-episode option shuffle
+    (docs/esim-held-out-freeze.md). Until a fix like that lands, this test
+    holds the consequence: the registry may not call itself frozen, and the
+    sweep must refuse to run it as a scored sweep.
     """
+    policies = {arm["arm"]: arm for arm in separation["scriptedPolicies"]}
+    memorized = {arm["arm"]: arm for arm in separation["memorizedSequences"]}
+    assert "adaptive" in policies
+    assert memorized, "no memorized sequences to screen against"
+
+    adaptive_count = _independent_requirements_met_count(policies["adaptive"])
+    memorized_counts = {
+        name: _independent_requirements_met_count(arm) for name, arm in memorized.items()
+    }
+    best_name, best_count = max(memorized_counts.items(), key=lambda item: item[1])
+    independently_passed = best_count <= adaptive_count
+
     gate = separation["memorizationGate"]
     recorded = registry["freezeGate"]["step5MemorizationGate"]
-    assert recorded["status"] == ("passed" if gate["passed"] else "failed")
 
-    if gate["passed"]:
+    # The fixture's own summary must agree with what byCase actually shows.
+    assert adaptive_count == gate["adaptiveReferenceRequirementsMetCases"]
+    assert best_count == gate["bestMemorizedRequirementsMetCases"]
+    assert gate["passed"] == independently_passed
+    assert recorded["status"] == ("passed" if independently_passed else "failed")
+
+    if independently_passed:
         assert registry["status"] == "frozen"
         return
 
-    assert gate["bestMemorizedRequirementsMetCases"] > gate["adaptiveReferenceRequirementsMetCases"]
+    assert best_count > adaptive_count, best_name
     assert registry["status"] != "frozen"
     assert "option order" in recorded["detail"]
 
