@@ -72,33 +72,39 @@ Final set: quiet-tuesday 101/308/619, dinner-rush 103/311/633, saturday-night
 | No case uses the old allergy id | **Pass.** Every allergy decision is `allergy_ticket:<orderId>` against an order that exists in the case; the episode-scoped `allergy_ticket` appears nowhere. |
 | Every case uses the fixed scorer | **Pass.** All nine declare `restaurant-fixed-workers-grader/v1` and carry exactly the four constants `grade_benchmark_events` reads, matching the engine's `benchmark_config`. |
 | No case tuned on model results | **Pass.** Seeds are pre-registered, replacements are structural and logged, and no model identifier appears anywhere in the registry. |
-| Nine cases defeat one memorized sequence | **Fail.** See below. |
+| Nine cases defeat one memorized sequence | **Pass** (after an upstream fix — see below). |
 
-### The blocking finding: option order leaks the answer
+### Resolved finding: option order leaked the answer
 
-A driver that never reads the observation and always picks the **first listed
-option** meets All Requirements on **8 of 9** cases with a mean composite of
-**96.8**, against **4 of 9** and **93.7** for the adaptive reference policy.
+The first pass through this screen failed here. A driver that never reads the
+observation and always picks the **first listed option** met All Requirements
+on **8 of 9** cases with a mean composite of **96.8**, against **4 of 9** and
+**93.7** for the adaptive reference policy.
 
-The cause is in tui-gamepigeon's `DECISIONS` catalogue
-(`src/games/restaurant-arena/arena-view.ts`): the scoring-optimal option is
+The cause was in tui-gamepigeon's `DECISIONS` catalogue
+(`src/games/restaurant-arena/arena-view.ts`): the scoring-optimal option was
 listed first in `allergy_ticket` (`verify`), `oven_down` (`repair`) and
 `rush_wave` (`seat_all`). Step 2 removed the `safe` / `risky` labels but left
 the positional signal, so the label leak became an ordering leak. The mirror
-image confirms it — always taking the **last** option scores 33.9 mean and
+image confirmed it — always taking the **last** option scored 33.9 mean and
 0 of 9.
 
-A 30-model table built on this suite would rank a model that always answers
-"the first one" above one that reads the shift, so the registry ships as
-`"status": "pending-freeze"`. `sweep.validate_sweep_inputs` refuses any
-non-dry-run sweep of a registry that does not say `frozen`, and a test holds
-that consequence in place.
+**Fixed upstream** in tui-gamepigeon (`fix(arena): randomize decision option
+order per episode`): `activateDecision` now shuffles a decision's options with
+a Fisher–Yates pass seeded from `(episodeSeed, decision.id)` — fixed for one
+seed and decision, so a recorded trace still replays byte-for-byte, but
+different across seeds and decisions, so position no longer correlates with
+which option scores best. Option ids are untouched; only presentation order
+moved, so `decide_<decision>_<optionId>` action strings, replay, and every
+export script that answers by name are unaffected. The shuffle draws from its
+own RNG rather than the engine's main stream, so no case's arrival schedule,
+menu picks, or allergy draws changed — the nine seeds, states, and thresholds
+in this registry are identical to before the fix.
 
-**Fix belongs in tui-gamepigeon**, not here: randomize option order per case
-seed (or otherwise break the positional signal), then re-run the screen. The
-case set itself does not need to change — the seeds, states, schedules and
-constants in this registry stay valid, and flipping the gate is a `status`
-change plus a regenerated `tests/fixtures/held-out-freeze/separation.json`.
+After the fix, "always first option" drops to 13.7 mean / 0 of 9, and the
+best-performing memorized sequence of any tried is "always last option" at
+33.9 mean / **2 of 9** — still well under the adaptive reference's 4 of 9.
+The registry now ships as `"status": "frozen"`.
 
 ### Two engine fairness defects found while screening
 
@@ -128,8 +134,10 @@ all nine cases. No model was called to produce it.
 | cautious | 60.8 | 3/9 |
 | passive | 57.4 | 3/9 |
 | passive + always buys the stove | 47.6 | 0/9 |
-| always first option (memorized) | 96.8 | 8/9 |
-| always last option (memorized) | 33.9 | 0/9 |
+| always last option (memorized) | 33.9 | 2/9 |
+| verify + hold + quote_wait (memorized) | 32.3 | 1/9 |
+| verify + push + seat_all (memorized) | 28.6 | 1/9 |
+| always first option (memorized) | 13.7 | 0/9 |
 | never answers a decision | 0.0 | 0/9 |
 
 Step 4's separation gate holds on the held-out nine: adaptive beats both

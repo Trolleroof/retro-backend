@@ -2,7 +2,7 @@
   "registryVersion": "restaurant-fixed-workers-held-out/v1",
   "benchmarkVersion": "restaurant-fixed-workers/v1",
   "graderVersion": "restaurant-fixed-workers-grader/v1",
-  "status": "pending-freeze",
+  "status": "frozen",
   "engine": {
     "repository": "tui-gamepigeon",
     "module": "src/games/restaurant-arena/restaurant-game.ts",
@@ -100,9 +100,9 @@
       "detail": "adaptive outperforms passive and cautious by >= 30 mean composite points on this suite; the over-intervening spender arm loses Resources on every Quiet Tuesday case, so restraint is measured"
     },
     "step5MemorizationGate": {
-      "status": "failed",
+      "status": "passed",
       "evidence": "tests/fixtures/held-out-freeze/separation.json",
-      "detail": "'always take the first listed option' meets All Requirements on 8 of 9 cases (mean composite 96.8) versus 4 of 9 for the adaptive reference (mean composite 93.7). The scoring-optimal option is listed first in allergy_ticket (verify), oven_down (repair) and rush_wave (seat_all) in tui-gamepigeon's DECISIONS catalogue, so option order leaks the answer that Step 2 removed from the labels. Fix belongs in tui-gamepigeon: randomize option order per case seed, or otherwise break the positional signal, then re-run this screen."
+      "detail": "no observation-free fixed sequence wins the suite"
     }
   },
   "cases": [

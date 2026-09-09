@@ -19,8 +19,9 @@ registry cannot drift out from under them:
    actually reads;
 4. no case was tuned on a model result;
 5. the nine cases differ enough that one memorized action sequence cannot
-   win the suite -- and while that gate fails, the registry may not say
-   ``frozen`` and the sweep must refuse to run it as a scored sweep.
+   win the suite -- and if that gate ever fails again (a future case swap,
+   say), the registry may not say ``frozen`` and the sweep must refuse to
+   run it as a scored sweep.
 """
 
 import hashlib
@@ -133,7 +134,9 @@ def test_every_case_loads_as_a_frozen_case(cases: list[dict[str, Any]]) -> None:
         assert case["startingStateHash"] == f"sha256:{digest}", case["caseId"]
 
 
-def test_every_case_pins_its_incident_timing_and_order_schedule(cases: list[dict[str, Any]]) -> None:
+def test_every_case_pins_its_incident_timing_and_order_schedule(
+    cases: list[dict[str, Any]],
+) -> None:
     for case in cases:
         schedule = case["eventSchedule"]
         assert schedule, case["caseId"]
@@ -362,7 +365,10 @@ def test_a_memorized_sequence_must_not_beat_the_adaptive_reference(
     assert "option order" in recorded["detail"]
 
 
-def test_a_registry_that_has_not_passed_its_gate_cannot_be_swept(tmp_path: Path) -> None:
+def test_a_frozen_registry_is_accepted_for_a_real_non_dry_run_sweep(tmp_path: Path) -> None:
+    """The mirror of the guard above: once every gate passes and the
+    registry says ``frozen``, `validate_sweep_inputs` must stop refusing it.
+    A freeze that a real sweep still can't use would not be a freeze."""
     roster = tmp_path / "roster.json"
     roster.write_text(json.dumps({"models": ["nim:openai/gpt-oss-20b"]}))
     config = SweepConfig(
@@ -373,7 +379,26 @@ def test_a_registry_that_has_not_passed_its_gate_cannot_be_swept(tmp_path: Path)
         dry_run=False,
     )
     registry = json.loads(_REGISTRY_PATH.read_text())
-    if registry["status"] == "frozen":
-        pytest.skip("registry is frozen; the guard is exercised by the draft-status path")
+    assert registry["status"] == "frozen", "the registry must pass its own freeze gate"
+    _, case_ids = validate_sweep_inputs(config)
+    assert len(case_ids) == 9
+
+
+def test_an_unfrozen_copy_of_the_registry_is_refused_by_a_real_sweep(
+    tmp_path: Path, registry: dict[str, Any]
+) -> None:
+    """The guard itself, exercised directly rather than by waiting for a
+    future regression to unfreeze the real file."""
+    unfrozen = tmp_path / "registry.json"
+    unfrozen.write_text(json.dumps({**registry, "status": "pending-freeze"}))
+    roster = tmp_path / "roster.json"
+    roster.write_text(json.dumps({"models": ["nim:openai/gpt-oss-20b"]}))
+    config = SweepConfig(
+        benchmark_version=_BENCHMARK_VERSION,
+        registry_path=unfrozen,
+        roster_path=roster,
+        output_dir=tmp_path / "out",
+        dry_run=False,
+    )
     with pytest.raises(ValueError, match="not frozen"):
         validate_sweep_inputs(config)
