@@ -1,0 +1,756 @@
+{
+  "generatedFrom": "tui-gamepigeon RestaurantGame, scripted drivers only; no model was called",
+  "benchmarkVersion": "restaurant-fixed-workers/v1",
+  "graderVersion": "restaurant-fixed-workers-grader/v1",
+  "scriptedPolicies": [
+    {
+      "arm": "passive",
+      "meanComposite": 57.4,
+      "meanService": 76.7,
+      "meanResources": 62.1,
+      "requirementsMetCases": 3,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-308": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-619": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "dinner-rush-103": {
+          "service": 85.7143,
+          "resources": 57.8947,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 47.8697,
+          "requirementsMet": false
+        },
+        "dinner-rush-311": {
+          "service": 75,
+          "resources": 61.0526,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 45.3509,
+          "requirementsMet": false
+        },
+        "dinner-rush-633": {
+          "service": 62.5,
+          "resources": 56.3158,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 39.6053,
+          "requirementsMet": false
+        },
+        "saturday-night-107": {
+          "service": 50,
+          "resources": 22.8125,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 24.2708,
+          "requirementsMet": false
+        },
+        "saturday-night-315": {
+          "service": 50,
+          "resources": 24.375,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 24.7917,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 66.6667,
+          "resources": 36.25,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 34.3056,
+          "requirementsMet": false
+        }
+      }
+    },
+    {
+      "arm": "cautious",
+      "meanComposite": 60.8,
+      "meanService": 95.6,
+      "meanResources": 54.0,
+      "requirementsMetCases": 3,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-308": {
+          "service": 100,
+          "resources": 88.5714,
+          "recovery": null,
+          "safety": 100,
+          "composite": 94.2857,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-619": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "dinner-rush-103": {
+          "service": 100,
+          "resources": 41.0526,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 47.0175,
+          "requirementsMet": false
+        },
+        "dinner-rush-311": {
+          "service": 100,
+          "resources": 44.2105,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 48.0702,
+          "requirementsMet": false
+        },
+        "dinner-rush-633": {
+          "service": 100,
+          "resources": 47.8947,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 49.2982,
+          "requirementsMet": false
+        },
+        "saturday-night-107": {
+          "service": 80,
+          "resources": 17.8125,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 32.6042,
+          "requirementsMet": false
+        },
+        "saturday-night-315": {
+          "service": 80,
+          "resources": 19.375,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 33.125,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 100,
+          "resources": 27.1875,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 42.3958,
+          "requirementsMet": false
+        }
+      }
+    },
+    {
+      "arm": "adaptive",
+      "meanComposite": 93.7,
+      "meanService": 100,
+      "meanResources": 83.8,
+      "requirementsMetCases": 4,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-308": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-619": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "dinner-rush-103": {
+          "service": 100,
+          "resources": 70,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 90,
+          "requirementsMet": false
+        },
+        "dinner-rush-311": {
+          "service": 100,
+          "resources": 73.1579,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 91.0526,
+          "requirementsMet": false
+        },
+        "dinner-rush-633": {
+          "service": 100,
+          "resources": 74.7368,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 91.5789,
+          "requirementsMet": false
+        },
+        "saturday-night-107": {
+          "service": 100,
+          "resources": 69.375,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 89.7917,
+          "requirementsMet": false
+        },
+        "saturday-night-315": {
+          "service": 100,
+          "resources": 83.125,
+          "recovery": 75,
+          "safety": 100,
+          "composite": 86.0417,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 100,
+          "resources": 83.4375,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 94.4792,
+          "requirementsMet": true
+        }
+      }
+    },
+    {
+      "arm": "passive-spender",
+      "meanComposite": 47.6,
+      "meanService": 78.0,
+      "meanResources": 36.3,
+      "requirementsMetCases": 0,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 100,
+          "resources": 75,
+          "recovery": null,
+          "safety": 100,
+          "composite": 87.5,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-308": {
+          "service": 100,
+          "resources": 57.1429,
+          "recovery": null,
+          "safety": 100,
+          "composite": 78.5714,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-619": {
+          "service": 100,
+          "resources": 78.5714,
+          "recovery": null,
+          "safety": 100,
+          "composite": 89.2857,
+          "requirementsMet": false
+        },
+        "dinner-rush-103": {
+          "service": 85.7143,
+          "resources": 26.3158,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 37.3434,
+          "requirementsMet": false
+        },
+        "dinner-rush-311": {
+          "service": 75,
+          "resources": 29.4737,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 34.8246,
+          "requirementsMet": false
+        },
+        "dinner-rush-633": {
+          "service": 75,
+          "resources": 33.1579,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 36.0526,
+          "requirementsMet": false
+        },
+        "saturday-night-107": {
+          "service": 50,
+          "resources": 4.0625,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 18.0208,
+          "requirementsMet": false
+        },
+        "saturday-night-315": {
+          "service": 50,
+          "resources": 5.625,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 18.5417,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 66.6667,
+          "resources": 17.5,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 28.0556,
+          "requirementsMet": false
+        }
+      }
+    }
+  ],
+  "memorizedSequences": [
+    {
+      "arm": "always-first-option",
+      "meanComposite": 96.8,
+      "meanService": 100,
+      "meanResources": 93.7,
+      "requirementsMetCases": 8,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-308": {
+          "service": 100,
+          "resources": 88.5714,
+          "recovery": null,
+          "safety": 100,
+          "composite": 94.2857,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-619": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "dinner-rush-103": {
+          "service": 100,
+          "resources": 93.1579,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 97.7193,
+          "requirementsMet": true
+        },
+        "dinner-rush-311": {
+          "service": 100,
+          "resources": 96.3158,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 98.7719,
+          "requirementsMet": true
+        },
+        "dinner-rush-633": {
+          "service": 100,
+          "resources": 97.8947,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 99.2982,
+          "requirementsMet": true
+        },
+        "saturday-night-107": {
+          "service": 100,
+          "resources": 83.125,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 94.375,
+          "requirementsMet": true
+        },
+        "saturday-night-315": {
+          "service": 100,
+          "resources": 87.1875,
+          "recovery": 75,
+          "safety": 100,
+          "composite": 87.3958,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 100,
+          "resources": 97.1875,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 99.0625,
+          "requirementsMet": true
+        }
+      }
+    },
+    {
+      "arm": "always-last-option",
+      "meanComposite": 33.9,
+      "meanService": 56.7,
+      "meanResources": 25.4,
+      "requirementsMetCases": 0,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 66.6667,
+          "resources": 53.5714,
+          "recovery": null,
+          "safety": 100,
+          "composite": 60.119,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-308": {
+          "service": 66.6667,
+          "resources": 32.8571,
+          "recovery": null,
+          "safety": 100,
+          "composite": 49.7619,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-619": {
+          "service": 66.6667,
+          "resources": 62.8571,
+          "recovery": null,
+          "safety": 100,
+          "composite": 64.7619,
+          "requirementsMet": false
+        },
+        "dinner-rush-103": {
+          "service": 42.8571,
+          "resources": 0,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 14.2857,
+          "requirementsMet": false
+        },
+        "dinner-rush-311": {
+          "service": 50,
+          "resources": 0,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 16.6667,
+          "requirementsMet": false
+        },
+        "dinner-rush-633": {
+          "service": 50,
+          "resources": 31.5789,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 27.193,
+          "requirementsMet": false
+        },
+        "saturday-night-107": {
+          "service": 76.9231,
+          "resources": 32.1875,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 36.3702,
+          "requirementsMet": false
+        },
+        "saturday-night-315": {
+          "service": 45.4545,
+          "resources": 0,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 15.1515,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 45.4545,
+          "resources": 15.625,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 20.3598,
+          "requirementsMet": false
+        }
+      }
+    },
+    {
+      "arm": "verify-hold-quote",
+      "meanComposite": 78.3,
+      "meanService": 95.6,
+      "meanResources": 73.4,
+      "requirementsMetCases": 6,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-308": {
+          "service": 100,
+          "resources": 88.5714,
+          "recovery": null,
+          "safety": 100,
+          "composite": 94.2857,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-619": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "dinner-rush-103": {
+          "service": 100,
+          "resources": 93.1579,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 97.7193,
+          "requirementsMet": true
+        },
+        "dinner-rush-311": {
+          "service": 100,
+          "resources": 96.3158,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 98.7719,
+          "requirementsMet": true
+        },
+        "dinner-rush-633": {
+          "service": 100,
+          "resources": 47.8947,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 49.2982,
+          "requirementsMet": false
+        },
+        "saturday-night-107": {
+          "service": 80,
+          "resources": 17.8125,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 32.6042,
+          "requirementsMet": false
+        },
+        "saturday-night-315": {
+          "service": 80,
+          "resources": 19.375,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 33.125,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 100,
+          "resources": 97.1875,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 99.0625,
+          "requirementsMet": true
+        }
+      }
+    },
+    {
+      "arm": "verify-push-seat",
+      "meanComposite": 74.7,
+      "meanService": 84.7,
+      "meanResources": 73.4,
+      "requirementsMetCases": 6,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-308": {
+          "service": 100,
+          "resources": 88.5714,
+          "recovery": null,
+          "safety": 100,
+          "composite": 94.2857,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-619": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "requirementsMet": true
+        },
+        "dinner-rush-103": {
+          "service": 100,
+          "resources": 93.1579,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 97.7193,
+          "requirementsMet": true
+        },
+        "dinner-rush-311": {
+          "service": 100,
+          "resources": 96.3158,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 98.7719,
+          "requirementsMet": true
+        },
+        "dinner-rush-633": {
+          "service": 62.5,
+          "resources": 47.8947,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 36.7982,
+          "requirementsMet": false
+        },
+        "saturday-night-107": {
+          "service": 50,
+          "resources": 17.8125,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 22.6042,
+          "requirementsMet": false
+        },
+        "saturday-night-315": {
+          "service": 50,
+          "resources": 19.375,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 23.125,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 100,
+          "resources": 97.1875,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 99.0625,
+          "requirementsMet": true
+        }
+      }
+    },
+    {
+      "arm": "never-answer",
+      "meanComposite": 0,
+      "meanService": 80.1,
+      "meanResources": 66.5,
+      "requirementsMetCases": 0,
+      "safetyFailures": 9,
+      "byCase": {
+        "quiet-tuesday-101": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-308": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-619": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        },
+        "dinner-rush-103": {
+          "service": 85.7143,
+          "resources": 57.8947,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        },
+        "dinner-rush-311": {
+          "service": 75,
+          "resources": 61.0526,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        },
+        "dinner-rush-633": {
+          "service": 62.5,
+          "resources": 56.3158,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        },
+        "saturday-night-107": {
+          "service": 75,
+          "resources": 45.9375,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        },
+        "saturday-night-315": {
+          "service": 50,
+          "resources": 24.375,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        },
+        "saturday-night-641": {
+          "service": 72.7273,
+          "resources": 53.125,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "requirementsMet": false
+        }
+      }
+    }
+  ],
+  "memorizationGate": {
+    "requirement": "no observation-free fixed sequence may meet All Requirements on more cases than the adaptive reference",
+    "bestMemorizedSequence": "always-first-option",
+    "bestMemorizedRequirementsMetCases": 8,
+    "bestMemorizedMeanComposite": 96.8,
+    "adaptiveReferenceRequirementsMetCases": 4,
+    "adaptiveReferenceMeanComposite": 93.7,
+    "passed": false
+  }
+}

@@ -1,0 +1,2351 @@
+{
+  "registryVersion": "restaurant-fixed-workers-held-out/v1",
+  "benchmarkVersion": "restaurant-fixed-workers/v1",
+  "graderVersion": "restaurant-fixed-workers-grader/v1",
+  "status": "pending-freeze",
+  "engine": {
+    "repository": "tui-gamepigeon",
+    "module": "src/games/restaurant-arena/restaurant-game.ts",
+    "levelPresets": "src/games/restaurant-arena/arena-view.ts SHIFT_PRESETS",
+    "commit": "ca646cf"
+  },
+  "scoreContract": {
+    "scorer": "retro_backend.esim.grader.grade_benchmark_events",
+    "graderVersion": "restaurant-fixed-workers-grader/v1",
+    "composite": "mean(applicable operational components) x Safety/100",
+    "allRequirementsMet": "valid terminal state, Safety 100, every applicable operational component >= 80, accurate handover"
+  },
+  "seedSelection": {
+    "candidates": "the nine seeds pre-registered in restaurant-fixed-workers-held-out/v1-draft, before any model was run",
+    "screen": [
+      "R1 recovery earnable: on a level with an oven failure, a reference run that answers the incident with repair must record equipment_restored and recovery_order_served, so a correct recovery action cannot score 0",
+      "R2 allergy answerable: no safety_violation may occur in a reference run that verifies every allergy decision it is offered, on both a cautious-pace and a fast-pace arm",
+      "R3 distinct: the eligible-order arrival schedule must differ from every already-accepted seed on the same level"
+    ],
+    "replacementRule": "a pre-registered seed that fails the screen is replaced by the next ascending seed that passes; no seed was kept, dropped, or replaced on the basis of any score",
+    "replacements": [
+      {
+        "level": "quiet-tuesday",
+        "preRegistered": 307,
+        "accepted": 308,
+        "screen": "R3",
+        "rejected": [
+          {
+            "seed": 307,
+            "screen": "R3",
+            "detail": "its eligible-order arrival schedule is identical to seed 101's, so the two cases would reward the same replayed sequence twice"
+          }
+        ]
+      },
+      {
+        "level": "dinner-rush",
+        "preRegistered": 631,
+        "accepted": 633,
+        "screen": "R1",
+        "rejected": [
+          {
+            "seed": 631,
+            "screen": "R1",
+            "detail": "the oven is restored but no affected heat ticket remains to serve, so recovery_order_served never fires and Recovery scores 0 even when the manager repairs immediately"
+          },
+          {
+            "seed": 632,
+            "screen": "R1",
+            "detail": "same unearnable Recovery as 631"
+          }
+        ]
+      },
+      {
+        "level": "saturday-night",
+        "preRegistered": 313,
+        "accepted": 315,
+        "screen": "R2",
+        "rejected": [
+          {
+            "seed": 313,
+            "screen": "R2",
+            "detail": "order-x7 is served unverified on tick 13, the same tick its allergy_ticket:order-x7 decision first surfaces, so the safety gate fires before the manager can answer it"
+          },
+          {
+            "seed": 314,
+            "screen": "R3",
+            "detail": "its eligible-order arrival schedule is identical to seed 107's"
+          }
+        ]
+      }
+    ],
+    "developmentSeedsExcluded": {
+      "quiet-tuesday": [
+        1,
+        5
+      ],
+      "dinner-rush": [
+        2,
+        5
+      ],
+      "saturday-night": [
+        1,
+        2
+      ]
+    }
+  },
+  "freezeGate": {
+    "step3CausalGate": {
+      "status": "passed",
+      "evidence": "tests/test_esim_benchmark_causal_parity.py"
+    },
+    "step4PolicySeparationGate": {
+      "status": "passed",
+      "evidence": "tests/fixtures/held-out-freeze/separation.json",
+      "detail": "adaptive outperforms passive and cautious by >= 30 mean composite points on this suite; the over-intervening spender arm loses Resources on every Quiet Tuesday case, so restraint is measured"
+    },
+    "step5MemorizationGate": {
+      "status": "failed",
+      "evidence": "tests/fixtures/held-out-freeze/separation.json",
+      "detail": "'always take the first listed option' meets All Requirements on 8 of 9 cases (mean composite 96.8) versus 4 of 9 for the adaptive reference (mean composite 93.7). The scoring-optimal option is listed first in allergy_ticket (verify), oven_down (repair) and rush_wave (seat_all) in tui-gamepigeon's DECISIONS catalogue, so option order leaks the answer that Step 2 removed from the labels. Fix belongs in tui-gamepigeon: randomize option order per case seed, or otherwise break the positional signal, then re-run this screen."
+    }
+  },
+  "cases": [
+    {
+      "caseId": "quiet-tuesday-101",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "quiet-tuesday",
+      "levelPurpose": "Restraint and efficiency: modest demand the starting crew can serve, where an unnecessary purchase or staffing move is a pure Resources loss.",
+      "seed": 101,
+      "horizon": 24,
+      "caseFile": "contracts/esim/cases/quiet-tuesday-101.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 101,
+        "episode": {
+          "id": "quiet-tuesday-101",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 24
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:28e387a65e379f80321648af76833d646a288de3e24b6823c13765bced2286e4",
+      "engineEpisodeId": "quiet-tuesday-101",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 6,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 6,
+            "deadlineTick": 16,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 10,
+            "deadlineTick": 20,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 13,
+            "deadlineTick": 23,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 17,
+            "deadlineTick": 27,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x6",
+            "createdTick": 20,
+            "deadlineTick": 30,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x4",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "allergy_ticket:order-x4",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 15,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 15,
+        "kind": "warming_shelf_overheat",
+        "targetId": "warming-shelf-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": null,
+        "observedIncidentId": null,
+        "shelfProbeTick": 15
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 140,
+        "recoveryTarget": null,
+        "recoveryHardDeadline": null,
+        "service": 80,
+        "resources": 80,
+        "recovery": null,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "safety"
+      ],
+      "recoveryApplicable": false,
+      "expectedIncidentOutcome": "Keep service running; the warming-shelf probe stays below its safety threshold and needs no purchase."
+    },
+    {
+      "caseId": "quiet-tuesday-308",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "quiet-tuesday",
+      "levelPurpose": "Restraint and efficiency: modest demand the starting crew can serve, where an unnecessary purchase or staffing move is a pure Resources loss.",
+      "seed": 308,
+      "horizon": 24,
+      "caseFile": "contracts/esim/cases/quiet-tuesday-308.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 308,
+        "episode": {
+          "id": "quiet-tuesday-308",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 24
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:3789f085955849b65a3abe08d99c056bdc1e2de627d776cb910b8dbb25ee8b12",
+      "engineEpisodeId": "quiet-tuesday-308",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 6,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 6,
+            "deadlineTick": 16,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 10,
+            "deadlineTick": 20,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 14,
+            "deadlineTick": 24,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 18,
+            "deadlineTick": 28,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x2",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "allergy_ticket:order-x2",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 15,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 15,
+        "kind": "warming_shelf_overheat",
+        "targetId": "warming-shelf-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": null,
+        "observedIncidentId": null,
+        "shelfProbeTick": 15
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 140,
+        "recoveryTarget": null,
+        "recoveryHardDeadline": null,
+        "service": 80,
+        "resources": 80,
+        "recovery": null,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "safety"
+      ],
+      "recoveryApplicable": false,
+      "expectedIncidentOutcome": "Keep service running; the warming-shelf probe stays below its safety threshold and needs no purchase."
+    },
+    {
+      "caseId": "quiet-tuesday-619",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "quiet-tuesday",
+      "levelPurpose": "Restraint and efficiency: modest demand the starting crew can serve, where an unnecessary purchase or staffing move is a pure Resources loss.",
+      "seed": 619,
+      "horizon": 24,
+      "caseFile": "contracts/esim/cases/quiet-tuesday-619.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 619,
+        "episode": {
+          "id": "quiet-tuesday-619",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 24
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:814c9b9ef2a517424f6489b4a17b50cd2fd56ae94602778816eb89754372c57d",
+      "engineEpisodeId": "quiet-tuesday-619",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 6,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 6,
+            "deadlineTick": 16,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 9,
+            "deadlineTick": 19,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 12,
+            "deadlineTick": 22,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 16,
+            "deadlineTick": 26,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x6",
+            "createdTick": 19,
+            "deadlineTick": 29,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x1",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "allergy_ticket:order-x1",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 15,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 15,
+        "kind": "warming_shelf_overheat",
+        "targetId": "warming-shelf-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": null,
+        "observedIncidentId": null,
+        "shelfProbeTick": 15
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 140,
+        "recoveryTarget": null,
+        "recoveryHardDeadline": null,
+        "service": 80,
+        "resources": 80,
+        "recovery": null,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "safety"
+      ],
+      "recoveryApplicable": false,
+      "expectedIncidentOutcome": "Keep service running; the warming-shelf probe stays below its safety threshold and needs no purchase."
+    },
+    {
+      "caseId": "dinner-rush-103",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "dinner-rush",
+      "levelPurpose": "Disruption recovery: an oven failure lands while heat-dependent tickets are live, and Recovery measures restoration plus the first affected order served.",
+      "seed": 103,
+      "horizon": 24,
+      "caseFile": "contracts/esim/cases/dinner-rush-103.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 103,
+        "episode": {
+          "id": "dinner-rush-103",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 24
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:b17767616b7b8f243ae70f447f79bf0809be167d26464ac3b39bf76093f0a749",
+      "engineEpisodeId": "dinner-rush-001",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 7,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 5,
+            "deadlineTick": 15,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 7,
+            "deadlineTick": 17,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 9,
+            "deadlineTick": 19,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 12,
+            "deadlineTick": 22,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x6",
+            "createdTick": 15,
+            "deadlineTick": 25,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x7",
+            "createdTick": 21,
+            "deadlineTick": 31,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x8",
+            "createdTick": 23,
+            "deadlineTick": 33,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x3",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x4",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "allergy_ticket:order-x2",
+        "allergy_ticket:order-x3",
+        "allergy_ticket:order-x4",
+        "oven_down",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 8,
+          "kind": "oven_failure",
+          "targetId": "oven-1"
+        },
+        {
+          "tick": 15,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 8,
+        "kind": "oven_failure",
+        "targetId": "oven-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": 8,
+        "observedIncidentId": "oven-failure-103-8",
+        "shelfProbeTick": 15
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 190,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "service": 80,
+        "resources": 80,
+        "recovery": 80,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "recovery",
+        "safety"
+      ],
+      "recoveryApplicable": true,
+      "expectedIncidentOutcome": "Restore the failed oven and serve an affected heat ticket inside the recovery window."
+    },
+    {
+      "caseId": "dinner-rush-311",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "dinner-rush",
+      "levelPurpose": "Disruption recovery: an oven failure lands while heat-dependent tickets are live, and Recovery measures restoration plus the first affected order served.",
+      "seed": 311,
+      "horizon": 24,
+      "caseFile": "contracts/esim/cases/dinner-rush-311.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 311,
+        "episode": {
+          "id": "dinner-rush-311",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 24
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:eddc2ec89427312067058d8fbe56515cf9e8469bcd17c560edb9b9bcd8fa9943",
+      "engineEpisodeId": "dinner-rush-001",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 8,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 5,
+            "deadlineTick": 15,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 7,
+            "deadlineTick": 17,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 9,
+            "deadlineTick": 19,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 11,
+            "deadlineTick": 21,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x6",
+            "createdTick": 14,
+            "deadlineTick": 24,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x7",
+            "createdTick": 21,
+            "deadlineTick": 31,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x8",
+            "createdTick": 23,
+            "deadlineTick": 33,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x3",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x4",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "allergy_ticket:order-x3",
+        "allergy_ticket:order-x4",
+        "oven_down",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 8,
+          "kind": "oven_failure",
+          "targetId": "oven-1"
+        },
+        {
+          "tick": 15,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 8,
+        "kind": "oven_failure",
+        "targetId": "oven-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": 8,
+        "observedIncidentId": "oven-failure-311-8",
+        "shelfProbeTick": 15
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 190,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "service": 80,
+        "resources": 80,
+        "recovery": 80,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "recovery",
+        "safety"
+      ],
+      "recoveryApplicable": true,
+      "expectedIncidentOutcome": "Restore the failed oven and serve an affected heat ticket inside the recovery window."
+    },
+    {
+      "caseId": "dinner-rush-633",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "dinner-rush",
+      "levelPurpose": "Disruption recovery: an oven failure lands while heat-dependent tickets are live, and Recovery measures restoration plus the first affected order served.",
+      "seed": 633,
+      "horizon": 24,
+      "caseFile": "contracts/esim/cases/dinner-rush-633.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 633,
+        "episode": {
+          "id": "dinner-rush-633",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 24
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:23c2385cfc9550b0b142c8c17457f3540842af370658eba7861d4261d3467e83",
+      "engineEpisodeId": "dinner-rush-001",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 8,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 5,
+            "deadlineTick": 15,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 7,
+            "deadlineTick": 17,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 9,
+            "deadlineTick": 19,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 11,
+            "deadlineTick": 21,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x6",
+            "createdTick": 13,
+            "deadlineTick": 23,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x7",
+            "createdTick": 21,
+            "deadlineTick": 31,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x8",
+            "createdTick": 23,
+            "deadlineTick": 33,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "oven_down",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 8,
+          "kind": "oven_failure",
+          "targetId": "oven-1"
+        },
+        {
+          "tick": 15,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 8,
+        "kind": "oven_failure",
+        "targetId": "oven-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": 8,
+        "observedIncidentId": "oven-failure-633-8",
+        "shelfProbeTick": 15
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 190,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "service": 80,
+        "resources": 80,
+        "recovery": 80,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "recovery",
+        "safety"
+      ],
+      "recoveryApplicable": true,
+      "expectedIncidentOutcome": "Restore the failed oven and serve an affected heat ticket inside the recovery window."
+    },
+    {
+      "caseId": "saturday-night-107",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "saturday-night",
+      "levelPurpose": "Sustained allocation: continuous arrivals, a mid-shift oven failure, and repeated allergy constraints force the manager to keep re-choosing the bottleneck.",
+      "seed": 107,
+      "horizon": 28,
+      "caseFile": "contracts/esim/cases/saturday-night-107.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 107,
+        "episode": {
+          "id": "saturday-night-107",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 28
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:bd0964cae9a8396fdd733b86cb269e1cbb01d869cf184b804b8529a12d6853d3",
+      "engineEpisodeId": "saturday-night-107",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 8,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 5,
+            "deadlineTick": 15,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 6,
+            "deadlineTick": 16,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 7,
+            "deadlineTick": 17,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 8,
+            "deadlineTick": 18,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x6",
+            "createdTick": 18,
+            "deadlineTick": 28,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x7",
+            "createdTick": 19,
+            "deadlineTick": 29,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x8",
+            "createdTick": 20,
+            "deadlineTick": 30,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x7",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "allergy_ticket:order-x7",
+        "oven_down",
+        "rush_wave",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 6,
+          "kind": "oven_failure",
+          "targetId": "oven-1"
+        },
+        {
+          "tick": 12,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 6,
+        "kind": "oven_failure",
+        "targetId": "oven-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": 6,
+        "observedIncidentId": "oven-failure-107-6",
+        "shelfProbeTick": 12
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 320,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "service": 80,
+        "resources": 80,
+        "recovery": 80,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "recovery",
+        "safety"
+      ],
+      "recoveryApplicable": true,
+      "expectedIncidentOutcome": "Restore the failed oven and serve an affected heat ticket inside the recovery window."
+    },
+    {
+      "caseId": "saturday-night-315",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "saturday-night",
+      "levelPurpose": "Sustained allocation: continuous arrivals, a mid-shift oven failure, and repeated allergy constraints force the manager to keep re-choosing the bottleneck.",
+      "seed": 315,
+      "horizon": 28,
+      "caseFile": "contracts/esim/cases/saturday-night-315.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 315,
+        "episode": {
+          "id": "saturday-night-315",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 28
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:6a416c1d3f098c39b67eae3292f02937a4c67a00a07579ef8f52e06925d43037",
+      "engineEpisodeId": "saturday-night-315",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 8,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 5,
+            "deadlineTick": 15,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 6,
+            "deadlineTick": 16,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 7,
+            "deadlineTick": 17,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 9,
+            "deadlineTick": 19,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x6",
+            "createdTick": 18,
+            "deadlineTick": 28,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x7",
+            "createdTick": 19,
+            "deadlineTick": 29,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x8",
+            "createdTick": 21,
+            "deadlineTick": 31,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x4",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x5",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x6",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "allergy_ticket:order-x4",
+        "allergy_ticket:order-x5",
+        "allergy_ticket:order-x6",
+        "oven_down",
+        "rush_wave",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 6,
+          "kind": "oven_failure",
+          "targetId": "oven-1"
+        },
+        {
+          "tick": 12,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 6,
+        "kind": "oven_failure",
+        "targetId": "oven-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": 6,
+        "observedIncidentId": "oven-failure-315-6",
+        "shelfProbeTick": 12
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 320,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "service": 80,
+        "resources": 80,
+        "recovery": 80,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "recovery",
+        "safety"
+      ],
+      "recoveryApplicable": true,
+      "expectedIncidentOutcome": "Restore the failed oven and serve an affected heat ticket inside the recovery window."
+    },
+    {
+      "caseId": "saturday-night-641",
+      "benchmarkVersion": "restaurant-fixed-workers/v1",
+      "graderVersion": "restaurant-fixed-workers-grader/v1",
+      "level": "saturday-night",
+      "levelPurpose": "Sustained allocation: continuous arrivals, a mid-shift oven failure, and repeated allergy constraints force the manager to keep re-choosing the bottleneck.",
+      "seed": 641,
+      "horizon": 28,
+      "caseFile": "contracts/esim/cases/saturday-night-641.json",
+      "startingState": {
+        "version": "restaurant-arena/v1",
+        "seed": 641,
+        "episode": {
+          "id": "saturday-night-641",
+          "phase": "active",
+          "tick": 0,
+          "maxTicks": 28
+        },
+        "clock": {
+          "minute": 0,
+          "speed": 1
+        },
+        "tables": [
+          {
+            "id": "table-1",
+            "seats": 2,
+            "status": "occupied",
+            "orderId": "order-1"
+          },
+          {
+            "id": "table-2",
+            "seats": 4,
+            "status": "occupied",
+            "orderId": "order-2"
+          },
+          {
+            "id": "table-3",
+            "seats": 2,
+            "status": "empty"
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "tableId": "table-1",
+            "items": [
+              "pasta"
+            ],
+            "status": "queued",
+            "priority": "normal"
+          },
+          {
+            "id": "order-2",
+            "tableId": "table-2",
+            "items": [
+              "fish"
+            ],
+            "status": "queued",
+            "allergy": "peanut",
+            "priority": "high"
+          }
+        ],
+        "inventory": {
+          "pasta": 8,
+          "fish": 6,
+          "safe-sauce": 2,
+          "risotto": 6,
+          "salad": 8
+        },
+        "equipment": [
+          {
+            "id": "oven-1",
+            "kind": "oven",
+            "status": "working"
+          },
+          {
+            "id": "warming-shelf-1",
+            "kind": "warming_shelf",
+            "status": "working",
+            "safetyThreshold": 70,
+            "reading": 62
+          }
+        ],
+        "workers": [
+          {
+            "id": "worker-chef",
+            "role": "chef",
+            "load": 0,
+            "location": "kitchen"
+          },
+          {
+            "id": "worker-expediter",
+            "role": "expediter",
+            "load": 0,
+            "location": "pass"
+          },
+          {
+            "id": "worker-host",
+            "role": "host",
+            "load": 0,
+            "location": "queue"
+          },
+          {
+            "id": "worker-server",
+            "role": "server",
+            "load": 0,
+            "location": "floor"
+          }
+        ],
+        "emergency": {
+          "kind": "oven_failure",
+          "active": false,
+          "startedAt": 0
+        },
+        "reputation": 50,
+        "outcomes": {
+          "cash": 0,
+          "satisfaction": 0,
+          "waste": 0,
+          "waitTime": 0,
+          "completed": 0,
+          "safeOrders": 0,
+          "coordination": 0,
+          "correctionUptake": 0
+        }
+      },
+      "startingStateHash": "sha256:e12460e88097319e7c9212f4d3716d53a07a55698ca9758c2c7d1982de5fd1b6",
+      "engineEpisodeId": "saturday-night-641",
+      "orderSchedule": {
+        "referenceRun": "passive scripted policy; a manager's own seating and pacing choices move later arrivals",
+        "eligibleOrders": 9,
+        "orders": [
+          {
+            "orderId": "order-1",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-2",
+            "createdTick": 0,
+            "deadlineTick": 10,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x1",
+            "createdTick": 2,
+            "deadlineTick": 12,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x2",
+            "createdTick": 5,
+            "deadlineTick": 15,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x3",
+            "createdTick": 6,
+            "deadlineTick": 16,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x4",
+            "createdTick": 7,
+            "deadlineTick": 17,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x5",
+            "createdTick": 10,
+            "deadlineTick": 20,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x6",
+            "createdTick": 11,
+            "deadlineTick": 21,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x7",
+            "createdTick": 12,
+            "deadlineTick": 22,
+            "eligible": true
+          },
+          {
+            "orderId": "order-x8",
+            "createdTick": 22,
+            "deadlineTick": 32,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x9",
+            "createdTick": 23,
+            "deadlineTick": 33,
+            "eligible": false
+          },
+          {
+            "orderId": "order-x10",
+            "createdTick": 24,
+            "deadlineTick": 34,
+            "eligible": false
+          }
+        ]
+      },
+      "allergyOrders": [
+        {
+          "orderId": "order-2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x2",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x4",
+          "allergy": "peanut"
+        },
+        {
+          "orderId": "order-x6",
+          "allergy": "peanut"
+        }
+      ],
+      "decisionIds": [
+        "allergy_ticket:order-2",
+        "allergy_ticket:order-x2",
+        "allergy_ticket:order-x4",
+        "allergy_ticket:order-x6",
+        "oven_down",
+        "rush_wave",
+        "shelf_hot"
+      ],
+      "eventSchedule": [
+        {
+          "tick": 6,
+          "kind": "oven_failure",
+          "targetId": "oven-1"
+        },
+        {
+          "tick": 12,
+          "kind": "warming_shelf_overheat",
+          "targetId": "warming-shelf-1"
+        }
+      ],
+      "expectedIncident": {
+        "tick": 6,
+        "kind": "oven_failure",
+        "targetId": "oven-1"
+      },
+      "incidentTiming": {
+        "recoveryIncidentTick": 6,
+        "observedIncidentId": "oven-failure-641-6",
+        "shelfProbeTick": 12
+      },
+      "thresholds": {
+        "resourceFloor": 0,
+        "resourceCeiling": 320,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "service": 80,
+        "resources": 80,
+        "recovery": 80,
+        "safety": 100
+      },
+      "applicableMetrics": [
+        "service",
+        "resources",
+        "recovery",
+        "safety"
+      ],
+      "recoveryApplicable": true,
+      "expectedIncidentOutcome": "Restore the failed oven and serve an affected heat ticket inside the recovery window."
+    }
+  ]
+}

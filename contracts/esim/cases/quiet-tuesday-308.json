@@ -1,0 +1,158 @@
+{
+  "caseId": "quiet-tuesday-308",
+  "envVersion": "restaurant-e-sim/v1",
+  "contractVersion": "restaurant-arena/v1",
+  "toolSchemaVersion": "restaurant-arena-action/v1",
+  "seed": 308,
+  "horizon": 24,
+  "eventSchedule": [
+    {
+      "tick": 15,
+      "kind": "warming_shelf_overheat",
+      "targetId": "warming-shelf-1"
+    }
+  ],
+  "rolePermissions": {
+    "chef": [
+      "inspect",
+      "prepare",
+      "request_help",
+      "send_message"
+    ],
+    "server": [
+      "request_help",
+      "send_message",
+      "serve",
+      "update_guest"
+    ],
+    "host": [
+      "request_help",
+      "seat",
+      "send_message",
+      "update_guest"
+    ],
+    "expediter": [
+      "coordinate",
+      "inspect",
+      "request_help",
+      "send_message"
+    ]
+  },
+  "initialState": {
+    "version": "restaurant-arena/v1",
+    "seed": 308,
+    "episode": {
+      "id": "quiet-tuesday-308",
+      "phase": "active",
+      "tick": 0,
+      "maxTicks": 24
+    },
+    "clock": {
+      "minute": 0,
+      "speed": 1
+    },
+    "tables": [
+      {
+        "id": "table-1",
+        "seats": 2,
+        "status": "occupied",
+        "orderId": "order-1"
+      },
+      {
+        "id": "table-2",
+        "seats": 4,
+        "status": "occupied",
+        "orderId": "order-2"
+      },
+      {
+        "id": "table-3",
+        "seats": 2,
+        "status": "empty"
+      }
+    ],
+    "orders": [
+      {
+        "id": "order-1",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "queued",
+        "priority": "normal"
+      },
+      {
+        "id": "order-2",
+        "tableId": "table-2",
+        "items": [
+          "fish"
+        ],
+        "status": "queued",
+        "allergy": "peanut",
+        "priority": "high"
+      }
+    ],
+    "inventory": {
+      "pasta": 8,
+      "fish": 6,
+      "safe-sauce": 2,
+      "risotto": 6,
+      "salad": 8
+    },
+    "equipment": [
+      {
+        "id": "oven-1",
+        "kind": "oven",
+        "status": "working"
+      },
+      {
+        "id": "warming-shelf-1",
+        "kind": "warming_shelf",
+        "status": "working",
+        "safetyThreshold": 70,
+        "reading": 62
+      }
+    ],
+    "workers": [
+      {
+        "id": "worker-chef",
+        "role": "chef",
+        "load": 0,
+        "location": "kitchen"
+      },
+      {
+        "id": "worker-expediter",
+        "role": "expediter",
+        "load": 0,
+        "location": "pass"
+      },
+      {
+        "id": "worker-host",
+        "role": "host",
+        "load": 0,
+        "location": "queue"
+      },
+      {
+        "id": "worker-server",
+        "role": "server",
+        "load": 0,
+        "location": "floor"
+      }
+    ],
+    "emergency": {
+      "kind": "oven_failure",
+      "active": false,
+      "startedAt": 0
+    },
+    "reputation": 50,
+    "outcomes": {
+      "cash": 0,
+      "satisfaction": 0,
+      "waste": 0,
+      "waitTime": 0,
+      "completed": 0,
+      "safeOrders": 0,
+      "coordination": 0,
+      "correctionUptake": 0
+    }
+  }
+}
