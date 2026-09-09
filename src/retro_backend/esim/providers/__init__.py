@@ -30,6 +30,10 @@ from retro_backend.esim.providers.nim import (
     NimAdapter,
     parse_retry_after,
 )
+from retro_backend.esim.providers.openrouter import (
+    DEFAULT_OPENROUTER_BASE_URL,
+    OpenRouterAdapter,
+)
 from retro_backend.esim.providers.registry import (
     get_adapter,
     parse_model_spec,
@@ -41,6 +45,7 @@ __all__ = [
     "DEFAULT_MAX_STARTS_PER_WINDOW",
     "DEFAULT_NIM_BASE_URL",
     "DEFAULT_NIM_TIMEOUT_SECONDS",
+    "DEFAULT_OPENROUTER_BASE_URL",
     "DEFAULT_WINDOW_SECONDS",
     "ERR_AUTH",
     "ERR_BUDGET_TIMEOUT",
@@ -56,6 +61,7 @@ __all__ = [
     "ModelAdapter",
     "ModelReply",
     "NimAdapter",
+    "OpenRouterAdapter",
     "RollingWindowBudget",
     "default_budget",
     "get_adapter",

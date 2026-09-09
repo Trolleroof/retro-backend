@@ -43,6 +43,7 @@ class SweepConfig:
     dry_run: bool = False
     engine_repo: Path | None = None
     nim_api_keys_file: Path | None = None
+    openrouter_api_key_file: Path | None = None
     models: tuple[str, ...] = ()
     case_ids: tuple[str, ...] = ()
 
@@ -216,6 +217,7 @@ async def _run_episode(
                 max_output_tokens=config.max_output_tokens,
                 request_timeout=config.request_timeout,
                 nim_api_keys_file=config.nim_api_keys_file,
+                openrouter_api_key_file=config.openrouter_api_key_file,
             ),
             out_dir,
             episode_id=f"{config.benchmark_version}/{model}/{case_id}/{attempt_number}",
@@ -364,6 +366,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--engine-repo", type=Path)
     parser.add_argument("--nim-api-keys-file", type=Path)
+    parser.add_argument("--openrouter-api-key-file", type=Path)
     parser.add_argument("--models", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     parser.add_argument("--case-ids", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     return parser

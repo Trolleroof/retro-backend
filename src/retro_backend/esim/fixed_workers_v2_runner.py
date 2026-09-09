@@ -6,7 +6,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, TextIO, cast
 
 from retro_backend.esim.case import load_fixed_worker_case_v2
 from retro_backend.esim.grader import (
@@ -16,6 +16,7 @@ from retro_backend.esim.grader import (
 )
 from retro_backend.esim.providers.base import ERR_RATE_LIMIT, ERR_TIMEOUT, ModelAdapter, ModelReply
 from retro_backend.esim.providers.nim import NimAdapter
+from retro_backend.esim.providers.openrouter import OpenRouterAdapter
 from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import retryable_model_error
 from retro_backend.esim.runner import record_jsonl
@@ -32,6 +33,7 @@ class FixedWorkersV2Config:
     max_output_tokens: int = 2500
     request_timeout: float = 30.0
     nim_api_keys_file: Path | None = None
+    openrouter_api_key_file: Path | None = None
 
 
 class _RotatingAdapter:
@@ -59,12 +61,21 @@ class _RotatingAdapter:
 
 
 def _adapter(config: FixedWorkersV2Config) -> ModelAdapter:
-    if config.nim_api_keys_file is None:
+    if config.nim_api_keys_file is None and config.openrouter_api_key_file is None:
         return get_adapter(config.model)
     provider, model = parse_model_spec(config.model)
+    if config.openrouter_api_key_file is not None:
+        if config.nim_api_keys_file is not None or provider != "openrouter":
+            raise ValueError("--openrouter-api-key-file may only be used with openrouter: models")
+        key_path = config.openrouter_api_key_file
+        keys = [line.strip() for line in key_path.read_text().splitlines() if line.strip()]
+        if len(keys) != 1:
+            raise ValueError("OpenRouter key file must contain exactly one nonblank key")
+        return OpenRouterAdapter(model, api_key=keys[0], timeout=config.request_timeout)
     if provider != "nim":
         raise ValueError("--nim-api-keys-file may only be used with nim: models")
-    keys = [line.strip() for line in config.nim_api_keys_file.read_text().splitlines() if line.strip()]
+    nim_key_path = cast(Path, config.nim_api_keys_file)
+    keys = [line.strip() for line in nim_key_path.read_text().splitlines() if line.strip()]
     if not keys or len(keys) != len(set(keys)):
         raise ValueError("NIM key file must contain unique, nonblank keys")
     return _RotatingAdapter(

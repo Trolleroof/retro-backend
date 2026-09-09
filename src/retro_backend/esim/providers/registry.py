@@ -9,6 +9,7 @@ from typing import Any
 
 from retro_backend.esim.providers.base import ModelAdapter
 from retro_backend.esim.providers.nim import NimAdapter
+from retro_backend.esim.providers.openrouter import OpenRouterAdapter
 
 __all__ = [
     "get_adapter",
@@ -21,8 +22,13 @@ def _create_nim_adapter(model: str, **kwargs: Any) -> ModelAdapter:
     return NimAdapter(model=model, **kwargs)
 
 
+def _create_openrouter_adapter(model: str, **kwargs: Any) -> ModelAdapter:
+    return OpenRouterAdapter(model=model, **kwargs)
+
+
 _PROVIDER_FACTORIES: dict[str, Callable[..., ModelAdapter]] = {
     "nim": _create_nim_adapter,
+    "openrouter": _create_openrouter_adapter,
 }
 
 
