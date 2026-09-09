@@ -37,7 +37,7 @@ class SweepConfig:
     max_concurrency: int = 2
     request_timeout: float = 30.0
     retry_budget: int = 2
-    max_output_tokens: int = 2500
+    max_output_tokens: int = 8000
     max_turns: int | None = None
     rerun_provider_invalid: bool = False
     dry_run: bool = False
@@ -314,13 +314,21 @@ def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_versi
     calls = sum(int(entry.get("summary", {}).get("turns", 0)) for entry in entries)
     requirements = [_all_requirements(grade) for grade in grades]
     met = [value for value in requirements if value is not None]
-    publishable = len(valid) >= 8
+    publishable = (planned_episodes == 9 and len(valid) == 9) if benchmark_version == FIXED_WORKER_BENCHMARK_VERSION_V2 else len(valid) >= 8
+    total_billed_tokens = sum(int(entry.get("summary", {}).get("total_billed_tokens", 0)) for entry in valid)
+    total_billed_tokens_per_valid_episode = total_billed_tokens / len(valid) if valid else None
     scores: dict[str, float | str | None] = {
         name: _mean([_metric(grade, name) for grade in grades])
         for name in ("Service", "Resources", "Recovery", "Safety", "Composite")
     }
     if not publishable:
         scores = {name: "N/A" for name in scores}
+    composite = scores["Composite"]
+    token_efficiency_score = (
+        float(composite) * 1_000_000 / total_billed_tokens_per_valid_episode
+        if isinstance(composite, (int, float)) and total_billed_tokens_per_valid_episode
+        else None
+    )
     provider_failures = sum(_provider_failure(entry.get("summary")) for entry in entries)
     task = {
         "benchmark_version": benchmark_version,
@@ -349,6 +357,8 @@ def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_versi
         **scores,
         "all_requirements_met_percent": None if not publishable or not met else 100 * sum(met) / len(met),
         "publishable": publishable,
+        "total_billed_tokens_per_valid_episode": total_billed_tokens_per_valid_episode,
+        "token_efficiency_score": token_efficiency_score,
         "total_model_calls": calls,
         "task": task,
         "provider": provider,
@@ -403,7 +413,16 @@ async def run_sweep(config: SweepConfig, *, episode_runner: EpisodeRunner | None
                 planned_episodes=len(cases),
             )
 
-    reports = await asyncio.gather(*(run_model(model) for model in models))
+    reports = list(await asyncio.gather(*(run_model(model) for model in models)))
+    ranked = sorted(
+        (report for report in reports if report["publishable"] and report["token_efficiency_score"] is not None),
+        key=lambda report: float(report["token_efficiency_score"]),
+        reverse=True,
+    )
+    for rank, report in enumerate(ranked, start=1):
+        report["token_efficiency_rank"] = rank
+    for report in reports:
+        report.setdefault("token_efficiency_rank", None)
     report = {
         "benchmark_version": config.benchmark_version,
         "planned_episodes": len(models) * len(cases),
@@ -423,7 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-concurrency", type=int, default=2)
     parser.add_argument("--request-timeout", type=float, default=30.0)
     parser.add_argument("--retry-budget", type=int, default=2)
-    parser.add_argument("--max-output-tokens", type=int, default=2500)
+    parser.add_argument("--max-output-tokens", type=int, default=8000)
     parser.add_argument("--max-turns", type=int, default=None)
     parser.add_argument("--rerun-provider-invalid", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

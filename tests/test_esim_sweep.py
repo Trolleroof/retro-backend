@@ -149,6 +149,7 @@ async def test_fewer_than_eight_valid_episodes_is_not_publishable(tmp_path: Path
     report = await run_sweep(config, episode_runner=fake_runner)
     assert report["models"][0]["valid_episodes"] == 0
     assert report["models"][0]["Service"] == "N/A"
+    assert report["models"][0]["publishable"] is False
 
 
 @pytest.mark.asyncio

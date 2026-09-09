@@ -9,7 +9,10 @@
     "openrouter:nvidia/nemotron-3.5-lightning",
     "openrouter:nvidia/nemotron-3-ultra-550b-a55b",
     "openrouter:google/gemma-4-26b-a4b-it",
-    "openrouter:google/gemma-4-31b-it"
+    "openrouter:google/gemma-4-31b-it",
+    "openrouter:google/gemini-3.7-flash",
+    "openrouter:z-ai/glm-5.3",
+    "openrouter:x-ai/grok-4.6"
   ],
   "excluded": [
     {

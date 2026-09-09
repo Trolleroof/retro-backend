@@ -31,7 +31,7 @@ class FixedWorkersV2Config:
     model: str
     engine_repo: Path
     max_attempts: int = 3
-    max_output_tokens: int = 2500
+    max_output_tokens: int = 8000
     request_timeout: float = 30.0
     nim_api_keys_file: Path | None = None
     openrouter_api_key_file: Path | None = None
@@ -132,6 +132,7 @@ async def _generate(
         totals["turns"] += 1
         totals["input_tokens"] += reply.input_tokens
         totals["output_tokens"] += reply.output_tokens
+        totals["total_billed_tokens"] += reply.input_tokens + reply.output_tokens
         totals["latency_ms"] += round(reply.latency_ms)
         totals["queue_delay_ms"] += round(reply.queue_delay_ms)
         if reply.served_model:
@@ -185,6 +186,7 @@ async def _handover(
         totals["turns"] += 1
         totals["input_tokens"] += reply.input_tokens
         totals["output_tokens"] += reply.output_tokens
+        totals["total_billed_tokens"] += reply.input_tokens + reply.output_tokens
         totals["latency_ms"] += round(reply.latency_ms)
         totals["queue_delay_ms"] += round(reply.queue_delay_ms)
         if reply.served_model:
