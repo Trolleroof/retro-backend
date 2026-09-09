@@ -85,6 +85,7 @@ class NimAdapter(ModelAdapter):
         budget: RollingWindowBudget | None = None,
         client: httpx.AsyncClient | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        request_options: Mapping[str, object] | None = None,
     ) -> None:
         """Initialize the NVIDIA NIM adapter.
 
@@ -115,6 +116,7 @@ class NimAdapter(ModelAdapter):
                 + "variable, or pass api_key explicitly."
             )
         self._api_key = resolved_key.strip()
+        self._request_options = dict(request_options or {})
 
         # Client management
         self._owns_client = client is None
@@ -194,6 +196,7 @@ class NimAdapter(ModelAdapter):
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        payload.update(self._request_options)
 
         headers = {
             "Authorization": f"Bearer {self._api_key}",

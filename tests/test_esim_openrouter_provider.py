@@ -1,5 +1,7 @@
 """OpenRouter uses the existing OpenAI-compatible E-Sim transport."""
 
+import json
+
 import httpx
 import pytest
 
@@ -13,7 +15,7 @@ async def test_openrouter_adapter_uses_openrouter_endpoint_and_key() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         seen["url"] = str(request.url)
         seen["auth"] = request.headers["authorization"]
-        seen["body"] = request.json() if hasattr(request, "json") else request.content
+        seen["body"] = json.loads(request.content)
         return httpx.Response(200, json={"model": "moonshotai/kimi-k3", "choices": [{"message": {"content": "{\"action\":\"wait\"}"}}], "usage": {"prompt_tokens": 2, "completion_tokens": 3}})
 
     adapter = OpenRouterAdapter(
@@ -29,6 +31,12 @@ async def test_openrouter_adapter_uses_openrouter_endpoint_and_key() -> None:
 
     assert seen["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert seen["auth"] == "Bearer test-key"
+    assert seen["body"] == {
+        "model": "moonshotai/kimi-k3",
+        "messages": [{"role": "user", "content": "hello"}],
+        "provider": {"allow_fallbacks": False},
+        "temperature": 0.0,
+    }
     assert reply.served_model == "moonshotai/kimi-k3"
     assert reply.text == '{"action":"wait"}'
 

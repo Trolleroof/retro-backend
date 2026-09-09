@@ -36,4 +36,5 @@ class OpenRouterAdapter(NimAdapter):
             budget=budget,
             client=client,
             transport=transport,
+            request_options={"provider": {"allow_fallbacks": False}},
         )
