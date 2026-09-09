@@ -44,14 +44,15 @@ class SweepConfig:
     engine_repo: Path | None = None
     nim_api_keys_file: Path | None = None
     openrouter_api_key_file: Path | None = None
+    provider_failure_limit: int = 2
     models: tuple[str, ...] = ()
     case_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.benchmark_version.strip():
             raise ValueError("benchmark_version must not be empty")
-        if self.max_concurrency < 1 or self.retry_budget < 0 or self.max_output_tokens < 1:
-            raise ValueError("max_concurrency must be positive; retry_budget must not be negative")
+        if self.max_concurrency < 1 or self.retry_budget < 0 or self.max_output_tokens < 1 or self.provider_failure_limit < 1:
+            raise ValueError("max_concurrency and provider_failure_limit must be positive; retry_budget must not be negative")
         if self.request_timeout <= 0:
             raise ValueError("request_timeout must be positive")
         if self.max_turns is not None and self.max_turns < 1:
@@ -166,6 +167,10 @@ def _summary(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _provider_failure(summary: Mapping[str, Any] | None) -> bool:
+    return isinstance(summary, Mapping) and summary.get("runValidity") in {"provider_failure", "provider_invalid"}
+
+
 def _bundle_is_complete(path: Path, *, benchmark_version: str, model: str) -> bool:
     if any(not (path / name).is_file() for name in REQUIRED_ARTIFACTS):
         return False
@@ -276,7 +281,7 @@ def _all_requirements(grade: Mapping[str, Any]) -> bool | None:
     return None
 
 
-def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_version: str) -> dict[str, Any]:
+def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_version: str, *, artifact_root: Path, stopped_after_provider_failures: bool, planned_episodes: int) -> dict[str, Any]:
     valid = [
         entry
         for entry in entries
@@ -295,17 +300,38 @@ def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_versi
     }
     if not publishable:
         scores = {name: "N/A" for name in scores}
+    provider_failures = sum(_provider_failure(entry.get("summary")) for entry in entries)
+    task = {
+        "benchmark_version": benchmark_version,
+        "planned_episodes": planned_episodes,
+        "completed_episodes": len(entries),
+        "valid_episodes": len(valid),
+        "skipped_after_provider_failures": planned_episodes - len(entries),
+    }
+    provider = {
+        "requested_model": model,
+        "served_model_ids": served,
+        "provider_failure_episodes": provider_failures,
+        "stopped_after_repeated_provider_failures": stopped_after_provider_failures,
+    }
+    trajectory = {
+        "artifact_root": str(artifact_root),
+        "valid_trajectory_episodes": len(valid),
+    }
     return {
         "model": model,
         "served_model_id": served[0] if len(served) == 1 else None,
         "benchmark_version": benchmark_version,
-        "planned_episodes": len(entries),
+        "planned_episodes": planned_episodes,
         "valid_episodes": len(valid),
-        "provider_invalid_episodes": len(entries) - len(valid),
+        "provider_invalid_episodes": provider_failures,
         **scores,
         "all_requirements_met_percent": None if not publishable or not met else 100 * sum(met) / len(met),
         "publishable": publishable,
         "total_model_calls": calls,
+        "task": task,
+        "provider": provider,
+        "trajectory": trajectory,
     }
 
 
@@ -327,10 +353,16 @@ async def run_sweep(config: SweepConfig, *, episode_runner: EpisodeRunner | None
         async with semaphore:
             entries: list[dict[str, Any]] = []
             model_dir = config.output_dir / _component(model)
+            consecutive_provider_failures = 0
+            stopped_after_provider_failures = False
             for case_id in cases:
                 case_dir = model_dir / _component(case_id)
                 latest_dir, latest_summary = _latest_bundle(case_dir)
-                if _bundle_is_complete(latest_dir, benchmark_version=config.benchmark_version, model=model) or latest_summary and latest_summary.get("runValidity") == "provider_invalid" and not config.rerun_provider_invalid:
+                if stopped_after_provider_failures:
+                    if latest_summary is None:
+                        continue
+                    selected = latest_dir
+                elif _bundle_is_complete(latest_dir, benchmark_version=config.benchmark_version, model=model) or _provider_failure(latest_summary) and not config.rerun_provider_invalid:
                     selected = latest_dir
                 else:
                     attempt_number, selected = _next_attempt(case_dir)
@@ -338,7 +370,17 @@ async def run_sweep(config: SweepConfig, *, episode_runner: EpisodeRunner | None
                 summary = _summary(selected) or {}
                 grade = _read_json(selected / "grade.json") if (selected / "grade.json").is_file() else {}
                 entries.append({"summary": summary, "grade": grade})
-            return _model_report(model, entries, config.benchmark_version)
+                consecutive_provider_failures = consecutive_provider_failures + 1 if _provider_failure(summary) else 0
+                if consecutive_provider_failures >= config.provider_failure_limit:
+                    stopped_after_provider_failures = True
+            return _model_report(
+                model,
+                entries,
+                config.benchmark_version,
+                artifact_root=model_dir,
+                stopped_after_provider_failures=stopped_after_provider_failures,
+                planned_episodes=len(cases),
+            )
 
     reports = await asyncio.gather(*(run_model(model) for model in models))
     report = {
@@ -367,6 +409,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--engine-repo", type=Path)
     parser.add_argument("--nim-api-keys-file", type=Path)
     parser.add_argument("--openrouter-api-key-file", type=Path)
+    parser.add_argument("--provider-failure-limit", type=int, default=2)
     parser.add_argument("--models", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     parser.add_argument("--case-ids", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     return parser

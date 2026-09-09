@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from retro_backend.esim import sweep as sweep_module
 from retro_backend.esim.sweep import SweepConfig, _component, main, run_sweep
 
 
@@ -114,6 +115,28 @@ async def test_provider_invalid_episode_reruns_when_requested(tmp_path: Path) ->
     await run_sweep(first, episode_runner=fake_runner)
     await run_sweep(config, episode_runner=fake_runner)
     assert attempts == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_repeated_provider_failures_stop_a_model_and_split_the_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _inputs(tmp_path, models=["nim:model-a"])
+    monkeypatch.setattr(
+        sweep_module,
+        "validate_sweep_inputs",
+        lambda _: (("nim:model-a",), ("dinner-rush-001", "dinner-rush-002", "dinner-rush-003")),
+    )
+    calls: list[str] = []
+
+    async def fake_runner(model, case_id, out_dir, attempt, sweep_config):
+        calls.append(case_id)
+        _write_bundle(out_dir, model=model, version=sweep_config.benchmark_version, valid=False, attempt=attempt)
+
+    report = await run_sweep(config, episode_runner=fake_runner)
+    model = report["models"][0]
+    assert calls == ["dinner-rush-001", "dinner-rush-002"]
+    assert model["task"]["skipped_after_provider_failures"] == 1
+    assert model["provider"]["stopped_after_repeated_provider_failures"] is True
+    assert model["trajectory"]["valid_trajectory_episodes"] == 0
 
 
 @pytest.mark.asyncio
