@@ -16,10 +16,11 @@ implemented here.
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Literal
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import ValidationError as PydanticValidationError
 from pydantic.alias_generators import to_camel
 
@@ -31,6 +32,9 @@ from retro_backend.esim.tools import ROLE_TOOLS
 # authored against a different value is rejected outright (#58 acceptance:
 # "a mismatch is rejected rather than coerced"), never silently upgraded.
 ENV_VERSION = "restaurant-e-sim/v1"
+FIXED_WORKER_CASE_VERSION_V2 = "restaurant-fixed-workers-case/v2"
+FIXED_WORKER_BENCHMARK_VERSION_V2 = "restaurant-fixed-workers/v2"
+FIXED_WORKER_GRADER_VERSION_V2 = "restaurant-fixed-workers-grader/v2"
 
 _CASES_DIR = Path(__file__).resolve().parents[3] / "contracts/esim/cases"
 _STATE_SCHEMA_PATH = (
@@ -80,6 +84,80 @@ class FrozenCase(BaseModel):
     tool_schema_version: str
     role_permissions: Mapping[Role, tuple[Tool, ...]]
     horizon: int = Field(ge=1, strict=True)
+
+
+class FixedWorkerThresholdsV2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        populate_by_name=True,
+        alias_generator=to_camel,
+    )
+
+    resource_floor: Literal[0]
+    resource_ceiling: float = Field(gt=0)
+    recovery_target: float | None = Field(ge=0)
+    recovery_hard_deadline: float | None = Field(ge=0)
+    service: Literal[80]
+    resources: Literal[80]
+    recovery: Literal[80] | None
+    safety: Literal[100]
+
+    @model_validator(mode="after")
+    def validate_recovery(self) -> "FixedWorkerThresholdsV2":
+        values = (self.recovery_target, self.recovery_hard_deadline, self.recovery)
+        if all(value is None for value in values):
+            return self
+        if any(value is None for value in values):
+            raise ValueError("recovery thresholds must be all present or all absent")
+        assert self.recovery_target is not None and self.recovery_hard_deadline is not None
+        if self.recovery_hard_deadline <= self.recovery_target:
+            raise ValueError("recoveryHardDeadline must be greater than recoveryTarget")
+        return self
+
+
+class FixedWorkerCaseV2(BaseModel):
+    """One development or held-out case for the deterministic 120-tick benchmark."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        populate_by_name=True,
+        alias_generator=to_camel,
+    )
+
+    case_version: Literal["restaurant-fixed-workers-case/v2"]
+    case_id: str = Field(pattern=r"^[a-z0-9-]+$", min_length=1, max_length=64)
+    benchmark_version: Literal["restaurant-fixed-workers/v2"]
+    grader_version: Literal["restaurant-fixed-workers-grader/v2"]
+    split: Literal["development", "held_out"]
+    level: Literal["quiet-tuesday-v2", "dinner-rush-v2", "saturday-night-v2"]
+    seed: int = Field(ge=0, strict=True)
+    duration_ticks: Literal[120]
+    arrival_ticks: tuple[int, ...] = Field(min_length=1)
+    cash_target: float = Field(gt=0)
+    event_schedule: tuple[ScheduledIncident, ...]
+    thresholds: FixedWorkerThresholdsV2
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> "FixedWorkerCaseV2":
+        if tuple(sorted(set(self.arrival_ticks))) != self.arrival_ticks:
+            raise ValueError("arrivalTicks must be unique and increasing")
+        if any(tick <= 0 or tick >= self.duration_ticks for tick in self.arrival_ticks):
+            raise ValueError("arrivalTicks must fall strictly inside the episode")
+        incident_ticks = tuple(incident.tick for incident in self.event_schedule)
+        if tuple(sorted(incident_ticks)) != incident_ticks:
+            raise ValueError("eventSchedule must be ordered by tick")
+        if any(tick >= self.duration_ticks for tick in incident_ticks):
+            raise ValueError("eventSchedule must fall before the terminal tick")
+        if self.thresholds.resource_ceiling != self.cash_target:
+            raise ValueError("resourceCeiling must match cashTarget")
+        recovery_applicable = any(
+            incident.kind == "oven_failure" for incident in self.event_schedule
+        )
+        if recovery_applicable is (self.thresholds.recovery is None):
+            raise ValueError("recovery thresholds must match oven-failure applicability")
+        return self
 
 
 def _case_path(case_id: str) -> Path:
@@ -164,6 +242,17 @@ def load_case(case_id: str) -> FrozenCase:
         raise CaseSchemaError(f"case {case_id!r} failed contract validation: {exc}") from exc
 
 
+def load_fixed_worker_case_v2(case_id: str) -> FixedWorkerCaseV2:
+    """Load one v2 benchmark case without changing the legacy E-Sim loader."""
+    path = _case_path(case_id)
+    if not path.is_file():
+        raise CaseNotFoundError(f"no fixed-worker v2 case at {path}")
+    try:
+        return FixedWorkerCaseV2.model_validate_json(path.read_text())
+    except (OSError, PydanticValidationError) as exc:
+        raise CaseSchemaError(f"case {case_id!r} failed v2 validation: {exc}") from exc
+
+
 def _same_permissions(
     declared: object, expected: Mapping[str, Sequence[str]]
 ) -> bool:
@@ -205,12 +294,18 @@ def default_role_permissions() -> Mapping[Role, tuple[Tool, ...]]:
 __all__ = [
     "ACTION_VERSION",
     "ENV_VERSION",
+    "FIXED_WORKER_BENCHMARK_VERSION_V2",
+    "FIXED_WORKER_CASE_VERSION_V2",
+    "FIXED_WORKER_GRADER_VERSION_V2",
     "CaseError",
     "CaseNotFoundError",
     "CaseSchemaError",
     "CaseVersionError",
     "FrozenCase",
+    "FixedWorkerCaseV2",
+    "FixedWorkerThresholdsV2",
     "default_role_permissions",
     "load_case",
+    "load_fixed_worker_case_v2",
     "reset",
 ]

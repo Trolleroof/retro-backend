@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tui-gamepigeon.dev/contracts/restaurant-fixed-workers-case-v2.schema.json",
+  "$defs": {
+    "FixedWorkerThresholdsV2": {
+      "additionalProperties": false,
+      "properties": {
+        "resourceFloor": {
+          "const": 0,
+          "title": "Resourcefloor",
+          "type": "integer"
+        },
+        "resourceCeiling": {
+          "exclusiveMinimum": 0.0,
+          "title": "Resourceceiling",
+          "type": "number"
+        },
+        "recoveryTarget": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Recoverytarget"
+        },
+        "recoveryHardDeadline": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Recoveryharddeadline"
+        },
+        "service": {
+          "const": 80,
+          "title": "Service",
+          "type": "integer"
+        },
+        "resources": {
+          "const": 80,
+          "title": "Resources",
+          "type": "integer"
+        },
+        "recovery": {
+          "anyOf": [
+            {
+              "const": 80,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Recovery"
+        },
+        "safety": {
+          "const": 100,
+          "title": "Safety",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resourceFloor",
+        "resourceCeiling",
+        "recoveryTarget",
+        "recoveryHardDeadline",
+        "service",
+        "resources",
+        "recovery",
+        "safety"
+      ],
+      "title": "FixedWorkerThresholdsV2",
+      "type": "object"
+    },
+    "ScheduledIncident": {
+      "additionalProperties": false,
+      "description": "One frozen-case event: happens once, at exactly this tick.\n\n``player_correction`` is the odd one out. The other kinds break a piece\nof the restaurant; this one delivers the player's scripted correction to\n``target_id``'s inbox as a high-priority message from\n:data:`PLAYER_ACTOR_ID`, so the worker meets it on its next observation\nthe same way it meets any other message.",
+      "properties": {
+        "tick": {
+          "minimum": 1,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "oven_failure",
+            "warming_shelf_overheat",
+            "player_correction"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "targetId": {
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "required": [
+        "tick",
+        "kind",
+        "targetId"
+      ],
+      "title": "ScheduledIncident",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One development or held-out case for the deterministic 120-tick benchmark.",
+  "properties": {
+    "caseVersion": {
+      "const": "restaurant-fixed-workers-case/v2",
+      "title": "Caseversion",
+      "type": "string"
+    },
+    "caseId": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z0-9-]+$",
+      "title": "Caseid",
+      "type": "string"
+    },
+    "benchmarkVersion": {
+      "const": "restaurant-fixed-workers/v2",
+      "title": "Benchmarkversion",
+      "type": "string"
+    },
+    "graderVersion": {
+      "const": "restaurant-fixed-workers-grader/v2",
+      "title": "Graderversion",
+      "type": "string"
+    },
+    "split": {
+      "enum": [
+        "development",
+        "held_out"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "level": {
+      "enum": [
+        "quiet-tuesday-v2",
+        "dinner-rush-v2",
+        "saturday-night-v2"
+      ],
+      "title": "Level",
+      "type": "string"
+    },
+    "seed": {
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "durationTicks": {
+      "const": 120,
+      "title": "Durationticks",
+      "type": "integer"
+    },
+    "arrivalTicks": {
+      "items": {
+        "type": "integer"
+      },
+      "minItems": 1,
+      "title": "Arrivalticks",
+      "type": "array"
+    },
+    "cashTarget": {
+      "exclusiveMinimum": 0.0,
+      "title": "Cashtarget",
+      "type": "number"
+    },
+    "eventSchedule": {
+      "items": {
+        "$ref": "#/$defs/ScheduledIncident"
+      },
+      "title": "Eventschedule",
+      "type": "array"
+    },
+    "thresholds": {
+      "$ref": "#/$defs/FixedWorkerThresholdsV2"
+    }
+  },
+  "required": [
+    "caseVersion",
+    "caseId",
+    "benchmarkVersion",
+    "graderVersion",
+    "split",
+    "level",
+    "seed",
+    "durationTicks",
+    "arrivalTicks",
+    "cashTarget",
+    "eventSchedule",
+    "thresholds"
+  ],
+  "title": "FixedWorkerCaseV2",
+  "type": "object"
+}

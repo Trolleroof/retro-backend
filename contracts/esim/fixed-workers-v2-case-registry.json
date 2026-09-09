@@ -1,0 +1,48 @@
+{
+  "registryVersion": "restaurant-fixed-workers-case-registry/v2",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "graderVersion": "restaurant-fixed-workers-grader/v2",
+  "status": "frozen",
+  "developmentCases": [
+    "quiet-tuesday-v2-dev-1",
+    "quiet-tuesday-v2-dev-5",
+    "quiet-tuesday-v2-dev-9",
+    "dinner-rush-v2-dev-2",
+    "dinner-rush-v2-dev-5",
+    "dinner-rush-v2-dev-9",
+    "saturday-night-v2-dev-1",
+    "saturday-night-v2-dev-2",
+    "saturday-night-v2-dev-9"
+  ],
+  "calibration": {
+    "source": "tests/fixtures/fixed-workers-v2/calibration.json",
+    "accepted": true,
+    "rejectionGates": {
+      "passivePassesEveryCase": false,
+      "allPoliciesTie": false,
+      "oneActionSequenceDominates": false,
+      "adaptiveCannotReachTarget": false,
+      "timerNeverAffectsDecisions": false
+    }
+  },
+  "backendParity": {
+    "fixture": "tests/fixtures/fixed-workers-v2/quiet-tuesday-v2-dev-1.json",
+    "scorer": "retro_backend.esim.grader.grade_benchmark_events_v2",
+    "status": "validated"
+  },
+  "heldOutSelection": {
+    "rule": "fresh positive seeds selected before execution, disjoint from all development seeds",
+    "outcomesInspected": false
+  },
+  "heldOutCases": [
+    "quiet-tuesday-v2-held-out-17",
+    "quiet-tuesday-v2-held-out-29",
+    "quiet-tuesday-v2-held-out-43",
+    "dinner-rush-v2-held-out-19",
+    "dinner-rush-v2-held-out-31",
+    "dinner-rush-v2-held-out-47",
+    "saturday-night-v2-held-out-23",
+    "saturday-night-v2-held-out-37",
+    "saturday-night-v2-held-out-53"
+  ]
+}
