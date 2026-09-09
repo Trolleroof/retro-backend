@@ -46,6 +46,7 @@ class SweepConfig:
     openrouter_api_key_file: Path | None = None
     provider_failure_limit: int = 2
     openrouter_provider_order: tuple[str, ...] = ()
+    openrouter_reasoning_effort: str | None = None
     models: tuple[str, ...] = ()
     case_ids: tuple[str, ...] = ()
 
@@ -225,6 +226,7 @@ async def _run_episode(
                 nim_api_keys_file=config.nim_api_keys_file,
                 openrouter_api_key_file=config.openrouter_api_key_file,
                 openrouter_provider_order=config.openrouter_provider_order,
+                openrouter_reasoning_effort=config.openrouter_reasoning_effort,
             ),
             out_dir,
             episode_id=f"{config.benchmark_version}/{model}/{case_id}/{attempt_number}",
@@ -413,6 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--openrouter-api-key-file", type=Path)
     parser.add_argument("--provider-failure-limit", type=int, default=2)
     parser.add_argument("--openrouter-provider", dest="openrouter_provider_order", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
+    parser.add_argument("--openrouter-reasoning-effort")
     parser.add_argument("--models", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     parser.add_argument("--case-ids", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     return parser

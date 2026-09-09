@@ -25,6 +25,7 @@ class OpenRouterAdapter(NimAdapter):
         client: httpx.AsyncClient | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         provider_order: tuple[str, ...] = (),
+        reasoning_effort: str | None = None,
     ) -> None:
         resolved_key = api_key or os.environ.get("OPENROUTER_API_KEY")
         if not resolved_key or not resolved_key.strip():
@@ -32,6 +33,9 @@ class OpenRouterAdapter(NimAdapter):
         provider: dict[str, object] = {"allow_fallbacks": False}
         if provider_order:
             provider["order"] = list(provider_order)
+        request_options: dict[str, object] = {"provider": provider}
+        if reasoning_effort:
+            request_options["reasoning"] = {"effort": reasoning_effort}
         super().__init__(
             model,
             api_key=resolved_key,
@@ -40,5 +44,5 @@ class OpenRouterAdapter(NimAdapter):
             budget=budget,
             client=client,
             transport=transport,
-            request_options={"provider": provider},
+            request_options=request_options,
         )
