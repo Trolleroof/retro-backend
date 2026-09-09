@@ -45,6 +45,14 @@ from retro_backend.esim.grader import (
 _FIXTURES_DIR = Path(__file__).parent / "fixtures/traces/benchmark-v2"
 
 _BENCHMARK_VERSION = "restaurant-fixed-workers/v2"
+
+#: This engine's grader identity. It is deliberately *not* a parity field:
+#: tui-gamepigeon publishes a ``benchmarkVersion`` but no grader version of
+#: its own, so there is nothing on the other side to diff it against, and
+#: asserting it inside the parity comparison would only be checking this
+#: constant against itself. It is asserted separately below as a local
+#: invariant -- the thing that would actually catch drift on this side is a
+#: changed grader version against an unchanged benchmark version.
 _GRADER_VERSION = "restaurant-fixed-workers-grader/v2"
 _DURATION_TICKS = 120
 
@@ -69,7 +77,6 @@ _CASE_IDS = [
 #: disagreement (an off-by-one order count, a flipped target verdict).
 _EXACT_FIELDS = (
     "benchmark_version",
-    "grader_version",
     "duration_ticks",
     "valid_terminal_state",
     "target_reached",
@@ -108,7 +115,6 @@ def _ts_score_in_backend_shape(ts_score: dict[str, Any]) -> dict[str, Any]:
     raw = ts_score["raw"]
     return {
         "benchmark_version": ts_score["benchmarkVersion"],
-        "grader_version": _GRADER_VERSION,
         "service": ts_score["service"],
         "resources": ts_score["resources"],
         "recovery": ts_score["recovery"],
@@ -159,6 +165,14 @@ def test_backend_grader_matches_the_typescript_engines_recorded_v2_score(case_id
 
     expected = _ts_score_in_backend_shape(fixture["tsScore"])
     actual = grade_benchmark_events_v2(fixture["events"]).model_dump()
+
+    # Asserted here rather than through `expected`, which carries only what
+    # the TypeScript fixture actually says. See `_GRADER_VERSION`.
+    assert actual["grader_version"] == _GRADER_VERSION
+    assert set(actual) == set(expected) | {"grader_version"}, (
+        "BenchmarkScoresV2 gained or lost a field -- add it to _EXACT_FIELDS or "
+        "_SCORE_FIELDS so parity still covers every score field"
+    )
 
     mismatches: list[str] = []
     for field in _EXACT_FIELDS:
