@@ -16,7 +16,7 @@ from retro_backend.esim.case import (
     load_fixed_worker_case_v2,
 )
 from retro_backend.esim.cli import _run_once  # pyright: ignore[reportPrivateUsage]
-from retro_backend.esim.fixed_workers_v2_runner import FixedWorkersV2Config, run_fixed_workers_v2
+from retro_backend.esim.fixed_workers_v2_runner import BUNDLE_VERSION, FixedWorkersV2Config, run_fixed_workers_v2
 from retro_backend.esim.runner import RunnerConfig
 
 REQUIRED_ARTIFACTS = (
@@ -183,6 +183,10 @@ def _bundle_is_complete(path: Path, *, benchmark_version: str, model: str) -> bo
         and isinstance(summary, dict)
         and manifest.get("benchmarkVersion") == benchmark_version
         and manifest.get("model") == model
+        and (
+            benchmark_version != FIXED_WORKER_BENCHMARK_VERSION_V2
+            or manifest.get("bundleVersion") == BUNDLE_VERSION
+        )
         and summary.get("benchmarkVersion") == benchmark_version
         and summary.get("model") == model
         and summary.get("runValidity") == "valid"

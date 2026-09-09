@@ -182,6 +182,14 @@ def test_v2_report_excludes_unverified_replays(tmp_path: Path) -> None:
     assert report["valid_episodes"] == 0
 
 
+def test_v2_resume_does_not_reuse_pre_engine_replay_bundle(tmp_path: Path) -> None:
+    out_dir = tmp_path / "attempt"
+    _write_bundle(out_dir, model="openrouter:model-a", version="restaurant-fixed-workers/v2", valid=True, attempt=1)
+    assert sweep_module._bundle_is_complete(
+        out_dir, benchmark_version="restaurant-fixed-workers/v2", model="openrouter:model-a"
+    ) is False
+
+
 def test_sweep_component_rejects_dot_segments() -> None:
     assert _component(".") == "__"
     assert _component("..") == "__"
