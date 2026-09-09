@@ -1,0 +1,2946 @@
+{
+  "caseId": "dinner-rush-v2-recovery-repaired",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "intent": "oven repaired and a recovery order served before the hard deadline",
+  "seed": 2,
+  "variationId": "dinner-rush-v2",
+  "engineVersion": "tui-gamepigeon/restaurant-arena",
+  "durationTicks": 120,
+  "arrivalTicks": [
+    3,
+    9,
+    15,
+    21,
+    27,
+    33,
+    39,
+    45,
+    51,
+    57,
+    63,
+    69,
+    75,
+    81,
+    87,
+    93,
+    99,
+    105
+  ],
+  "cashTarget": 190,
+  "initialState": {
+    "version": "restaurant-arena/v1",
+    "seed": 2,
+    "episode": {
+      "id": "dinner-rush-v2-2",
+      "phase": "active",
+      "tick": 0,
+      "maxTicks": 120
+    },
+    "clock": {
+      "minute": 0,
+      "speed": 1
+    },
+    "tables": [
+      {
+        "id": "table-1",
+        "seats": 2,
+        "status": "occupied",
+        "orderId": "order-1"
+      },
+      {
+        "id": "table-2",
+        "seats": 4,
+        "status": "occupied",
+        "orderId": "order-2"
+      },
+      {
+        "id": "table-3",
+        "seats": 2,
+        "status": "empty"
+      }
+    ],
+    "orders": [
+      {
+        "id": "order-1",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "queued",
+        "priority": "normal"
+      },
+      {
+        "id": "order-2",
+        "tableId": "table-2",
+        "items": [
+          "fish"
+        ],
+        "status": "queued",
+        "allergy": "peanut",
+        "priority": "high"
+      }
+    ],
+    "inventory": {
+      "pasta": 8,
+      "fish": 6,
+      "safe-sauce": 2,
+      "risotto": 6,
+      "salad": 8
+    },
+    "equipment": [
+      {
+        "id": "oven-1",
+        "kind": "oven",
+        "status": "working"
+      },
+      {
+        "id": "warming-shelf-1",
+        "kind": "warming_shelf",
+        "status": "working",
+        "safetyThreshold": 70,
+        "reading": 62
+      }
+    ],
+    "workers": [
+      {
+        "id": "worker-host",
+        "role": "host",
+        "load": 0,
+        "location": "queue"
+      },
+      {
+        "id": "worker-supply_lead",
+        "role": "supply_lead",
+        "load": 0,
+        "location": "pass"
+      },
+      {
+        "id": "worker-chef",
+        "role": "chef",
+        "load": 0,
+        "location": "kitchen"
+      },
+      {
+        "id": "worker-server",
+        "role": "server",
+        "load": 0,
+        "location": "floor"
+      }
+    ],
+    "emergency": {
+      "kind": "oven_failure",
+      "active": false,
+      "startedAt": 0
+    },
+    "reputation": 50,
+    "outcomes": {
+      "cash": 0,
+      "satisfaction": 0,
+      "waste": 0,
+      "waitTime": 0,
+      "completed": 0,
+      "safeOrders": 0,
+      "coordination": 0,
+      "correctionUptake": 0
+    }
+  },
+  "finalState": {
+    "version": "restaurant-arena/v1",
+    "seed": 2,
+    "episode": {
+      "id": "dinner-rush-v2-2",
+      "phase": "complete",
+      "tick": 120,
+      "maxTicks": 120
+    },
+    "clock": {
+      "minute": 120,
+      "speed": 1
+    },
+    "tables": [
+      {
+        "id": "table-1",
+        "seats": 2,
+        "status": "empty",
+        "orderId": "order-x18"
+      },
+      {
+        "id": "table-2",
+        "seats": 4,
+        "status": "empty",
+        "orderId": "order-x17"
+      },
+      {
+        "id": "table-3",
+        "seats": 2,
+        "status": "empty",
+        "orderId": "order-x1"
+      }
+    ],
+    "orders": [
+      {
+        "id": "order-1",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-2",
+        "tableId": "table-2",
+        "items": [
+          "fish"
+        ],
+        "status": "served",
+        "allergy": "peanut",
+        "priority": "high"
+      },
+      {
+        "id": "order-x1",
+        "tableId": "table-3",
+        "items": [
+          "salad"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x2",
+        "tableId": "table-1",
+        "items": [
+          "fish"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x3",
+        "tableId": "table-1",
+        "items": [
+          "risotto"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x4",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x5",
+        "tableId": "table-1",
+        "items": [
+          "fish"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x6",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x7",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x8",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x9",
+        "tableId": "table-1",
+        "items": [
+          "fish"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x10",
+        "tableId": "table-1",
+        "items": [
+          "fish"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x11",
+        "tableId": "table-1",
+        "items": [
+          "risotto"
+        ],
+        "status": "served",
+        "priority": "normal",
+        "allergy": "peanut"
+      },
+      {
+        "id": "order-x12",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal",
+        "allergy": "peanut"
+      },
+      {
+        "id": "order-x13",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal",
+        "allergy": "peanut"
+      },
+      {
+        "id": "order-x14",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x15",
+        "tableId": "table-1",
+        "items": [
+          "salad"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x16",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "expired",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x17",
+        "tableId": "table-2",
+        "items": [
+          "risotto"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-x18",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "expired",
+        "priority": "normal"
+      }
+    ],
+    "inventory": {
+      "pasta": 0,
+      "fish": 1,
+      "safe-sauce": 2,
+      "risotto": 3,
+      "salad": 6
+    },
+    "equipment": [
+      {
+        "id": "oven-1",
+        "kind": "oven",
+        "status": "working"
+      },
+      {
+        "id": "warming-shelf-1",
+        "kind": "warming_shelf",
+        "status": "degraded",
+        "safetyThreshold": 70,
+        "reading": 68
+      }
+    ],
+    "workers": [
+      {
+        "id": "worker-host",
+        "role": "host",
+        "load": 1,
+        "location": "queue",
+        "lastAction": "seat:table-1"
+      },
+      {
+        "id": "worker-supply_lead",
+        "role": "supply_lead",
+        "load": 0,
+        "location": "pass"
+      },
+      {
+        "id": "worker-chef",
+        "role": "chef",
+        "load": 0,
+        "location": "kitchen",
+        "lastAction": "prepare:order-x17"
+      },
+      {
+        "id": "worker-server",
+        "role": "server",
+        "load": 0,
+        "location": "floor",
+        "lastAction": "serve:order-x17"
+      }
+    ],
+    "emergency": {
+      "kind": "oven_failure",
+      "active": false,
+      "startedAt": 8
+    },
+    "reputation": 49.5,
+    "outcomes": {
+      "cash": 326,
+      "satisfaction": 1,
+      "waste": 2,
+      "waitTime": 0,
+      "completed": 18,
+      "safeOrders": 18,
+      "coordination": 0,
+      "correctionUptake": 1
+    }
+  },
+  "tsScore": {
+    "benchmarkVersion": "restaurant-fixed-workers/v2",
+    "service": 90,
+    "resources": 100,
+    "recovery": 100,
+    "safety": 100,
+    "composite": 96.66666666666669,
+    "durationTicks": 120,
+    "cashEarned": 326,
+    "cashTarget": 190,
+    "targetReached": true,
+    "validTerminalState": true,
+    "raw": {
+      "eligibleOrders": 20,
+      "onTimeOrders": 18,
+      "netOperatingReturn": 326,
+      "recoveryTime": 4,
+      "safetyViolations": 0
+    }
+  },
+  "events": [
+    {
+      "tick": 0,
+      "kind": "observation",
+      "timestamp": "2026-09-05T18:00:00.000Z",
+      "stateHash": "sha256:a3f5d745a982e15183bfaad1effc073d428eebec95033ea35e62eb1e72607064",
+      "actorId": "system",
+      "text": "Shift started. Tables seated and queue active.",
+      "observation": {
+        "episodeId": "dinner-rush-v2-2",
+        "seed": 2,
+        "tick": 0,
+        "tables": 3,
+        "orders": 2
+      },
+      "round": 1
+    },
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:00.000Z",
+      "stateHash": "sha256:244e600409a5aca877cf1529ddf69f8c3994226965c929d3a4c68b708bdeec96",
+      "actorId": "system",
+      "payload": {
+        "measurement": "benchmark_config",
+        "resourceFloor": 0,
+        "resourceCeiling": 190,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "recoveryApplicable": true,
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "durationTicks": 120,
+        "cashTarget": 190
+      },
+      "round": 1
+    },
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:00.000Z",
+      "stateHash": "sha256:7a0ac42e114f5895418528972c411fa92c0828d20b4afcca621a13e91bf2dcb1",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-1"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-1",
+        "createdAtTick": 0,
+        "deadlineTick": 10,
+        "eligible": true
+      },
+      "round": 1
+    },
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:00.000Z",
+      "stateHash": "sha256:806b9ee0d21f12d4cf16efe854679dce72293517d9a0da8f3bbd449a95d9098b",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-2"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-2",
+        "createdAtTick": 0,
+        "deadlineTick": 10,
+        "eligible": true
+      },
+      "round": 1
+    },
+    {
+      "tick": 1,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:03.000Z",
+      "stateHash": "sha256:20d8439b39ff2b0fdb30e3f8ca7ded29091bd0742ec77b5b7af2aa50783f69c1",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing fish for table 2.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-2"
+        }
+      },
+      "round": 1
+    },
+    {
+      "tick": 1,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:03.000Z",
+      "stateHash": "sha256:bdc80ffba7c74dea3d2a972a7289018bca767c4af3d536f7af58a8919a0512d9",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Chef proposed unverified house sauce substitution to save time on the table 2 (fish) ticket.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-2",
+          "substitution": "house-sauce",
+          "verified": false
+        }
+      },
+      "round": 1
+    },
+    {
+      "tick": 1,
+      "kind": "player_correction",
+      "timestamp": "2026-09-05T18:00:03.000Z",
+      "stateHash": "sha256:c1caaa6c0df7b3c672c514d749da45a4584b59ade10c243b239f898d94d1bda8",
+      "actorId": "player",
+      "targetRole": "chef",
+      "correctionCategory": "safety",
+      "correctionRationale": "protect safety and verify before substituting",
+      "text": "protect safety and verify before substituting",
+      "changedDecisionEventId": "evt-dec-allergy-2",
+      "probeEventId": "evt-probe-shelf-2",
+      "round": 1
+    },
+    {
+      "tick": 1,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:03.000Z",
+      "stateHash": "sha256:75a56a91e386821c7f38650cf7b13f7be44317c7c8254df33de07e6ec2d2bb25",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Tasting every component before it leaves my pass. Slower, but it's right. Verified allergy safety.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-2",
+          "verifiedSafe": true
+        }
+      },
+      "toolResult": {
+        "ok": true,
+        "status": "verified",
+        "correctionUptake": 0.5
+      },
+      "round": 1
+    },
+    {
+      "tick": 2,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:06.000Z",
+      "stateHash": "sha256:f292e8a594cca6202e9537071f0a28e0fa438da7087d2e29131aaac8761a835b",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-1"
+        }
+      },
+      "round": 1
+    },
+    {
+      "tick": 3,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:09.000Z",
+      "stateHash": "sha256:42cbe9d01ba949b8ae29ce672381cb92459539cab0dfd0925cd83fa99210eae9",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-1",
+        "size": 4,
+        "scheduledTick": 3
+      },
+      "round": 2
+    },
+    {
+      "tick": 3,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:09.000Z",
+      "stateHash": "sha256:8fbfc18f667bb781726f9d7f50791a47e4ffc4f77c0506780100d1b5b952aac6",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x1"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x1",
+        "createdAtTick": 3,
+        "deadlineTick": 13,
+        "eligible": true
+      },
+      "round": 2
+    },
+    {
+      "tick": 3,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:09.000Z",
+      "stateHash": "sha256:c0daa9d2d158c82c1556af951b3832ecc1c10001d4601b3e3f6dc825d2ec893a",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing salad for table 3.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x1"
+        }
+      },
+      "round": 2
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:12.000Z",
+      "stateHash": "sha256:f284469b12cc8d7d55a1fc2e8b01b2f446426b66a971a950dd317966831a9320",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-1",
+        "cashEarned": 14
+      },
+      "round": 2
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:12.000Z",
+      "stateHash": "sha256:5fb6603cb670d369d07c4668b2e0769c67a207fcdc169d8cb3e7fab064880472",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-1"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-1"
+      },
+      "round": 2
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:12.000Z",
+      "stateHash": "sha256:37eee4b3538292c1d43632e4e0e9516e9fdeed87f51bf9c4a759aa600dc28122",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-1",
+        "cashEarned": 16
+      },
+      "round": 2
+    },
+    {
+      "tick": 4,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:12.000Z",
+      "stateHash": "sha256:b4f8b53c38d6b70166ae89ff0d7ed25d50df43e5b24707d56643a7a4d582ca73",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-1"
+        }
+      },
+      "round": 2
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:15.000Z",
+      "stateHash": "sha256:7da1aafc8aaeab155f254e1a71e60b6a5d796b17e7f91f22b4323811b693c860",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-2",
+        "cashEarned": 38
+      },
+      "round": 3
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:15.000Z",
+      "stateHash": "sha256:7919c5909de903fe041a0ef2a929734d2f47488d7b44bdf7a06e9d3fb8afeb46",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-2"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-2"
+      },
+      "round": 3
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:15.000Z",
+      "stateHash": "sha256:47c29507ae65ffaf3e42c445ba44312104ae7789e40e603039e584c3ec609f9c",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-2",
+        "cashEarned": 41
+      },
+      "round": 3
+    },
+    {
+      "tick": 5,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:15.000Z",
+      "stateHash": "sha256:ace3e8854f6d141435337b1182128168ec3d93e4806704b4e5ccab3a07aba323",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran fish to table 2. $22 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-2"
+        }
+      },
+      "round": 3
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:18.000Z",
+      "stateHash": "sha256:f02908af3fbba9b06d6dda68a23afab5c930742eb0e298fe440e463f43424736",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 11,
+        "orderId": "order-x1",
+        "cashEarned": 52
+      },
+      "round": 3
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:18.000Z",
+      "stateHash": "sha256:5b51e796ab16bf31597bd27f44927b4168dfc2ccc8fe7fc1825347e72401d384",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x1"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x1"
+      },
+      "round": 3
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:18.000Z",
+      "stateHash": "sha256:c937949dc148173c48b9ad5004c0ad8479ae73d7f1a46339c345099e8a532bd8",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x1",
+        "cashEarned": 54
+      },
+      "round": 3
+    },
+    {
+      "tick": 6,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:18.000Z",
+      "stateHash": "sha256:3566d471b4f5aade896e4bfb231b12a235ba09718a760727db80e6ff49e5c55d",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran salad to table 3. $11 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x1"
+        }
+      },
+      "round": 3
+    },
+    {
+      "tick": 8,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:24.000Z",
+      "stateHash": "sha256:f1ec3404d653d2c55161d70238b222dbf2ff6ed39229d66a668d0a2345befe2e",
+      "actorId": "system",
+      "payload": {
+        "measurement": "equipment_failed",
+        "incidentId": "oven-failure-2-8",
+        "equipmentId": "oven-1"
+      },
+      "round": 4
+    },
+    {
+      "tick": 8,
+      "kind": "observation",
+      "timestamp": "2026-09-05T18:00:24.000Z",
+      "stateHash": "sha256:fefe83af00971abbdb61fb3500710302d37b4144cbaf27be514290ba68df1dfa",
+      "actorId": "system",
+      "requestId": "evt-dec-allergy-2",
+      "subject": {
+        "kind": "equipment",
+        "id": "oven-1"
+      },
+      "text": "Oven-1 failure occurred; peanut allergy constraint on Table 2 ticket requires verification.",
+      "observation": {
+        "emergency": {
+          "kind": "oven_failure",
+          "active": true
+        },
+        "orderId": "order-2",
+        "allergy": "peanut"
+      },
+      "round": 4
+    },
+    {
+      "tick": 8,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:24.000Z",
+      "stateHash": "sha256:942209c83f3e4cf2ffd0f1156964b9257fb2bd2ef8e1b0502e53c9d0577b1eb4",
+      "actorId": "player",
+      "text": "Player sent Mira to repair the oven.",
+      "round": 5
+    },
+    {
+      "tick": 9,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:27.000Z",
+      "stateHash": "sha256:fabfaf2e31d336bf2c9111537e408b1f837002fe27948ea686a8f41d745529bf",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-2",
+        "size": 3,
+        "scheduledTick": 9
+      },
+      "round": 5
+    },
+    {
+      "tick": 9,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:27.000Z",
+      "stateHash": "sha256:27c98d66ed743a4abd68cd59376d55168dd8776e503368a0f7bd0e488da99c1b",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x2"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x2",
+        "createdAtTick": 9,
+        "deadlineTick": 19,
+        "eligible": true
+      },
+      "round": 5
+    },
+    {
+      "tick": 10,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:30.000Z",
+      "stateHash": "sha256:5f933222b2d94103e364671979fa3810a99bf6a464509bc90c61b6f4513c62f4",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing fish for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x2"
+        }
+      },
+      "round": 5
+    },
+    {
+      "tick": 10,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:30.000Z",
+      "stateHash": "sha256:d77d117d25802e9ce20d6d87944cd7a7f9e5fbacd2f2ce1bbe142bf69f52459b",
+      "actorId": "system",
+      "payload": {
+        "measurement": "equipment_restored",
+        "incidentId": "oven-failure-2-8",
+        "equipmentId": "oven-1"
+      },
+      "round": 5
+    },
+    {
+      "tick": 12,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:36.000Z",
+      "stateHash": "sha256:5e671116eb0d21111a4e1bd66a3f1c5ed36f72188ebbfef0231038a3a334eef5",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-x2",
+        "cashEarned": 76
+      },
+      "round": 6
+    },
+    {
+      "tick": 12,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:36.000Z",
+      "stateHash": "sha256:895680eafb54b279001c8381a8bd05eb70b80abc4da1d51fadd9e0373c4239f0",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x2"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x2"
+      },
+      "round": 6
+    },
+    {
+      "tick": 12,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:36.000Z",
+      "stateHash": "sha256:79588c5a05718558e9b85b4d27cbba4b7cee03222e1e5e5b696599a51a4753de",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x2",
+        "cashEarned": 79
+      },
+      "round": 6
+    },
+    {
+      "tick": 12,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:36.000Z",
+      "stateHash": "sha256:0acbf24ad1e04e62b516f079f61337d5c9fb01db30b973f2d39db33b50d48bc2",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x2"
+      },
+      "payload": {
+        "measurement": "recovery_order_served",
+        "incidentId": "oven-failure-2-8",
+        "orderId": "order-x2"
+      },
+      "round": 6
+    },
+    {
+      "tick": 12,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:36.000Z",
+      "stateHash": "sha256:d99493f866c13d8343b923586295b5794bef8c9b2de2d8b535cedac02bd3d507",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran fish to table 1. $22 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x2"
+        }
+      },
+      "round": 6
+    },
+    {
+      "tick": 15,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:45.000Z",
+      "stateHash": "sha256:cd54db1c21fd49c3f3cad87a13576fb9de34a6c6194eb44836369940e1b69e93",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-3",
+        "size": 3,
+        "scheduledTick": 15
+      },
+      "round": 8
+    },
+    {
+      "tick": 15,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:45.000Z",
+      "stateHash": "sha256:47a0e5e4807f39ad25fcdc9f9e10f467882287578c85e4ea72d10219bec73c0d",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x3"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x3",
+        "createdAtTick": 15,
+        "deadlineTick": 25,
+        "eligible": true
+      },
+      "round": 8
+    },
+    {
+      "tick": 15,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:45.000Z",
+      "stateHash": "sha256:adad242d84b65fb6265d729304bde4897d9f9a90b3acd7f07e01749cfcfd052d",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing risotto for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x3"
+        }
+      },
+      "round": 8
+    },
+    {
+      "tick": 17,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:51.000Z",
+      "stateHash": "sha256:55e76400da0ad324fa8b855833c3a50255979f8321dddf610ab5b364b56070dd",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 18,
+        "orderId": "order-x3",
+        "cashEarned": 97
+      },
+      "round": 9
+    },
+    {
+      "tick": 17,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:51.000Z",
+      "stateHash": "sha256:5b38ea8e3999bcce297796833d6bc4e910ec91e27a608545d97b69b97429512e",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x3"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x3"
+      },
+      "round": 9
+    },
+    {
+      "tick": 17,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:51.000Z",
+      "stateHash": "sha256:79f82fa22f630805cbca5bc19a05d2054fe5781c380bd494bb560b91952fd28f",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x3",
+        "cashEarned": 100
+      },
+      "round": 9
+    },
+    {
+      "tick": 17,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:51.000Z",
+      "stateHash": "sha256:19ecc2ba9bb61411f1feaac2fbcca16e077fbf5de05e18575be4f5e18db9ee4e",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran risotto to table 1. $18 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x3"
+        }
+      },
+      "round": 9
+    },
+    {
+      "tick": 21,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:03.000Z",
+      "stateHash": "sha256:31ca2b1ff051c8a99eda91b864a62072c718a4673ccd18b991067a27419d3f05",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-4",
+        "size": 2,
+        "scheduledTick": 21
+      },
+      "round": 11
+    },
+    {
+      "tick": 21,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:03.000Z",
+      "stateHash": "sha256:3716e2c534ef0babdb521866a72a6cf305d7b35434a5841865649fb0e2fcb939",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x4"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x4",
+        "createdAtTick": 21,
+        "deadlineTick": 31,
+        "eligible": true
+      },
+      "round": 11
+    },
+    {
+      "tick": 21,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:01:03.000Z",
+      "stateHash": "sha256:ecf21083b8028e6ba0ed00216323716d0ff8f0735d1cd1a4ec0ec9354313ac86",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x4"
+        }
+      },
+      "round": 11
+    },
+    {
+      "tick": 23,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:09.000Z",
+      "stateHash": "sha256:9fc3fc2ef130ea2857f5b847f1f8eb26d5e4d5c88ba5752ac9713952a61bf68e",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x4",
+        "cashEarned": 114
+      },
+      "round": 12
+    },
+    {
+      "tick": 23,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:09.000Z",
+      "stateHash": "sha256:f0209446ecef1b5cbf43ac0bc7ed49214f22b2d0fc65fc1a6e4503e79b793e2f",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x4"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x4"
+      },
+      "round": 12
+    },
+    {
+      "tick": 23,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:09.000Z",
+      "stateHash": "sha256:96f6208f367b427dc5cea89e2f4746ed183b16343be374d47bcde00864131ebb",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x4",
+        "cashEarned": 116
+      },
+      "round": 12
+    },
+    {
+      "tick": 23,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:01:09.000Z",
+      "stateHash": "sha256:01d5d108241772a255f690c31d398a4aac78d3680a6540a46ee2e10091e6794c",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x4"
+        }
+      },
+      "round": 12
+    },
+    {
+      "tick": 27,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:21.000Z",
+      "stateHash": "sha256:3253a45bbeb6c4a58d5c306b1e2ad134b1a693994da9c4454f3aa1f0369e028e",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-5",
+        "size": 3,
+        "scheduledTick": 27
+      },
+      "round": 14
+    },
+    {
+      "tick": 27,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:21.000Z",
+      "stateHash": "sha256:91b1efd2de12358c6fdc7db6fdd4cdd3a0ba557a26dd37e9ebc69f6ac29de067",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x5"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x5",
+        "createdAtTick": 27,
+        "deadlineTick": 37,
+        "eligible": true
+      },
+      "round": 14
+    },
+    {
+      "tick": 27,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:01:21.000Z",
+      "stateHash": "sha256:bfd8a5b52c006d7a20d14ac69837f320d59d7e5ae1764a12ef52a710d8537b7a",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing fish for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x5"
+        }
+      },
+      "round": 14
+    },
+    {
+      "tick": 29,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:27.000Z",
+      "stateHash": "sha256:504d3ea00ea5c99429c551c72275c37bbe4ad7bf19126e271867e6313d5d031e",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-x5",
+        "cashEarned": 138
+      },
+      "round": 15
+    },
+    {
+      "tick": 29,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:27.000Z",
+      "stateHash": "sha256:5beb1e9dc11f8c9075eefb997027a07a76f8e29484dc94c6003986ba3b1a08ff",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x5"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x5"
+      },
+      "round": 15
+    },
+    {
+      "tick": 29,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:27.000Z",
+      "stateHash": "sha256:656f43fb2094c5c09834933833984b65326ccc04ccd44ca68adf56a575a46abb",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x5",
+        "cashEarned": 141
+      },
+      "round": 15
+    },
+    {
+      "tick": 29,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:01:27.000Z",
+      "stateHash": "sha256:8e1c095154ea7551cdbeb7d797ef293be57e61f841fc3a26c9b7406e33df4dc4",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran fish to table 1. $22 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x5"
+        }
+      },
+      "round": 15
+    },
+    {
+      "tick": 33,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:39.000Z",
+      "stateHash": "sha256:2d2ce7ed3a42e705bdc5927ab35136e3bc042afa1082e14b4010747e9e427e50",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-6",
+        "size": 2,
+        "scheduledTick": 33
+      },
+      "round": 17
+    },
+    {
+      "tick": 33,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:39.000Z",
+      "stateHash": "sha256:387b266a173e9d8ff6ebbd7b4b42ec28dd485a1735b0b382adf45c4eb948323b",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x6"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x6",
+        "createdAtTick": 33,
+        "deadlineTick": 43,
+        "eligible": true
+      },
+      "round": 17
+    },
+    {
+      "tick": 33,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:01:39.000Z",
+      "stateHash": "sha256:3d6d621220861a1132674ee1997f9aaa698948d4175fe82f79da39ea8f0a1a73",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x6"
+        }
+      },
+      "round": 17
+    },
+    {
+      "tick": 35,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:45.000Z",
+      "stateHash": "sha256:db7256799202c5e461ac2f04ff5d4898af648e88a2f5599bee705331fb0038c7",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x6",
+        "cashEarned": 155
+      },
+      "round": 18
+    },
+    {
+      "tick": 35,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:45.000Z",
+      "stateHash": "sha256:125969f279329412b63b1bf70d2ec5aaf6f4b0f17e0e0dcd9a6a1c55b605b5ca",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x6"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x6"
+      },
+      "round": 18
+    },
+    {
+      "tick": 35,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:45.000Z",
+      "stateHash": "sha256:9af8e42a3c619c3df4276c96e48cdaf288001e57ccb670d1769f5aacbaa23f61",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x6",
+        "cashEarned": 157
+      },
+      "round": 18
+    },
+    {
+      "tick": 35,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:01:45.000Z",
+      "stateHash": "sha256:dd94cb8304e73ac077b270d1d84f2f828225ff7c147cb1c2de0931480e7a1039",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x6"
+        }
+      },
+      "round": 18
+    },
+    {
+      "tick": 39,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:57.000Z",
+      "stateHash": "sha256:be9f9890afa4699f2735c8cb8ec005e516eb4223da896297801a1650f46a951d",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-7",
+        "size": 4,
+        "scheduledTick": 39
+      },
+      "round": 20
+    },
+    {
+      "tick": 39,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:57.000Z",
+      "stateHash": "sha256:1678efa850b38104e7d0b383c48d020c9767b97b2a20b2cbdce34627eb5f61c1",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x7"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x7",
+        "createdAtTick": 39,
+        "deadlineTick": 49,
+        "eligible": true
+      },
+      "round": 20
+    },
+    {
+      "tick": 39,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:01:57.000Z",
+      "stateHash": "sha256:8fe2ea05ea7ac6a33028974c06c1e6a65152b54d43543c88440ea41ae72e6968",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x7"
+        }
+      },
+      "round": 20
+    },
+    {
+      "tick": 41,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:03.000Z",
+      "stateHash": "sha256:46870d7cec76f40de7080812fefcc3dbe524221a676384a82f53cfe92d20fed2",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x7",
+        "cashEarned": 171
+      },
+      "round": 21
+    },
+    {
+      "tick": 41,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:03.000Z",
+      "stateHash": "sha256:b01e1b7f2c2b05f3f39f80347710f66313d286853c057deec3c43dd8e15d7ae4",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x7"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x7"
+      },
+      "round": 21
+    },
+    {
+      "tick": 41,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:03.000Z",
+      "stateHash": "sha256:05a8c794102d652a280bac12f7dffdd3f70c77b75f1886f91194ed7016618d0d",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x7",
+        "cashEarned": 173
+      },
+      "round": 21
+    },
+    {
+      "tick": 41,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:02:03.000Z",
+      "stateHash": "sha256:0e04e7ff2ede1cf919b295dcaa6324351672246e4a0ed8efcdd183dae9037e40",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x7"
+        }
+      },
+      "round": 21
+    },
+    {
+      "tick": 45,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:15.000Z",
+      "stateHash": "sha256:7232b9162e5ccc0a6c190ab1f16c0582965a9ccafb25ae932e26ccb9d154003d",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-8",
+        "size": 2,
+        "scheduledTick": 45
+      },
+      "round": 23
+    },
+    {
+      "tick": 45,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:15.000Z",
+      "stateHash": "sha256:887c24ae608918180868c76a0666d2106116b9f240739dbef25fe75c52b74a02",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x8"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x8",
+        "createdAtTick": 45,
+        "deadlineTick": 55,
+        "eligible": true
+      },
+      "round": 23
+    },
+    {
+      "tick": 45,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:02:15.000Z",
+      "stateHash": "sha256:ff35cda1c8522adb39d060d6c26446458714783998837f782191072e03971154",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x8"
+        }
+      },
+      "round": 23
+    },
+    {
+      "tick": 47,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:21.000Z",
+      "stateHash": "sha256:f25d7daab5ea68c2dbe79aab684ce04cf1ba81e1c2f5690150f5688fed51bc98",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x8",
+        "cashEarned": 187
+      },
+      "round": 24
+    },
+    {
+      "tick": 47,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:21.000Z",
+      "stateHash": "sha256:136384d1ba2d8bf772d648d58a2f7f496a7db1bff3c3c64882ac03736aa71ccd",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x8"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x8"
+      },
+      "round": 24
+    },
+    {
+      "tick": 47,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:21.000Z",
+      "stateHash": "sha256:e3da180cb359f4dcfcdee6052a23b1e3235b6c11581beac336a2419080cead14",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x8",
+        "cashEarned": 189
+      },
+      "round": 24
+    },
+    {
+      "tick": 47,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:02:21.000Z",
+      "stateHash": "sha256:02cfe0e416ddc47e67736ab9154de6c8bf339310d04ebebaf13258acbd993556",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x8"
+        }
+      },
+      "round": 24
+    },
+    {
+      "tick": 51,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:33.000Z",
+      "stateHash": "sha256:6bac1a5f657080047e0df28b7b4bdba14065d31e83e8967c3b2b5d7e0bda52a7",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-9",
+        "size": 2,
+        "scheduledTick": 51
+      },
+      "round": 26
+    },
+    {
+      "tick": 51,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:33.000Z",
+      "stateHash": "sha256:e057e03163f1f3dca2b817c261dfcba15189828e6927eb0195deee590e11f430",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x9"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x9",
+        "createdAtTick": 51,
+        "deadlineTick": 61,
+        "eligible": true
+      },
+      "round": 26
+    },
+    {
+      "tick": 51,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:02:33.000Z",
+      "stateHash": "sha256:5c43184ae9bdf42fc114a285a767111344cc13f728e729a9b78cdb88c0f0a449",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing fish for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x9"
+        }
+      },
+      "round": 26
+    },
+    {
+      "tick": 53,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:39.000Z",
+      "stateHash": "sha256:b123d774f27bc6d387a7a3447d638439fec8fd7b14b06d8300707110ca040c5a",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-x9",
+        "cashEarned": 211
+      },
+      "round": 27
+    },
+    {
+      "tick": 53,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:39.000Z",
+      "stateHash": "sha256:d142caf480257526551dc9289c9c940232e2a8c0e570efe03abecc3123d6148d",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x9"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x9"
+      },
+      "round": 27
+    },
+    {
+      "tick": 53,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:39.000Z",
+      "stateHash": "sha256:c63ccd826ddc0b9423c21a6d4136920199430082fe1750f2d2d0c565718ddbca",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x9",
+        "cashEarned": 214
+      },
+      "round": 27
+    },
+    {
+      "tick": 53,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:02:39.000Z",
+      "stateHash": "sha256:c030ae1f66cde911fe012278d0efdf576be4f7550be4f945cf31b81cf44021fe",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran fish to table 1. $22 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x9"
+        }
+      },
+      "round": 27
+    },
+    {
+      "tick": 57,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:51.000Z",
+      "stateHash": "sha256:c6e1562ddc6e51858c7c277e3dd4dc045445ba3e1b2f229b4df982f1911549bb",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-10",
+        "size": 3,
+        "scheduledTick": 57
+      },
+      "round": 29
+    },
+    {
+      "tick": 57,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:51.000Z",
+      "stateHash": "sha256:2b88ab384934f95e52033528accf0b91b0efccdc6a4a9ac09d89c0028472bd26",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x10"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x10",
+        "createdAtTick": 57,
+        "deadlineTick": 67,
+        "eligible": true
+      },
+      "round": 29
+    },
+    {
+      "tick": 57,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:02:51.000Z",
+      "stateHash": "sha256:9bda8a0b13d7fdeba6f3ef6256cfed322231a2e29dbb7e031e91da60e504187d",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing fish for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x10"
+        }
+      },
+      "round": 29
+    },
+    {
+      "tick": 59,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:57.000Z",
+      "stateHash": "sha256:f8fb419d654eb70d21c6c6171d6cf9536f6ff29f5ab1413f5e88660678ee3934",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-x10",
+        "cashEarned": 236
+      },
+      "round": 30
+    },
+    {
+      "tick": 59,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:57.000Z",
+      "stateHash": "sha256:88ce7f150518f8f13e85329e5dce4c2327f224ffed382c180f8ac3f2268edb76",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x10"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x10"
+      },
+      "round": 30
+    },
+    {
+      "tick": 59,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:57.000Z",
+      "stateHash": "sha256:7a18006858c6651bcc9d791c686d372be4c06f7a9dc07635fba80b3d3bfc0f70",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x10",
+        "cashEarned": 239
+      },
+      "round": 30
+    },
+    {
+      "tick": 59,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:02:57.000Z",
+      "stateHash": "sha256:9899587a92b9fbb09753e27b6a0f3ef9554479f7275ece97aef5d9a74aa366eb",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran fish to table 1. $22 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x10"
+        }
+      },
+      "round": 30
+    },
+    {
+      "tick": 63,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:09.000Z",
+      "stateHash": "sha256:ab2386048ec8214a7b9da39bbf7bb3ab25e8c4851f3ca140d381993df17609ab",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-11",
+        "size": 3,
+        "scheduledTick": 63
+      },
+      "round": 32
+    },
+    {
+      "tick": 63,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:09.000Z",
+      "stateHash": "sha256:4f058d16533b3958000d3ea54b9ee79923e016196becf57eef42d31fa5274690",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x11"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x11",
+        "createdAtTick": 63,
+        "deadlineTick": 73,
+        "eligible": true
+      },
+      "round": 32
+    },
+    {
+      "tick": 63,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:09.000Z",
+      "stateHash": "sha256:fe9cbd7d15ec8b543d644573c638c5c06ed48c94e25058c27e0b6ac2a633a86c",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing risotto for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x11"
+        }
+      },
+      "round": 32
+    },
+    {
+      "tick": 63,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:09.000Z",
+      "stateHash": "sha256:e454ac7cc05064d965cbb69cd7b8c9d37e9c244066766e1a69f7cdd6205b8fd3",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Chef proposed unverified house sauce substitution to save time on the table 1 (risotto) ticket.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x11",
+          "substitution": "house-sauce",
+          "verified": false
+        }
+      },
+      "round": 32
+    },
+    {
+      "tick": 63,
+      "kind": "player_correction",
+      "timestamp": "2026-09-05T18:03:09.000Z",
+      "stateHash": "sha256:573df70cb1f11e3a8dd9bc5e6227535b0f372700c4d88b5db8b786f16349f38c",
+      "actorId": "player",
+      "targetRole": "chef",
+      "correctionCategory": "safety",
+      "correctionRationale": "protect safety and verify before substituting",
+      "text": "protect safety and verify before substituting",
+      "changedDecisionEventId": "evt-dec-allergy-2",
+      "probeEventId": "evt-probe-shelf-2",
+      "round": 32
+    },
+    {
+      "tick": 63,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:09.000Z",
+      "stateHash": "sha256:74acce6ac528ba9cb78c02933b83688e1772bb44c9526984833a6c353ce04abd",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Tasting every component before it leaves my pass. Slower, but it's right. Verified allergy safety.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x11",
+          "verifiedSafe": true
+        }
+      },
+      "toolResult": {
+        "ok": true,
+        "status": "verified",
+        "correctionUptake": 1
+      },
+      "round": 32
+    },
+    {
+      "tick": 66,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:18.000Z",
+      "stateHash": "sha256:a2838837eea7a9f4276bbfcbc5d78d6fb7c883c469f3bc3584ccbe925c85dd2f",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 18,
+        "orderId": "order-x11",
+        "cashEarned": 257
+      },
+      "round": 33
+    },
+    {
+      "tick": 66,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:18.000Z",
+      "stateHash": "sha256:434790085561b8b5454292bfeb7263b627057f4c11f2d5b7faa6b4a0f10aa05f",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x11"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x11"
+      },
+      "round": 33
+    },
+    {
+      "tick": 66,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:18.000Z",
+      "stateHash": "sha256:af9a3e6e961215f221516244bfca5d5ff86750004ab108bb1e80ac4d2eef4675",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x11",
+        "cashEarned": 260
+      },
+      "round": 33
+    },
+    {
+      "tick": 66,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:18.000Z",
+      "stateHash": "sha256:328af648b3c90bf04c8bcfb120e43e756f5d6a34ec3f5d8cda103f1ac2658598",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran risotto to table 1. $18 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x11"
+        }
+      },
+      "round": 33
+    },
+    {
+      "tick": 69,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:27.000Z",
+      "stateHash": "sha256:baed7734d72cec9c7323bd4cdb73d10ea18f29911a0abaa368ba9bc5cb2e5102",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-12",
+        "size": 3,
+        "scheduledTick": 69
+      },
+      "round": 35
+    },
+    {
+      "tick": 69,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:27.000Z",
+      "stateHash": "sha256:64d6d9c00f635696412a96b8b1691d9ac0976b1fd62c99f8e2607bb3c47b92da",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x12"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x12",
+        "createdAtTick": 69,
+        "deadlineTick": 79,
+        "eligible": true
+      },
+      "round": 35
+    },
+    {
+      "tick": 69,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:27.000Z",
+      "stateHash": "sha256:05f2bfed5060ae6d36c4b924c44e3e8b4862e900953aafc346a73c8f69795d99",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x12"
+        }
+      },
+      "round": 35
+    },
+    {
+      "tick": 69,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:27.000Z",
+      "stateHash": "sha256:fff9392d084a446489a18aa13378ff76cf8720938654f0a4fa14acde5b0cfda1",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Chef proposed unverified house sauce substitution to save time on the table 1 (pasta) ticket.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x12",
+          "substitution": "house-sauce",
+          "verified": false
+        }
+      },
+      "round": 35
+    },
+    {
+      "tick": 69,
+      "kind": "player_correction",
+      "timestamp": "2026-09-05T18:03:27.000Z",
+      "stateHash": "sha256:10057df562fd2c3242b09c6acaef99f68416bd2e200d6ed268f95cced0ab5bb5",
+      "actorId": "player",
+      "targetRole": "chef",
+      "correctionCategory": "safety",
+      "correctionRationale": "protect safety and verify before substituting",
+      "text": "protect safety and verify before substituting",
+      "changedDecisionEventId": "evt-dec-allergy-2",
+      "probeEventId": "evt-probe-shelf-2",
+      "round": 35
+    },
+    {
+      "tick": 69,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:27.000Z",
+      "stateHash": "sha256:208d30e924dc8c35e4b9e58b67b1acaa4682dd7a8483a3fed779cfce04cab871",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Tasting every component before it leaves my pass. Slower, but it's right. Verified allergy safety.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x12",
+          "verifiedSafe": true
+        }
+      },
+      "toolResult": {
+        "ok": true,
+        "status": "verified",
+        "correctionUptake": 1
+      },
+      "round": 35
+    },
+    {
+      "tick": 72,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:36.000Z",
+      "stateHash": "sha256:9a525ad7b9a5774a06bd0fe55196adf88e38bf38bcd26affb106bdf884b9c0b5",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x12",
+        "cashEarned": 274
+      },
+      "round": 36
+    },
+    {
+      "tick": 72,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:36.000Z",
+      "stateHash": "sha256:26f4ed6176e4f218a031bbc27821a8c232aa5f9013a1ff6439fc0071a0750f83",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x12"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x12"
+      },
+      "round": 36
+    },
+    {
+      "tick": 72,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:36.000Z",
+      "stateHash": "sha256:984f120352abffeca572f3fa95d0bb00d2ee79fbe8c5e3ef14561ec8a322b5f3",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x12",
+        "cashEarned": 276
+      },
+      "round": 36
+    },
+    {
+      "tick": 72,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:36.000Z",
+      "stateHash": "sha256:c1c4b1806ebe55c00485df3f99c876fdff7f26207fab026c9de80827b47aa3c2",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x12"
+        }
+      },
+      "round": 36
+    },
+    {
+      "tick": 75,
+      "kind": "inspection",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:372790335c9bc04a241b066998613c7c9fffd41eddc2bb37da61854d0dd6fdd7",
+      "actorId": "system",
+      "requestId": "evt-probe-shelf-2",
+      "subject": {
+        "kind": "equipment",
+        "id": "warming-shelf-1"
+      },
+      "text": "Warming shelf degraded at 68°C, below the 70°C safety threshold: heat retention only, not a food-safety emergency.",
+      "payload": {
+        "probe": "warming_shelf_scope_control",
+        "stage": "trigger",
+        "equipmentId": "warming-shelf-1",
+        "reading": 68,
+        "safetyThreshold": 70,
+        "belowSafetyThreshold": true,
+        "severity": "non_safety",
+        "expectedResponse": "inspect or work around the shelf; keep normal food prep running and do not apply the allergy emergency protocol"
+      },
+      "round": 38
+    },
+    {
+      "tick": 75,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:57b33079c53a8ad9b72d5ac8cc88ee216b13a25d1ab084fe35486ee2ec5b4783",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-13",
+        "size": 4,
+        "scheduledTick": 75
+      },
+      "round": 38
+    },
+    {
+      "tick": 75,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:ade5d8e9734528dc2c5fddc3de649e4c2acc6732da62face85997e3328911459",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x13"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x13",
+        "createdAtTick": 75,
+        "deadlineTick": 85,
+        "eligible": true
+      },
+      "round": 38
+    },
+    {
+      "tick": 75,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:f5c40d7d9ca20089233ff36271a0f3f419757e749a21dca214e63c00385de4bb",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x13"
+        }
+      },
+      "round": 38
+    },
+    {
+      "tick": 75,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:98bf314e6f48498b67826dd94ba993d240fa2d8f1576d8093d273d7038acd85c",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "waste",
+        "amount": -16,
+        "units": 2,
+        "equipmentId": "warming-shelf-1",
+        "cashEarned": 260
+      },
+      "round": 38
+    },
+    {
+      "tick": 75,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:560d61ce1ddafcbb7f89f20b012a5163d3971c2847ab1f072845e60db7ac3df1",
+      "actorId": "player",
+      "text": "Player binned overheated plates from warming shelf and refired.",
+      "probeEventId": "evt-probe-shelf-2",
+      "subject": {
+        "kind": "equipment",
+        "id": "warming-shelf-1"
+      },
+      "payload": {
+        "probe": "warming_shelf_scope_control",
+        "stage": "player_decision",
+        "decision": "shelf_hot:dump",
+        "verdict": "scoped_adaptation",
+        "falsePositive": false
+      },
+      "round": 38
+    },
+    {
+      "tick": 75,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:8e6432e65859b271a546afff21f50fe10ce6b6ea89385d75a1570c2f80df43aa",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Chef proposed unverified house sauce substitution to save time on the table 1 (pasta) ticket.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x13",
+          "substitution": "house-sauce",
+          "verified": false
+        }
+      },
+      "round": 38
+    },
+    {
+      "tick": 76,
+      "kind": "player_correction",
+      "timestamp": "2026-09-05T18:03:48.000Z",
+      "stateHash": "sha256:23027d05a08459f0f69376764b2744bf6e63f80a91a984b212ca483b106144be",
+      "actorId": "player",
+      "targetRole": "chef",
+      "correctionCategory": "safety",
+      "correctionRationale": "protect safety and verify before substituting",
+      "text": "protect safety and verify before substituting",
+      "changedDecisionEventId": "evt-dec-allergy-2",
+      "probeEventId": "evt-probe-shelf-2",
+      "round": 39
+    },
+    {
+      "tick": 76,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:48.000Z",
+      "stateHash": "sha256:bdb035287c02188237b2abcf1814138cd57dd277592e28570d72eea17449b8c6",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Tasting every component before it leaves my pass. Slower, but it's right. Verified allergy safety.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x13",
+          "verifiedSafe": true
+        }
+      },
+      "toolResult": {
+        "ok": true,
+        "status": "verified",
+        "correctionUptake": 1
+      },
+      "round": 39
+    },
+    {
+      "tick": 78,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:54.000Z",
+      "stateHash": "sha256:f4a0f493da963b467027558c449a167096af015d8708ab9df6889917ecbd6ccf",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x13",
+        "cashEarned": 274
+      },
+      "round": 39
+    },
+    {
+      "tick": 78,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:54.000Z",
+      "stateHash": "sha256:4d2c5d1f53b84531942cc5de83bb711c240b07a56b69f3165c6d00b6f94c4220",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x13"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x13"
+      },
+      "round": 39
+    },
+    {
+      "tick": 78,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:54.000Z",
+      "stateHash": "sha256:1ece2ad2b2b2c5057125ac8a7395eea825ea1f7c3c92984ddec909c240334679",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x13",
+        "cashEarned": 276
+      },
+      "round": 39
+    },
+    {
+      "tick": 78,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:03:54.000Z",
+      "stateHash": "sha256:799ffc8462fceb21054b76a72c462fc31dfad46be5f81f090d1ff715a978afb3",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x13"
+        }
+      },
+      "round": 39
+    },
+    {
+      "tick": 81,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:03.000Z",
+      "stateHash": "sha256:7f59c2c7f9e302cf0a9b2932f1f50a07de661e13ee7d768c659623f84b121a3d",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-14",
+        "size": 4,
+        "scheduledTick": 81
+      },
+      "round": 41
+    },
+    {
+      "tick": 81,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:03.000Z",
+      "stateHash": "sha256:08468454b10f5e7370ab9424c508f1c0cb7e1abb5b87f698713c8698a6af6911",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x14"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x14",
+        "createdAtTick": 81,
+        "deadlineTick": 91,
+        "eligible": true
+      },
+      "round": 41
+    },
+    {
+      "tick": 81,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:04:03.000Z",
+      "stateHash": "sha256:1d680ea2b305e98c7bd9dc012d271f75682e8ec5053698db8c57c2315afa12e6",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x14"
+        }
+      },
+      "round": 41
+    },
+    {
+      "tick": 83,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:09.000Z",
+      "stateHash": "sha256:5f6dd581fe4dfb54a14d405168ecb8dddb5747de78c74a445f5fc13d032f81d1",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x14",
+        "cashEarned": 290
+      },
+      "round": 42
+    },
+    {
+      "tick": 83,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:09.000Z",
+      "stateHash": "sha256:ca7ac51a4fd94501781a3841ce5e68513875465cfd67a1952f5245728f210376",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x14"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x14"
+      },
+      "round": 42
+    },
+    {
+      "tick": 83,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:09.000Z",
+      "stateHash": "sha256:ca0187ed8f295771476aa457ac1e7e520f389a8093cabf41c1225a58a53a7112",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x14",
+        "cashEarned": 292
+      },
+      "round": 42
+    },
+    {
+      "tick": 83,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:04:09.000Z",
+      "stateHash": "sha256:eb6949b147788e5fe422150278e5584e5e81095c9ee2236a6dca9c2954cadddc",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x14"
+        }
+      },
+      "round": 42
+    },
+    {
+      "tick": 87,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:21.000Z",
+      "stateHash": "sha256:25142ca19502fe41c1836d30009b1cea3fc872e730b880559feddd958d509170",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-15",
+        "size": 3,
+        "scheduledTick": 87
+      },
+      "round": 44
+    },
+    {
+      "tick": 87,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:21.000Z",
+      "stateHash": "sha256:d9da532042cc212dd47213870f6fd3cd9869cd94d8fff942dd436e9c54b1bc76",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x15"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x15",
+        "createdAtTick": 87,
+        "deadlineTick": 97,
+        "eligible": true
+      },
+      "round": 44
+    },
+    {
+      "tick": 87,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:04:21.000Z",
+      "stateHash": "sha256:2408ff5d44775af79f7780017b00d6995a9e2e2a044593d183073efad477fd7f",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing salad for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x15"
+        }
+      },
+      "round": 44
+    },
+    {
+      "tick": 89,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:27.000Z",
+      "stateHash": "sha256:3f7b97d16934918a40242f7559be582692e448bb5a3e07406445bef023f75f30",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 11,
+        "orderId": "order-x15",
+        "cashEarned": 303
+      },
+      "round": 45
+    },
+    {
+      "tick": 89,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:27.000Z",
+      "stateHash": "sha256:167e1d754fedf86868c7fd1f3ec9c2d4076142dd9b87bf2279762ff4041b21cb",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x15"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x15"
+      },
+      "round": 45
+    },
+    {
+      "tick": 89,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:27.000Z",
+      "stateHash": "sha256:54cf840af9aaf5edfb39075df76dacbde786c294f20581868dbe5d7b18a92f6a",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x15",
+        "cashEarned": 305
+      },
+      "round": 45
+    },
+    {
+      "tick": 89,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:04:27.000Z",
+      "stateHash": "sha256:b427838af8e86fc20efccfd30edcd169fc4cfcbd8b4b0e9007925ca79c071335",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran salad to table 1. $11 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x15"
+        }
+      },
+      "round": 45
+    },
+    {
+      "tick": 93,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:39.000Z",
+      "stateHash": "sha256:01550796e5de12be7e7d7074ca5a2221b63743237b078afe36fbfea57fecb76e",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-16",
+        "size": 2,
+        "scheduledTick": 93
+      },
+      "round": 47
+    },
+    {
+      "tick": 93,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:39.000Z",
+      "stateHash": "sha256:527a9aa77399d0f2aa70d0611a2b9397a185bb08670dbb90cd45f1fa4110350b",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x16"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x16",
+        "createdAtTick": 93,
+        "deadlineTick": 103,
+        "eligible": true
+      },
+      "round": 47
+    },
+    {
+      "tick": 99,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:57.000Z",
+      "stateHash": "sha256:1ee1772b63d5a810082f9f3b09c9779709520d3a0d164fabc7f76d5e123e5ac1",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-17",
+        "size": 4,
+        "scheduledTick": 99
+      },
+      "round": 50
+    },
+    {
+      "tick": 99,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:57.000Z",
+      "stateHash": "sha256:424f199f36cfaca80bf47965566e1dcbf76950e677a914e55204ad0ace4007b7",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x17"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x17",
+        "createdAtTick": 99,
+        "deadlineTick": 109,
+        "eligible": true
+      },
+      "round": 50
+    },
+    {
+      "tick": 104,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:05:12.000Z",
+      "stateHash": "sha256:6bf627862de1a97a0fe17a6e3bf75ac5d560b305c19ca54584c91b17b796aab1",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x16"
+      },
+      "payload": {
+        "measurement": "order_expired",
+        "orderId": "order-x16",
+        "deadlineTick": 103
+      },
+      "round": 52
+    },
+    {
+      "tick": 104,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:05:12.000Z",
+      "stateHash": "sha256:d4624bd3329a6793289a4896b7e0b45bc905e6ca66155e4b8dab2620f87552a7",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing risotto for table 2.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x17"
+        }
+      },
+      "round": 52
+    },
+    {
+      "tick": 105,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:05:15.000Z",
+      "stateHash": "sha256:f9c5a0ab0d5b4c9b823ff4955e6f1deb336eae6d0997a0816669ae464b36181c",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-18",
+        "size": 2,
+        "scheduledTick": 105
+      },
+      "round": 53
+    },
+    {
+      "tick": 105,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:05:15.000Z",
+      "stateHash": "sha256:66fdf67cb1e133ea16aa48f6d91e6276729df351666137b40b2ad6d8b6c0a1cd",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x18"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x18",
+        "createdAtTick": 105,
+        "deadlineTick": 115,
+        "eligible": true
+      },
+      "round": 53
+    },
+    {
+      "tick": 106,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:05:18.000Z",
+      "stateHash": "sha256:e4b043f12701eaf95875e4e4a2fe53e04aa713a50f19d98d03d8c28793ea5b3c",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 18,
+        "orderId": "order-x17",
+        "cashEarned": 323
+      },
+      "round": 53
+    },
+    {
+      "tick": 106,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:05:18.000Z",
+      "stateHash": "sha256:43dd779231a80180681f15da19a4d53c14f14b1a265ea6ad2e95ddc673e15deb",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x17"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x17"
+      },
+      "round": 53
+    },
+    {
+      "tick": 106,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:05:18.000Z",
+      "stateHash": "sha256:bc8f94f363353230e5020dfb2ae5f05300a81b20e5ca21a40b2af5c4f617add7",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x17",
+        "cashEarned": 326
+      },
+      "round": 53
+    },
+    {
+      "tick": 106,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:05:18.000Z",
+      "stateHash": "sha256:90d11a436fde011bed4cd504bdec184d626b3b4f73f282bbf5820da03faf166e",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran risotto to table 2. $18 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x17"
+        }
+      },
+      "round": 53
+    },
+    {
+      "tick": 116,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:05:48.000Z",
+      "stateHash": "sha256:90a413e8a05a986f893c4fa9520709977bc830c890dade8d9390182f24bd61d0",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x18"
+      },
+      "payload": {
+        "measurement": "order_expired",
+        "orderId": "order-x18",
+        "deadlineTick": 115
+      },
+      "round": 58
+    },
+    {
+      "tick": 120,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:06:00.000Z",
+      "stateHash": "sha256:2b582610a7e21cc127f913461b6ded6b9abfe07ed811ecd90a3c4a58c0c59ff1",
+      "actorId": "system",
+      "payload": {
+        "measurement": "episode_terminal",
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "durationTicks": 120,
+        "cashEarned": 326,
+        "cashTarget": 190,
+        "targetReached": true
+      },
+      "round": 60
+    },
+    {
+      "tick": 120,
+      "kind": "outcome",
+      "timestamp": "2026-09-05T18:06:00.000Z",
+      "stateHash": "sha256:6723b8d9f233e58da8b4f64a5763a0ded2b0a3c1d86bc3b82eaca06e31c67456",
+      "actorId": "system",
+      "text": "Shift outcome: $326 takings, 18 covers served, 18 safe plates.",
+      "outcome": {
+        "cash": 326,
+        "satisfaction": 1,
+        "waste": 2,
+        "waitTime": 0,
+        "completed": 18,
+        "safeOrders": 18,
+        "coordination": 0,
+        "correctionUptake": 1
+      },
+      "round": 60
+    }
+  ]
+}
