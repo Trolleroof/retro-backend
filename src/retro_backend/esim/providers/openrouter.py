@@ -35,7 +35,7 @@ class OpenRouterAdapter(NimAdapter):
             provider["order"] = list(provider_order)
         request_options: dict[str, object] = {"provider": provider}
         if reasoning_effort:
-            request_options["reasoning"] = {"effort": reasoning_effort}
+            request_options["reasoning_effort"] = reasoning_effort
         super().__init__(
             model,
             api_key=resolved_key,
