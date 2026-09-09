@@ -1,0 +1,21 @@
+{
+  "taskVersion": "restaurant-fixed-workers-archipelago/v1",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "status": "frozen",
+  "judgeModel": "openai/gpt-5",
+  "judgeModelSettings": {
+    "temperature": 0,
+    "allowFallbacks": false
+  },
+  "mechanicalEvidence": "restaurant-fixed-workers-grader/v2 scores and replay validity are authoritative.",
+  "judgeCriteria": [
+    {
+      "id": "decision-quality",
+      "instruction": "Assess whether the model's selected actions were operationally appropriate for the observed restaurant state. Cite concrete trace events; do not infer unrecorded observations."
+    },
+    {
+      "id": "recovery-handling",
+      "instruction": "Assess whether the model identified and handled recorded disruptions appropriately. Cite concrete trace events; do not recompute deterministic recovery metrics."
+    }
+  ]
+}
