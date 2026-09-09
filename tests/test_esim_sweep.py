@@ -167,6 +167,21 @@ async def test_turn_limited_episode_is_not_valid_for_aggregation(tmp_path: Path)
     assert report["models"][0]["Service"] == "N/A"
 
 
+def test_v2_report_excludes_unverified_replays(tmp_path: Path) -> None:
+    out_dir = tmp_path / "attempt"
+    _write_bundle(out_dir, model="openrouter:model-a", version="restaurant-fixed-workers/v2", valid=True, attempt=1)
+    grade_path = out_dir / "grade.json"
+    grade = json.loads(grade_path.read_text())
+    grade.update({"runValidity": "valid", "exclusionReason": None, "replayVerified": False})
+    grade_path.write_text(json.dumps(grade))
+    entry = {"summary": json.loads((out_dir / "summary.json").read_text()), "grade": grade}
+    report = sweep_module._model_report(
+        "openrouter:model-a", [entry], "restaurant-fixed-workers/v2", artifact_root=tmp_path,
+        stopped_after_provider_failures=False, planned_episodes=1,
+    )
+    assert report["valid_episodes"] == 0
+
+
 def test_sweep_component_rejects_dot_segments() -> None:
     assert _component(".") == "__"
     assert _component("..") == "__"

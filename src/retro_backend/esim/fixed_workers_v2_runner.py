@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import tempfile
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -21,7 +22,7 @@ from retro_backend.esim.providers.registry import get_adapter, parse_model_spec
 from retro_backend.esim.rotation import retryable_model_error
 from retro_backend.esim.runner import record_jsonl
 
-BUNDLE_VERSION = "esim-fixed-workers-v2-bundle/v1"
+BUNDLE_VERSION = "esim-fixed-workers-v2-bundle/v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,10 +126,7 @@ async def _generate(
     assert isinstance(available, list) and all(isinstance(value, str) for value in available)
     for attempt in range(1, config.max_attempts + 1):
         try:
-            reply = await asyncio.wait_for(
-                adapter.generate(_messages(turn), max_tokens=config.max_output_tokens),
-                timeout=config.request_timeout,
-            )
+            reply = await adapter.generate(_messages(turn), max_tokens=config.max_output_tokens)
         except TimeoutError:
             reply = ModelReply(None, 0, 0, config.request_timeout * 1000, f"{ERR_TIMEOUT}: request exceeded {config.request_timeout:g}s")
         totals["turns"] += 1
@@ -181,10 +179,7 @@ async def _handover(
     ]
     for attempt in range(1, config.max_attempts + 1):
         try:
-            reply = await asyncio.wait_for(
-                adapter.generate(prompt, max_tokens=config.max_output_tokens),
-                timeout=config.request_timeout,
-            )
+            reply = await adapter.generate(prompt, max_tokens=config.max_output_tokens)
         except TimeoutError:
             reply = ModelReply(None, 0, 0, config.request_timeout * 1000, f"{ERR_TIMEOUT}: request exceeded {config.request_timeout:g}s")
         totals["turns"] += 1
@@ -230,6 +225,29 @@ async def _handover(
         record_jsonl(attempts, record)
         return accurate, payload, None
     return False, None, "retry_budget_exhausted"
+
+
+async def _replay_with_engine(
+    config: FixedWorkersV2Config, case_id: str, seed: int, actions: Sequence[Mapping[str, object]]
+) -> Mapping[str, object]:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", encoding="utf-8", delete=False) as replay_file:
+        json.dump(actions, replay_file, separators=(",", ":"))
+        replay_path = Path(replay_file.name)
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "npx", "--yes", "bun@1.3.11", str(Path(__file__).resolve().parents[3] / "scripts/fixed_workers_v2_bridge.ts"),
+            str(config.engine_repo), load_fixed_worker_case_v2(case_id).level, str(seed), str(replay_path),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=10 * 1024 * 1024,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode:
+            raise RuntimeError(f"v2 replay bridge failed ({process.returncode}): {stderr.decode().strip()}")
+        payload = json.loads(stdout.decode())
+        if not isinstance(payload, Mapping) or payload.get("type") != "complete":
+            raise RuntimeError("v2 replay bridge returned no completion record")
+        return payload
+    finally:
+        replay_path.unlink(missing_ok=True)
 
 
 async def run_fixed_workers_v2(
@@ -281,7 +299,17 @@ async def run_fixed_workers_v2(
         raise RuntimeError(f"v2 engine bridge failed ({return_code}): {stderr}")
 
     scores = grade_benchmark_events_v2(completed["events"], case)
-    replay_verified = verify_benchmark_replay_v2(completed["events"], scores, case)
+    try:
+        replayed = await _replay_with_engine(config, case.case_id, case.seed, completed["actions"])
+        replay_events = cast(Sequence[Mapping[str, object]], replayed["events"])
+        replay_scores = grade_benchmark_events_v2(replay_events, case)
+        replay_verified = (
+            replayed.get("finalState") == completed.get("finalState")
+            and verify_benchmark_replay_v2(replay_events, scores, case)
+            and replay_scores == scores
+        )
+    except (RuntimeError, json.JSONDecodeError, KeyError):
+        replay_verified = False
     requested = parse_model_spec(config.model)[1]
     identity_mismatch = bool(served) and served != {requested}
     run_validity = "provider_failure" if provider_error else "unverified_identity" if identity_mismatch or not served else "valid"
@@ -297,6 +325,8 @@ async def run_fixed_workers_v2(
         "model": config.model, "engineRepo": str(config.engine_repo.resolve()),
         "openrouterProviderOrder": list(config.openrouter_provider_order),
         "openrouterReasoningEffort": config.openrouter_reasoning_effort,
+        "maxOutputTokens": config.max_output_tokens,
+        "requestTimeoutSeconds": config.request_timeout,
     }
     grade = episode.model_dump(by_alias=True, mode="json") | {"allRequirementsMet": episode.all_requirements_met}
     summary = {
@@ -304,6 +334,10 @@ async def run_fixed_workers_v2(
         "servedModels": sorted(served), "servedModelMismatch": identity_mismatch,
         "runValidity": run_validity, "providerError": provider_error,
         "termination": "episode_complete", "ticks": case.duration_ticks,
+        "replayVerified": replay_verified,
+        "requestedProviderRoute": list(config.openrouter_provider_order),
+        "reasoningEffort": config.openrouter_reasoning_effort,
+        "maxOutputTokens": config.max_output_tokens,
         **totals,
     }
     for name, payload in {

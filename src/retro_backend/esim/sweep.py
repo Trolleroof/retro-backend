@@ -286,11 +286,24 @@ def _all_requirements(grade: Mapping[str, Any]) -> bool | None:
 
 
 def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_version: str, *, artifact_root: Path, stopped_after_provider_failures: bool, planned_episodes: int) -> dict[str, Any]:
+    def eligible(entry: Mapping[str, Any]) -> bool:
+        summary = entry.get("summary")
+        if not isinstance(summary, Mapping) or summary.get("runValidity") != "valid" or summary.get("termination") != "episode_complete":
+            return False
+        if benchmark_version != FIXED_WORKER_BENCHMARK_VERSION_V2:
+            return True
+        grade = entry.get("grade")
+        return (
+            isinstance(grade, Mapping)
+            and grade.get("runValidity") == "valid"
+            and grade.get("exclusionReason") is None
+            and grade.get("replayVerified") is True
+        )
+
     valid = [
         entry
         for entry in entries
-        if entry.get("summary", {}).get("runValidity") == "valid"
-        and entry.get("summary", {}).get("termination") == "episode_complete"
+        if eligible(entry)
     ]
     served = sorted({served for entry in valid for served in entry.get("summary", {}).get("servedModels", [])})
     grades = [entry["grade"] for entry in valid if isinstance(entry.get("grade"), Mapping)]
