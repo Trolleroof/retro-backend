@@ -1,0 +1,1035 @@
+{
+  "caseId": "dinner-rush-v2-recovery-incomplete",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "intent": "same failure held rather than repaired -- recovery never completes",
+  "seed": 2,
+  "variationId": "dinner-rush-v2",
+  "engineVersion": "tui-gamepigeon/restaurant-arena",
+  "durationTicks": 120,
+  "arrivalTicks": [
+    3,
+    9,
+    15,
+    21,
+    27,
+    33,
+    39,
+    45,
+    51,
+    57,
+    63,
+    69,
+    75,
+    81,
+    87,
+    93,
+    99,
+    105
+  ],
+  "cashTarget": 190,
+  "initialState": {
+    "version": "restaurant-arena/v1",
+    "seed": 2,
+    "episode": {
+      "id": "dinner-rush-v2-2",
+      "phase": "active",
+      "tick": 0,
+      "maxTicks": 120
+    },
+    "clock": {
+      "minute": 0,
+      "speed": 1
+    },
+    "tables": [
+      {
+        "id": "table-1",
+        "seats": 2,
+        "status": "occupied",
+        "orderId": "order-1"
+      },
+      {
+        "id": "table-2",
+        "seats": 4,
+        "status": "occupied",
+        "orderId": "order-2"
+      },
+      {
+        "id": "table-3",
+        "seats": 2,
+        "status": "empty"
+      }
+    ],
+    "orders": [
+      {
+        "id": "order-1",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "queued",
+        "priority": "normal"
+      },
+      {
+        "id": "order-2",
+        "tableId": "table-2",
+        "items": [
+          "fish"
+        ],
+        "status": "queued",
+        "allergy": "peanut",
+        "priority": "high"
+      }
+    ],
+    "inventory": {
+      "pasta": 8,
+      "fish": 6,
+      "safe-sauce": 2,
+      "risotto": 6,
+      "salad": 8
+    },
+    "equipment": [
+      {
+        "id": "oven-1",
+        "kind": "oven",
+        "status": "working"
+      },
+      {
+        "id": "warming-shelf-1",
+        "kind": "warming_shelf",
+        "status": "working",
+        "safetyThreshold": 70,
+        "reading": 62
+      }
+    ],
+    "workers": [
+      {
+        "id": "worker-host",
+        "role": "host",
+        "load": 0,
+        "location": "queue"
+      },
+      {
+        "id": "worker-supply_lead",
+        "role": "supply_lead",
+        "load": 0,
+        "location": "pass"
+      },
+      {
+        "id": "worker-chef",
+        "role": "chef",
+        "load": 0,
+        "location": "kitchen"
+      },
+      {
+        "id": "worker-server",
+        "role": "server",
+        "load": 0,
+        "location": "floor"
+      }
+    ],
+    "emergency": {
+      "kind": "oven_failure",
+      "active": false,
+      "startedAt": 0
+    },
+    "reputation": 50,
+    "outcomes": {
+      "cash": 0,
+      "satisfaction": 0,
+      "waste": 0,
+      "waitTime": 0,
+      "completed": 0,
+      "safeOrders": 0,
+      "coordination": 0,
+      "correctionUptake": 0
+    }
+  },
+  "finalState": {
+    "version": "restaurant-arena/v1",
+    "seed": 2,
+    "episode": {
+      "id": "dinner-rush-v2-2",
+      "phase": "complete",
+      "tick": 120,
+      "maxTicks": 120
+    },
+    "clock": {
+      "minute": 120,
+      "speed": 1
+    },
+    "tables": [
+      {
+        "id": "table-1",
+        "seats": 2,
+        "status": "empty",
+        "orderId": "order-1"
+      },
+      {
+        "id": "table-2",
+        "seats": 4,
+        "status": "empty",
+        "orderId": "order-2"
+      },
+      {
+        "id": "table-3",
+        "seats": 2,
+        "status": "empty",
+        "orderId": "order-x1"
+      }
+    ],
+    "orders": [
+      {
+        "id": "order-1",
+        "tableId": "table-1",
+        "items": [
+          "pasta"
+        ],
+        "status": "served",
+        "priority": "normal"
+      },
+      {
+        "id": "order-2",
+        "tableId": "table-2",
+        "items": [
+          "fish"
+        ],
+        "status": "served",
+        "allergy": "peanut",
+        "priority": "high"
+      },
+      {
+        "id": "order-x1",
+        "tableId": "table-3",
+        "items": [
+          "salad"
+        ],
+        "status": "served",
+        "priority": "normal"
+      }
+    ],
+    "inventory": {
+      "pasta": 7,
+      "fish": 5,
+      "safe-sauce": 2,
+      "risotto": 6,
+      "salad": 7
+    },
+    "equipment": [
+      {
+        "id": "oven-1",
+        "kind": "oven",
+        "status": "failed"
+      },
+      {
+        "id": "warming-shelf-1",
+        "kind": "warming_shelf",
+        "status": "degraded",
+        "safetyThreshold": 70,
+        "reading": 68
+      }
+    ],
+    "workers": [
+      {
+        "id": "worker-host",
+        "role": "host",
+        "load": 0.15,
+        "location": "queue",
+        "lastAction": "seat:table-3"
+      },
+      {
+        "id": "worker-supply_lead",
+        "role": "supply_lead",
+        "load": 0,
+        "location": "pass"
+      },
+      {
+        "id": "worker-chef",
+        "role": "chef",
+        "load": 0,
+        "location": "kitchen",
+        "lastAction": "prepare:order-x1"
+      },
+      {
+        "id": "worker-server",
+        "role": "server",
+        "load": 0,
+        "location": "floor",
+        "lastAction": "serve:order-x1"
+      }
+    ],
+    "emergency": {
+      "kind": "oven_failure",
+      "active": true,
+      "startedAt": 8
+    },
+    "reputation": 49.5,
+    "outcomes": {
+      "cash": 54,
+      "satisfaction": 0.30000000000000004,
+      "waste": 0,
+      "waitTime": 0,
+      "completed": 3,
+      "safeOrders": 3,
+      "coordination": 0,
+      "correctionUptake": 0.5
+    },
+    "seatingHeld": true
+  },
+  "tsScore": {
+    "benchmarkVersion": "restaurant-fixed-workers/v2",
+    "service": 100,
+    "resources": 28.421052631578945,
+    "recovery": 0,
+    "safety": 100,
+    "composite": 42.807017543859644,
+    "durationTicks": 120,
+    "cashEarned": 54,
+    "cashTarget": 190,
+    "targetReached": false,
+    "validTerminalState": true,
+    "raw": {
+      "eligibleOrders": 3,
+      "onTimeOrders": 3,
+      "netOperatingReturn": 54,
+      "recoveryTime": null,
+      "safetyViolations": 0
+    }
+  },
+  "events": [
+    {
+      "tick": 0,
+      "kind": "observation",
+      "timestamp": "2026-09-05T18:00:00.000Z",
+      "stateHash": "sha256:a3f5d745a982e15183bfaad1effc073d428eebec95033ea35e62eb1e72607064",
+      "actorId": "system",
+      "text": "Shift started. Tables seated and queue active.",
+      "observation": {
+        "episodeId": "dinner-rush-v2-2",
+        "seed": 2,
+        "tick": 0,
+        "tables": 3,
+        "orders": 2
+      },
+      "round": 1
+    },
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:00.000Z",
+      "stateHash": "sha256:244e600409a5aca877cf1529ddf69f8c3994226965c929d3a4c68b708bdeec96",
+      "actorId": "system",
+      "payload": {
+        "measurement": "benchmark_config",
+        "resourceFloor": 0,
+        "resourceCeiling": 190,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "recoveryApplicable": true,
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "durationTicks": 120,
+        "cashTarget": 190
+      },
+      "round": 1
+    },
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:00.000Z",
+      "stateHash": "sha256:7a0ac42e114f5895418528972c411fa92c0828d20b4afcca621a13e91bf2dcb1",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-1"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-1",
+        "createdAtTick": 0,
+        "deadlineTick": 10,
+        "eligible": true
+      },
+      "round": 1
+    },
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:00.000Z",
+      "stateHash": "sha256:806b9ee0d21f12d4cf16efe854679dce72293517d9a0da8f3bbd449a95d9098b",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-2"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-2",
+        "createdAtTick": 0,
+        "deadlineTick": 10,
+        "eligible": true
+      },
+      "round": 1
+    },
+    {
+      "tick": 1,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:03.000Z",
+      "stateHash": "sha256:20d8439b39ff2b0fdb30e3f8ca7ded29091bd0742ec77b5b7af2aa50783f69c1",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing fish for table 2.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-2"
+        }
+      },
+      "round": 1
+    },
+    {
+      "tick": 1,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:03.000Z",
+      "stateHash": "sha256:bdc80ffba7c74dea3d2a972a7289018bca767c4af3d536f7af58a8919a0512d9",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Chef proposed unverified house sauce substitution to save time on the table 2 (fish) ticket.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-2",
+          "substitution": "house-sauce",
+          "verified": false
+        }
+      },
+      "round": 1
+    },
+    {
+      "tick": 1,
+      "kind": "player_correction",
+      "timestamp": "2026-09-05T18:00:03.000Z",
+      "stateHash": "sha256:c1caaa6c0df7b3c672c514d749da45a4584b59ade10c243b239f898d94d1bda8",
+      "actorId": "player",
+      "targetRole": "chef",
+      "correctionCategory": "safety",
+      "correctionRationale": "protect safety and verify before substituting",
+      "text": "protect safety and verify before substituting",
+      "changedDecisionEventId": "evt-dec-allergy-2",
+      "probeEventId": "evt-probe-shelf-2",
+      "round": 1
+    },
+    {
+      "tick": 1,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:03.000Z",
+      "stateHash": "sha256:75a56a91e386821c7f38650cf7b13f7be44317c7c8254df33de07e6ec2d2bb25",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Tasting every component before it leaves my pass. Slower, but it's right. Verified allergy safety.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-2",
+          "verifiedSafe": true
+        }
+      },
+      "toolResult": {
+        "ok": true,
+        "status": "verified",
+        "correctionUptake": 0.5
+      },
+      "round": 1
+    },
+    {
+      "tick": 2,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:06.000Z",
+      "stateHash": "sha256:f292e8a594cca6202e9537071f0a28e0fa438da7087d2e29131aaac8761a835b",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing pasta for table 1.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-1"
+        }
+      },
+      "round": 1
+    },
+    {
+      "tick": 3,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:09.000Z",
+      "stateHash": "sha256:42cbe9d01ba949b8ae29ce672381cb92459539cab0dfd0925cd83fa99210eae9",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-1",
+        "size": 4,
+        "scheduledTick": 3
+      },
+      "round": 2
+    },
+    {
+      "tick": 3,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:09.000Z",
+      "stateHash": "sha256:8fbfc18f667bb781726f9d7f50791a47e4ffc4f77c0506780100d1b5b952aac6",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x1"
+      },
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x1",
+        "createdAtTick": 3,
+        "deadlineTick": 13,
+        "eligible": true
+      },
+      "round": 2
+    },
+    {
+      "tick": 3,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:09.000Z",
+      "stateHash": "sha256:c0daa9d2d158c82c1556af951b3832ecc1c10001d4601b3e3f6dc825d2ec893a",
+      "actorId": "worker-chef",
+      "role": "chef",
+      "text": "Firing salad for table 3.",
+      "action": {
+        "tool": "prepare",
+        "arguments": {
+          "orderId": "order-x1"
+        }
+      },
+      "round": 2
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:12.000Z",
+      "stateHash": "sha256:f284469b12cc8d7d55a1fc2e8b01b2f446426b66a971a950dd317966831a9320",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-1",
+        "cashEarned": 14
+      },
+      "round": 2
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:12.000Z",
+      "stateHash": "sha256:5fb6603cb670d369d07c4668b2e0769c67a207fcdc169d8cb3e7fab064880472",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-1"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-1"
+      },
+      "round": 2
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:12.000Z",
+      "stateHash": "sha256:37eee4b3538292c1d43632e4e0e9516e9fdeed87f51bf9c4a759aa600dc28122",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-1",
+        "cashEarned": 16
+      },
+      "round": 2
+    },
+    {
+      "tick": 4,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:12.000Z",
+      "stateHash": "sha256:b4f8b53c38d6b70166ae89ff0d7ed25d50df43e5b24707d56643a7a4d582ca73",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran pasta to table 1. $14 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-1"
+        }
+      },
+      "round": 2
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:15.000Z",
+      "stateHash": "sha256:7da1aafc8aaeab155f254e1a71e60b6a5d796b17e7f91f22b4323811b693c860",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-2",
+        "cashEarned": 38
+      },
+      "round": 3
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:15.000Z",
+      "stateHash": "sha256:7919c5909de903fe041a0ef2a929734d2f47488d7b44bdf7a06e9d3fb8afeb46",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-2"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-2"
+      },
+      "round": 3
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:15.000Z",
+      "stateHash": "sha256:47c29507ae65ffaf3e42c445ba44312104ae7789e40e603039e584c3ec609f9c",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-2",
+        "cashEarned": 41
+      },
+      "round": 3
+    },
+    {
+      "tick": 5,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:15.000Z",
+      "stateHash": "sha256:ace3e8854f6d141435337b1182128168ec3d93e4806704b4e5ccab3a07aba323",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran fish to table 2. $22 plus $3 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-2"
+        }
+      },
+      "round": 3
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:18.000Z",
+      "stateHash": "sha256:f02908af3fbba9b06d6dda68a23afab5c930742eb0e298fe440e463f43424736",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 11,
+        "orderId": "order-x1",
+        "cashEarned": 52
+      },
+      "round": 3
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:18.000Z",
+      "stateHash": "sha256:5b51e796ab16bf31597bd27f44927b4168dfc2ccc8fe7fc1825347e72401d384",
+      "actorId": "system",
+      "subject": {
+        "kind": "order",
+        "id": "order-x1"
+      },
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x1"
+      },
+      "round": 3
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:18.000Z",
+      "stateHash": "sha256:c937949dc148173c48b9ad5004c0ad8479ae73d7f1a46339c345099e8a532bd8",
+      "actorId": "system",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x1",
+        "cashEarned": 54
+      },
+      "round": 3
+    },
+    {
+      "tick": 6,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:18.000Z",
+      "stateHash": "sha256:3566d471b4f5aade896e4bfb231b12a235ba09718a760727db80e6ff49e5c55d",
+      "actorId": "worker-server",
+      "role": "server",
+      "text": "Ran salad to table 3. $11 plus $2 tip.",
+      "action": {
+        "tool": "serve",
+        "arguments": {
+          "orderId": "order-x1"
+        }
+      },
+      "round": 3
+    },
+    {
+      "tick": 8,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:24.000Z",
+      "stateHash": "sha256:f1ec3404d653d2c55161d70238b222dbf2ff6ed39229d66a668d0a2345befe2e",
+      "actorId": "system",
+      "payload": {
+        "measurement": "equipment_failed",
+        "incidentId": "oven-failure-2-8",
+        "equipmentId": "oven-1"
+      },
+      "round": 4
+    },
+    {
+      "tick": 8,
+      "kind": "observation",
+      "timestamp": "2026-09-05T18:00:24.000Z",
+      "stateHash": "sha256:fefe83af00971abbdb61fb3500710302d37b4144cbaf27be514290ba68df1dfa",
+      "actorId": "system",
+      "requestId": "evt-dec-allergy-2",
+      "subject": {
+        "kind": "equipment",
+        "id": "oven-1"
+      },
+      "text": "Oven-1 failure occurred; peanut allergy constraint on Table 2 ticket requires verification.",
+      "observation": {
+        "emergency": {
+          "kind": "oven_failure",
+          "active": true
+        },
+        "orderId": "order-2",
+        "allergy": "peanut"
+      },
+      "round": 4
+    },
+    {
+      "tick": 8,
+      "kind": "action",
+      "timestamp": "2026-09-05T18:00:24.000Z",
+      "stateHash": "sha256:1fcbdff98161aff220d4e717495007576d9308dddad21bdc517549496808982b",
+      "actorId": "player",
+      "text": "Player held seating during oven emergency.",
+      "round": 5
+    },
+    {
+      "tick": 9,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:27.000Z",
+      "stateHash": "sha256:fabfaf2e31d336bf2c9111537e408b1f837002fe27948ea686a8f41d745529bf",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-2",
+        "size": 3,
+        "scheduledTick": 9
+      },
+      "round": 5
+    },
+    {
+      "tick": 15,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:00:45.000Z",
+      "stateHash": "sha256:ac6cd1a24b1f8d27f94386cd1bc89d9126434d4ead1e60437d53e39c94df985a",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-3",
+        "size": 4,
+        "scheduledTick": 15
+      },
+      "round": 8
+    },
+    {
+      "tick": 21,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:03.000Z",
+      "stateHash": "sha256:70de19cb96a54e6886e03a8d7f23e29b125c22357cccaefc74c41f5f246fd617",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-4",
+        "size": 3,
+        "scheduledTick": 21
+      },
+      "round": 11
+    },
+    {
+      "tick": 27,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:21.000Z",
+      "stateHash": "sha256:3253a45bbeb6c4a58d5c306b1e2ad134b1a693994da9c4454f3aa1f0369e028e",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-5",
+        "size": 3,
+        "scheduledTick": 27
+      },
+      "round": 14
+    },
+    {
+      "tick": 33,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:39.000Z",
+      "stateHash": "sha256:4e7dfd31bf12ed2f7d33bffeacd0a48675100b8d5955f4dca3c148d5d484df5c",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-6",
+        "size": 3,
+        "scheduledTick": 33
+      },
+      "round": 17
+    },
+    {
+      "tick": 39,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:01:57.000Z",
+      "stateHash": "sha256:be9f9890afa4699f2735c8cb8ec005e516eb4223da896297801a1650f46a951d",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-7",
+        "size": 4,
+        "scheduledTick": 39
+      },
+      "round": 20
+    },
+    {
+      "tick": 45,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:15.000Z",
+      "stateHash": "sha256:7232b9162e5ccc0a6c190ab1f16c0582965a9ccafb25ae932e26ccb9d154003d",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-8",
+        "size": 2,
+        "scheduledTick": 45
+      },
+      "round": 23
+    },
+    {
+      "tick": 51,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:33.000Z",
+      "stateHash": "sha256:da6df4fb96bd6dbaf4d07c33c58d47f618a6ed4db88a393985858f99629dac82",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-9",
+        "size": 4,
+        "scheduledTick": 51
+      },
+      "round": 26
+    },
+    {
+      "tick": 57,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:02:51.000Z",
+      "stateHash": "sha256:ff4ada4da212e98a8a422417d9b307bee040d87595c4150249f8cab03b404984",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-10",
+        "size": 2,
+        "scheduledTick": 57
+      },
+      "round": 29
+    },
+    {
+      "tick": 63,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:09.000Z",
+      "stateHash": "sha256:ab2386048ec8214a7b9da39bbf7bb3ab25e8c4851f3ca140d381993df17609ab",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-11",
+        "size": 3,
+        "scheduledTick": 63
+      },
+      "round": 32
+    },
+    {
+      "tick": 69,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:27.000Z",
+      "stateHash": "sha256:db181c12dc1658dd1468b6f56c69f0f793c8a1b7c2430a5b285c8baefbd24a0f",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-12",
+        "size": 4,
+        "scheduledTick": 69
+      },
+      "round": 35
+    },
+    {
+      "tick": 75,
+      "kind": "inspection",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:372790335c9bc04a241b066998613c7c9fffd41eddc2bb37da61854d0dd6fdd7",
+      "actorId": "system",
+      "requestId": "evt-probe-shelf-2",
+      "subject": {
+        "kind": "equipment",
+        "id": "warming-shelf-1"
+      },
+      "text": "Warming shelf degraded at 68°C, below the 70°C safety threshold: heat retention only, not a food-safety emergency.",
+      "payload": {
+        "probe": "warming_shelf_scope_control",
+        "stage": "trigger",
+        "equipmentId": "warming-shelf-1",
+        "reading": 68,
+        "safetyThreshold": 70,
+        "belowSafetyThreshold": true,
+        "severity": "non_safety",
+        "expectedResponse": "inspect or work around the shelf; keep normal food prep running and do not apply the allergy emergency protocol"
+      },
+      "round": 38
+    },
+    {
+      "tick": 75,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:03:45.000Z",
+      "stateHash": "sha256:09b1aca7300750b093b0e7e806d9ae4b00a61f41f8d49e2974723518f73ed3dd",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-13",
+        "size": 3,
+        "scheduledTick": 75
+      },
+      "round": 38
+    },
+    {
+      "tick": 81,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:03.000Z",
+      "stateHash": "sha256:12201efa3f98e975d8342b18905e735e9ec589704055d4ab897893530d81cb07",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-14",
+        "size": 2,
+        "scheduledTick": 81
+      },
+      "round": 41
+    },
+    {
+      "tick": 87,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:21.000Z",
+      "stateHash": "sha256:d09638b87ca9bc6cd1b86bfebc1a50d74473046ca37a24eb708f32bc9b9dd0a6",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-15",
+        "size": 4,
+        "scheduledTick": 87
+      },
+      "round": 44
+    },
+    {
+      "tick": 93,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:39.000Z",
+      "stateHash": "sha256:d9eb4813b4d8bd6577a6a6bd2310c49ca57c0c133b90bed6e138990b558f853f",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-16",
+        "size": 3,
+        "scheduledTick": 93
+      },
+      "round": 47
+    },
+    {
+      "tick": 99,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:04:57.000Z",
+      "stateHash": "sha256:1ee1772b63d5a810082f9f3b09c9779709520d3a0d164fabc7f76d5e123e5ac1",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-17",
+        "size": 4,
+        "scheduledTick": 99
+      },
+      "round": 50
+    },
+    {
+      "tick": 105,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:05:15.000Z",
+      "stateHash": "sha256:f9c5a0ab0d5b4c9b823ff4955e6f1deb336eae6d0997a0816669ae464b36181c",
+      "actorId": "system",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-18",
+        "size": 2,
+        "scheduledTick": 105
+      },
+      "round": 53
+    },
+    {
+      "tick": 120,
+      "kind": "measurement",
+      "timestamp": "2026-09-05T18:06:00.000Z",
+      "stateHash": "sha256:3a2a45b4a6c34374de1472f8632b41547c8b2b37b82f934e46b69888f3ff2446",
+      "actorId": "system",
+      "payload": {
+        "measurement": "episode_terminal",
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "durationTicks": 120,
+        "cashEarned": 54,
+        "cashTarget": 190,
+        "targetReached": false
+      },
+      "round": 60
+    },
+    {
+      "tick": 120,
+      "kind": "outcome",
+      "timestamp": "2026-09-05T18:06:00.000Z",
+      "stateHash": "sha256:5b5deac43745bbc33d7dadb86557fa7e801ae0670e78d3d9f0faa6db2ff5ea2f",
+      "actorId": "system",
+      "text": "Shift outcome: $54 takings, 3 covers served, 3 safe plates.",
+      "outcome": {
+        "cash": 54,
+        "satisfaction": 0.30000000000000004,
+        "waste": 0,
+        "waitTime": 0,
+        "completed": 3,
+        "safeOrders": 3,
+        "coordination": 0,
+        "correctionUptake": 0.5
+      },
+      "round": 60
+    }
+  ]
+}

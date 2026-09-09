@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tui-gamepigeon.dev/contracts/restaurant-fixed-workers-score-v2.schema.json",
+  "additionalProperties": false,
+  "description": "v1 components plus the two-minute terminal cash-target contract.",
+  "properties": {
+    "graderVersion": {
+      "const": "restaurant-fixed-workers-grader/v2",
+      "default": "restaurant-fixed-workers-grader/v2",
+      "title": "Graderversion",
+      "type": "string"
+    },
+    "service": {
+      "maximum": 100.0,
+      "minimum": 0.0,
+      "title": "Service",
+      "type": "number"
+    },
+    "resources": {
+      "maximum": 100.0,
+      "minimum": 0.0,
+      "title": "Resources",
+      "type": "number"
+    },
+    "recovery": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Recovery"
+    },
+    "safety": {
+      "maximum": 100.0,
+      "minimum": 0.0,
+      "title": "Safety",
+      "type": "number"
+    },
+    "composite": {
+      "maximum": 100.0,
+      "minimum": 0.0,
+      "title": "Composite",
+      "type": "number"
+    },
+    "eligibleOrders": {
+      "minimum": 0,
+      "title": "Eligibleorders",
+      "type": "integer"
+    },
+    "onTimeOrders": {
+      "minimum": 0,
+      "title": "Ontimeorders",
+      "type": "integer"
+    },
+    "netOperatingReturn": {
+      "title": "Netoperatingreturn",
+      "type": "number"
+    },
+    "recoveryTime": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Recoverytime"
+    },
+    "safetyViolations": {
+      "minimum": 0,
+      "title": "Safetyviolations",
+      "type": "integer"
+    },
+    "benchmarkVersion": {
+      "const": "restaurant-fixed-workers/v2",
+      "default": "restaurant-fixed-workers/v2",
+      "title": "Benchmarkversion",
+      "type": "string"
+    },
+    "durationTicks": {
+      "const": 120,
+      "default": 120,
+      "title": "Durationticks",
+      "type": "integer"
+    },
+    "validTerminalState": {
+      "title": "Validterminalstate",
+      "type": "boolean"
+    },
+    "cashEarned": {
+      "title": "Cashearned",
+      "type": "number"
+    },
+    "cashTarget": {
+      "exclusiveMinimum": 0.0,
+      "title": "Cashtarget",
+      "type": "number"
+    },
+    "targetReached": {
+      "title": "Targetreached",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "service",
+    "resources",
+    "safety",
+    "composite",
+    "eligibleOrders",
+    "onTimeOrders",
+    "netOperatingReturn",
+    "safetyViolations",
+    "validTerminalState",
+    "cashEarned",
+    "cashTarget",
+    "targetReached"
+  ],
+  "title": "BenchmarkScoresV2",
+  "type": "object"
+}

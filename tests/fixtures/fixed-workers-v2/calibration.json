@@ -1,0 +1,962 @@
+{
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "developmentCases": {
+    "quiet-tuesday": [
+      1,
+      5,
+      9
+    ],
+    "dinner-rush": [
+      2,
+      5,
+      9
+    ],
+    "saturday-night": [
+      1,
+      2,
+      9
+    ]
+  },
+  "episodes": [
+    {
+      "policy": "passive",
+      "level": "quiet-tuesday",
+      "seed": 1,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 100,
+        "durationTicks": 120,
+        "cashEarned": 247,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 13,
+          "netOperatingReturn": 247,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x6_verify",
+        "decide_shelf_hot_serve"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "passive",
+      "level": "quiet-tuesday",
+      "seed": 5,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 100,
+        "durationTicks": 120,
+        "cashEarned": 225,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 13,
+          "netOperatingReturn": 225,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x10_verify"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "passive",
+      "level": "quiet-tuesday",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 92.3076923076923,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 96.15384615384615,
+        "durationTicks": 120,
+        "cashEarned": 248,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 12,
+          "netOperatingReturn": 248,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x9_verify"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "passive",
+      "level": "dinner-rush",
+      "seed": 2,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 55,
+        "resources": 94.21052631578948,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 49.73684210526316,
+        "durationTicks": 120,
+        "cashEarned": 179,
+        "cashTarget": 190,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 20,
+          "onTimeOrders": 11,
+          "netOperatingReturn": 179,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_push",
+        "decide_allergy_ticket:order-x11_verify",
+        "decide_allergy_ticket:order-x12_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x13_verify"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "passive",
+      "level": "dinner-rush",
+      "seed": 5,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 65,
+        "resources": 100,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 55,
+        "durationTicks": 120,
+        "cashEarned": 205,
+        "cashTarget": 190,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 20,
+          "onTimeOrders": 13,
+          "netOperatingReturn": 205,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_push",
+        "decide_allergy_ticket:order-x10_verify",
+        "decide_shelf_hot_serve"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "passive",
+      "level": "dinner-rush",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 50,
+        "resources": 88.94736842105263,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 46.315789473684205,
+        "durationTicks": 120,
+        "cashEarned": 169,
+        "cashTarget": 190,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 20,
+          "onTimeOrders": 10,
+          "netOperatingReturn": 169,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x1_verify",
+        "decide_oven_down_push",
+        "decide_allergy_ticket:order-x3_verify",
+        "decide_allergy_ticket:order-x9_verify",
+        "decide_allergy_ticket:order-x12_verify",
+        "decide_shelf_hot_serve"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "passive",
+      "level": "saturday-night",
+      "seed": 1,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 45.833333333333336,
+        "resources": 68.84615384615384,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 38.22649572649573,
+        "durationTicks": 120,
+        "cashEarned": 179,
+        "cashTarget": 260,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 24,
+          "onTimeOrders": 11,
+          "netOperatingReturn": 179,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_push",
+        "decide_allergy_ticket:order-x5_verify",
+        "decide_allergy_ticket:order-x6_verify",
+        "decide_allergy_ticket:order-x13_verify",
+        "decide_allergy_ticket:order-x14_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x16_verify",
+        "decide_allergy_ticket:order-x17_verify",
+        "decide_allergy_ticket:order-x21_verify"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "passive",
+      "level": "saturday-night",
+      "seed": 2,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 50,
+        "resources": 73.84615384615385,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 41.28205128205129,
+        "durationTicks": 120,
+        "cashEarned": 192,
+        "cashTarget": 260,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 24,
+          "onTimeOrders": 12,
+          "netOperatingReturn": 192,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_push",
+        "decide_allergy_ticket:order-x4_verify",
+        "decide_allergy_ticket:order-x8_verify",
+        "decide_allergy_ticket:order-x10_verify",
+        "decide_allergy_ticket:order-x11_verify",
+        "decide_allergy_ticket:order-x12_verify",
+        "decide_allergy_ticket:order-x13_verify",
+        "decide_shelf_hot_serve"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "passive",
+      "level": "saturday-night",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 45.833333333333336,
+        "resources": 71.15384615384616,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 38.9957264957265,
+        "durationTicks": 120,
+        "cashEarned": 185,
+        "cashTarget": 260,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 24,
+          "onTimeOrders": 11,
+          "netOperatingReturn": 185,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x1_verify",
+        "decide_oven_down_push",
+        "decide_allergy_ticket:order-x3_verify",
+        "decide_allergy_ticket:order-x8_verify",
+        "decide_allergy_ticket:order-x9_verify",
+        "decide_allergy_ticket:order-x12_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x18_verify"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "quiet-tuesday",
+      "seed": 1,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 100,
+        "durationTicks": 120,
+        "cashEarned": 231,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 13,
+          "netOperatingReturn": 231,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x6_verify",
+        "decide_shelf_hot_dump"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "quiet-tuesday",
+      "seed": 5,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 100,
+        "durationTicks": 120,
+        "cashEarned": 209,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 13,
+          "netOperatingReturn": 209,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_shelf_hot_dump",
+        "decide_allergy_ticket:order-x10_verify"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "quiet-tuesday",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 92.3076923076923,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 96.15384615384615,
+        "durationTicks": 120,
+        "cashEarned": 232,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 12,
+          "netOperatingReturn": 232,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_shelf_hot_dump",
+        "decide_allergy_ticket:order-x9_verify"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "dinner-rush",
+      "seed": 2,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 20,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 40,
+        "durationTicks": 120,
+        "cashEarned": 38,
+        "cashTarget": 190,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 3,
+          "onTimeOrders": 3,
+          "netOperatingReturn": 38,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_hold",
+        "decide_rush_wave_quote_wait",
+        "decide_shelf_hot_dump"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "dinner-rush",
+      "seed": 5,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 21.578947368421055,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 40.526315789473685,
+        "durationTicks": 120,
+        "cashEarned": 41,
+        "cashTarget": 190,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 3,
+          "onTimeOrders": 3,
+          "netOperatingReturn": 41,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_hold",
+        "decide_rush_wave_quote_wait",
+        "decide_shelf_hot_dump"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "dinner-rush",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 26.31578947368421,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 42.10526315789473,
+        "durationTicks": 120,
+        "cashEarned": 50,
+        "cashTarget": 190,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 3,
+          "onTimeOrders": 3,
+          "netOperatingReturn": 50,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x1_verify",
+        "decide_oven_down_hold",
+        "decide_rush_wave_quote_wait",
+        "decide_shelf_hot_dump"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "saturday-night",
+      "seed": 1,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 15.769230769230768,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 38.58974358974359,
+        "durationTicks": 120,
+        "cashEarned": 41,
+        "cashTarget": 260,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 3,
+          "onTimeOrders": 3,
+          "netOperatingReturn": 41,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_hold",
+        "decide_rush_wave_quote_wait",
+        "decide_shelf_hot_dump"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "saturday-night",
+      "seed": 2,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 14.615384615384617,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 38.205128205128204,
+        "durationTicks": 120,
+        "cashEarned": 38,
+        "cashTarget": 260,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 3,
+          "onTimeOrders": 3,
+          "netOperatingReturn": 38,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_hold",
+        "decide_rush_wave_quote_wait",
+        "decide_shelf_hot_dump"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "cautious",
+      "level": "saturday-night",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 19.230769230769234,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 39.743589743589745,
+        "durationTicks": 120,
+        "cashEarned": 50,
+        "cashTarget": 260,
+        "targetReached": false,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 3,
+          "onTimeOrders": 3,
+          "netOperatingReturn": 50,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x1_verify",
+        "decide_oven_down_hold",
+        "decide_rush_wave_quote_wait",
+        "decide_shelf_hot_dump"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "quiet-tuesday",
+      "seed": 1,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 100,
+        "durationTicks": 120,
+        "cashEarned": 247,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 13,
+          "netOperatingReturn": 247,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x6_verify",
+        "decide_shelf_hot_serve"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "quiet-tuesday",
+      "seed": 5,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 100,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 100,
+        "durationTicks": 120,
+        "cashEarned": 225,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 13,
+          "netOperatingReturn": 225,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x10_verify"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "quiet-tuesday",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 92.3076923076923,
+        "resources": 100,
+        "recovery": null,
+        "safety": 100,
+        "composite": 96.15384615384615,
+        "durationTicks": 120,
+        "cashEarned": 248,
+        "cashTarget": 140,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 13,
+          "onTimeOrders": 12,
+          "netOperatingReturn": 248,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x9_verify"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "dinner-rush",
+      "seed": 2,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 90,
+        "resources": 100,
+        "recovery": 100,
+        "safety": 0,
+        "composite": 0,
+        "durationTicks": 120,
+        "cashEarned": 282,
+        "cashTarget": 190,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 20,
+          "onTimeOrders": 18,
+          "netOperatingReturn": 282,
+          "recoveryTime": 4,
+          "safetyViolations": 1
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_repair",
+        "buy_second_stove",
+        "decide_allergy_ticket:order-x11_verify",
+        "decide_allergy_ticket:order-x12_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x13_verify"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "dinner-rush",
+      "seed": 5,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 90,
+        "resources": 100,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 63.33333333333334,
+        "durationTicks": 120,
+        "cashEarned": 262,
+        "cashTarget": 190,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 20,
+          "onTimeOrders": 18,
+          "netOperatingReturn": 262,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_repair",
+        "buy_second_stove",
+        "decide_allergy_ticket:order-x10_verify",
+        "decide_shelf_hot_serve"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "dinner-rush",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 80,
+        "resources": 100,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 60,
+        "durationTicks": 120,
+        "cashEarned": 251,
+        "cashTarget": 190,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 20,
+          "onTimeOrders": 16,
+          "netOperatingReturn": 251,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x1_verify",
+        "buy_second_stove",
+        "decide_oven_down_repair",
+        "decide_allergy_ticket:order-x3_verify",
+        "decide_allergy_ticket:order-x9_verify",
+        "decide_allergy_ticket:order-x12_verify",
+        "decide_shelf_hot_serve"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "saturday-night",
+      "seed": 1,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 83.33333333333333,
+        "resources": 100,
+        "recovery": 100,
+        "safety": 100,
+        "composite": 94.44444444444443,
+        "durationTicks": 120,
+        "cashEarned": 328,
+        "cashTarget": 260,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 24,
+          "onTimeOrders": 20,
+          "netOperatingReturn": 328,
+          "recoveryTime": 4,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_repair",
+        "buy_second_stove",
+        "decide_allergy_ticket:order-x5_verify",
+        "decide_allergy_ticket:order-x6_verify",
+        "decide_allergy_ticket:order-x13_verify",
+        "decide_allergy_ticket:order-x14_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x16_verify",
+        "decide_allergy_ticket:order-x17_verify",
+        "decide_allergy_ticket:order-x21_verify"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "saturday-night",
+      "seed": 2,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 87.5,
+        "resources": 100,
+        "recovery": 100,
+        "safety": 100,
+        "composite": 95.83333333333331,
+        "durationTicks": 120,
+        "cashEarned": 341,
+        "cashTarget": 260,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 24,
+          "onTimeOrders": 21,
+          "netOperatingReturn": 341,
+          "recoveryTime": 4,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_oven_down_repair",
+        "buy_second_stove",
+        "decide_allergy_ticket:order-x4_verify",
+        "decide_allergy_ticket:order-x8_verify",
+        "decide_allergy_ticket:order-x10_verify",
+        "decide_allergy_ticket:order-x11_verify",
+        "decide_allergy_ticket:order-x12_verify",
+        "decide_allergy_ticket:order-x13_verify",
+        "decide_shelf_hot_serve"
+      ],
+      "requirementsMet": true,
+      "timerAffectedDecisions": true
+    },
+    {
+      "policy": "adaptive",
+      "level": "saturday-night",
+      "seed": 9,
+      "score": {
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "service": 70.83333333333333,
+        "resources": 100,
+        "recovery": 0,
+        "safety": 100,
+        "composite": 56.944444444444436,
+        "durationTicks": 120,
+        "cashEarned": 267,
+        "cashTarget": 260,
+        "targetReached": true,
+        "validTerminalState": true,
+        "raw": {
+          "eligibleOrders": 24,
+          "onTimeOrders": 17,
+          "netOperatingReturn": 267,
+          "recoveryTime": null,
+          "safetyViolations": 0
+        }
+      },
+      "actions": [
+        "decide_allergy_ticket:order-2_verify",
+        "decide_allergy_ticket:order-x1_verify",
+        "decide_oven_down_repair",
+        "buy_second_stove",
+        "decide_allergy_ticket:order-x3_verify",
+        "decide_allergy_ticket:order-x8_verify",
+        "decide_allergy_ticket:order-x9_verify",
+        "decide_allergy_ticket:order-x12_verify",
+        "decide_shelf_hot_serve",
+        "decide_allergy_ticket:order-x18_verify"
+      ],
+      "requirementsMet": false,
+      "timerAffectedDecisions": true
+    }
+  ],
+  "rejectionGates": {
+    "passivePassesEveryCase": false,
+    "allPoliciesTie": false,
+    "oneActionSequenceDominates": false,
+    "adaptiveCannotReachTarget": false,
+    "timerNeverAffectsDecisions": false
+  },
+  "accepted": true
+}

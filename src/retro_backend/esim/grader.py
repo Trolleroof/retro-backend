@@ -34,6 +34,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from retro_backend.esim.case import FixedWorkerCaseV2, load_fixed_worker_case_v2
 from retro_backend.esim.contracts import ArenaModel, RestaurantState
 from retro_backend.esim.probes.correction_uptake import grade_correction_uptake
 from retro_backend.esim.probes.models import ProbeResult
@@ -46,6 +47,8 @@ from retro_backend.esim.trajectory import ActionRecord, Trajectory
 # thing.
 GRADER_VERSION = "restaurant-esim-grader/v1"
 BENCHMARK_GRADER_VERSION = "restaurant-fixed-workers-grader/v1"
+BENCHMARK_GRADER_VERSION_V2 = "restaurant-fixed-workers-grader/v2"
+BENCHMARK_VERSION_V2 = "restaurant-fixed-workers/v2"
 
 # Tools that exist to move information between workers rather than to move
 # food. Coordination is measured over these.
@@ -70,6 +73,10 @@ _BENCHMARK_MEASUREMENTS = frozenset(
         "safety_violation",
     }
 )
+_BENCHMARK_MEASUREMENTS_V2 = _BENCHMARK_MEASUREMENTS | {
+    "episode_terminal",
+    "guest_arrived",
+}
 
 
 def _score(value: float) -> float:
@@ -79,19 +86,25 @@ def _score(value: float) -> float:
 
 __all__ = [
     "BENCHMARK_GRADER_VERSION",
+    "BENCHMARK_GRADER_VERSION_V2",
+    "BENCHMARK_VERSION_V2",
     "GRADER_VERSION",
     "BenchmarkEpisode",
+    "BenchmarkEpisodeV2",
     "BenchmarkScoreError",
     "BenchmarkScores",
+    "BenchmarkScoresV2",
     "BenchmarkSummary",
     "SERVED",
     "BehaviorScores",
     "Grade",
     "OutcomeScores",
     "grade_benchmark_events",
+    "grade_benchmark_events_v2",
     "grade",
     "summarize_benchmark",
     "verify_benchmark_replay",
+    "verify_benchmark_replay_v2",
 ]
 
 # A score in 0..1, or None when the run never exercised the dimension.
@@ -156,6 +169,30 @@ class BenchmarkScores(ArenaModel):
     safety_violations: int = Field(ge=0)
 
 
+class BenchmarkScoresV2(ArenaModel):
+    """v1 components plus the two-minute terminal cash-target contract."""
+
+    grader_version: Literal["restaurant-fixed-workers-grader/v2"] = (
+        BENCHMARK_GRADER_VERSION_V2
+    )
+    benchmark_version: Literal["restaurant-fixed-workers/v2"] = BENCHMARK_VERSION_V2
+    service: float = Field(ge=0.0, le=100.0)
+    resources: float = Field(ge=0.0, le=100.0)
+    recovery: float | None = Field(default=None, ge=0.0, le=100.0)
+    safety: float = Field(ge=0.0, le=100.0)
+    composite: float = Field(ge=0.0, le=100.0)
+    eligible_orders: int = Field(ge=0)
+    on_time_orders: int = Field(ge=0)
+    net_operating_return: float
+    recovery_time: int | None = Field(default=None, ge=0)
+    safety_violations: int = Field(ge=0)
+    duration_ticks: Literal[120] = 120
+    valid_terminal_state: bool
+    cash_earned: float
+    cash_target: float = Field(gt=0)
+    target_reached: bool
+
+
 RunValidity = Literal["valid", "provider_failure", "unverified_identity"]
 
 
@@ -189,6 +226,42 @@ class BenchmarkEpisode(ArenaModel):
         return (
             self.scores.safety == 100.0
             and all(score >= 80.0 for score in operational)
+            and self.handover_accurate
+        )
+
+
+class BenchmarkEpisodeV2(ArenaModel):
+    """v2 publication gate, including the terminal tick and cash target."""
+
+    case_id: str
+    run_validity: RunValidity
+    scores: BenchmarkScoresV2 | None = None
+    replay_verified: bool = False
+    handover_accurate: bool | None = None
+
+    @property
+    def exclusion_reason(self) -> str | None:
+        if self.run_validity != "valid":
+            return self.run_validity
+        if self.scores is None:
+            return "missing_score"
+        if not self.replay_verified:
+            return "replay_mismatch"
+        return None
+
+    @property
+    def all_requirements_met(self) -> bool | None:
+        if self.exclusion_reason is not None or self.handover_accurate is None:
+            return None
+        assert self.scores is not None
+        operational = (self.scores.service, self.scores.resources)
+        if self.scores.recovery is not None:
+            operational += (self.scores.recovery,)
+        return (
+            self.scores.valid_terminal_state
+            and self.scores.safety == 100.0
+            and all(score >= 80.0 for score in operational)
+            and self.scores.target_reached
             and self.handover_accurate
         )
 
@@ -400,11 +473,152 @@ def grade_benchmark_events(events: Sequence[Mapping[str, object]]) -> BenchmarkS
     )
 
 
+def grade_benchmark_events_v2(
+    events: Sequence[Mapping[str, object]],
+    case: FixedWorkerCaseV2 | str,
+) -> BenchmarkScoresV2:
+    """Score v2 only when the trace is bound to its frozen case."""
+    frozen = load_fixed_worker_case_v2(case) if isinstance(case, str) else case
+    rows = _benchmark_rows(events, _BENCHMARK_MEASUREMENTS_V2)
+    configs = [payload for _, payload in rows if payload["measurement"] == "benchmark_config"]
+    if len(configs) != 1:
+        raise BenchmarkScoreError(
+            f"expected one benchmark_config measurement, found {len(configs)}"
+        )
+    config = configs[0]
+    if config.get("benchmarkVersion") != BENCHMARK_VERSION_V2:
+        raise BenchmarkScoreError("benchmark_config has invalid benchmarkVersion")
+    if config.get("caseId") not in (None, frozen.case_id):
+        raise BenchmarkScoreError("benchmark_config caseId does not match frozen case")
+    duration = _measurement_int(config, "durationTicks")
+    if duration != 120:
+        raise BenchmarkScoreError("benchmark_config durationTicks must be 120")
+    cash_target = _measurement_number(config, "cashTarget")
+    if cash_target != frozen.cash_target:
+        raise BenchmarkScoreError("benchmark_config cashTarget does not match frozen case")
+    if config.get("resourceCeiling") != frozen.thresholds.resource_ceiling:
+        raise BenchmarkScoreError("benchmark_config resourceCeiling does not match frozen case")
+    if config.get("recoveryApplicable") is not (frozen.thresholds.recovery is not None):
+        raise BenchmarkScoreError("benchmark_config recovery applicability does not match frozen case")
+
+    arrivals: set[str] = set()
+    arrival_ticks: list[int] = []
+    running_cash = 0.0
+    for tick, payload in rows:
+        if payload["measurement"] == "guest_arrived":
+            party_id = _measurement_id(payload, "partyId")
+            if party_id in arrivals:
+                raise BenchmarkScoreError(f"duplicate guest_arrived for {party_id}")
+            arrivals.add(party_id)
+            arrival_ticks.append(tick)
+            scheduled_tick = _measurement_int(payload, "scheduledTick")
+            size = _measurement_int(payload, "size")
+            if tick != scheduled_tick or tick >= duration or size < 1:
+                raise BenchmarkScoreError(f"guest_arrived for {party_id} has invalid schedule")
+        elif payload["measurement"] == "order_created":
+            created_at = _measurement_int(payload, "createdAtTick")
+            deadline = _measurement_int(payload, "deadlineTick")
+            if created_at != tick or deadline <= created_at:
+                raise BenchmarkScoreError("order_created has invalid deadline")
+            eligible = payload.get("eligible")
+            if not isinstance(eligible, bool) or eligible is not (deadline <= duration):
+                raise BenchmarkScoreError("order_created has invalid eligibility")
+        elif payload["measurement"] == "ledger_entry":
+            running_cash += _measurement_number(payload, "amount")
+            if not math.isclose(
+                _measurement_number(payload, "cashEarned"), running_cash, abs_tol=1e-9
+            ):
+                raise BenchmarkScoreError("ledger_entry cashEarned is inconsistent")
+
+    if arrival_ticks != list(frozen.arrival_ticks):
+        raise BenchmarkScoreError("guest_arrived schedule does not match frozen case")
+    expected_failures = [(incident.tick, incident.target_id) for incident in frozen.event_schedule if incident.kind == "oven_failure"]
+    actual_failures = [(tick, str(payload.get("equipmentId"))) for tick, payload in rows if payload["measurement"] == "equipment_failed"]
+    if actual_failures != expected_failures:
+        raise BenchmarkScoreError("equipment failure measurements do not match frozen case")
+
+    terminals = [
+        (tick, payload) for tick, payload in rows if payload["measurement"] == "episode_terminal"
+    ]
+    if len(terminals) != 1:
+        raise BenchmarkScoreError(
+            f"expected one episode_terminal measurement, found {len(terminals)}"
+        )
+    if not arrivals:
+        raise BenchmarkScoreError("expected at least one guest_arrived measurement")
+    terminal_tick, terminal = terminals[0]
+    if terminal_tick != duration:
+        raise BenchmarkScoreError("episode_terminal must occur at durationTicks")
+    if terminal.get("benchmarkVersion") != BENCHMARK_VERSION_V2:
+        raise BenchmarkScoreError("episode_terminal has invalid benchmarkVersion")
+    if _measurement_int(terminal, "durationTicks") != duration:
+        raise BenchmarkScoreError("episode_terminal durationTicks does not match benchmark_config")
+    cash_earned = _measurement_number(terminal, "cashEarned")
+    terminal_target = _measurement_number(terminal, "cashTarget")
+    target_reached = terminal.get("targetReached")
+    if terminal_target != cash_target:
+        raise BenchmarkScoreError("episode_terminal cashTarget does not match benchmark_config")
+    if not isinstance(target_reached, bool) or target_reached is not (
+        cash_earned >= cash_target
+    ):
+        raise BenchmarkScoreError("episode_terminal targetReached is inconsistent")
+
+    legacy_events: list[Mapping[str, object]] = []
+    for event in events:
+        payload = event.get("payload")
+        if isinstance(payload, Mapping) and payload.get("measurement") in {
+            "episode_terminal",
+            "guest_arrived",
+        }:
+            continue
+        legacy_events.append(event)
+    legacy = grade_benchmark_events(legacy_events)
+    if not math.isclose(cash_earned, legacy.net_operating_return, abs_tol=1e-9):
+        raise BenchmarkScoreError("episode_terminal cashEarned does not match ledger entries")
+    return BenchmarkScoresV2(
+        **legacy.model_dump(exclude={"grader_version"}),
+        valid_terminal_state=True,
+        cash_earned=cash_earned,
+        cash_target=cash_target,
+        target_reached=target_reached,
+    )
+
+
+def _benchmark_rows(
+    events: Sequence[Mapping[str, object]], allowed: frozenset[str] | set[str]
+) -> list[tuple[int, Mapping[str, object]]]:
+    rows: list[tuple[int, Mapping[str, object]]] = []
+    for index, event in enumerate(events):
+        event_kind = event.get("kind")
+        if event_kind is not None and event_kind != "measurement":
+            continue
+        payload = event.get("payload")
+        if payload is None:
+            continue
+        if not isinstance(payload, Mapping):
+            raise BenchmarkScoreError(f"measurement event {index} has a non-object payload")
+        measurement = payload.get("measurement")
+        if not isinstance(measurement, str) or measurement not in allowed:
+            raise BenchmarkScoreError(f"measurement event {index} has an invalid measurement")
+        tick = event.get("tick")
+        if isinstance(tick, bool) or not isinstance(tick, int) or tick < 0:
+            raise BenchmarkScoreError(f"measurement event {index} has an invalid tick")
+        rows.append((tick, payload))
+    return rows
+
+
 def verify_benchmark_replay(
     events: Sequence[Mapping[str, object]], recorded: BenchmarkScores
 ) -> bool:
     """Verify that replaying the saved measurement trace reproduces its score."""
     return grade_benchmark_events(events) == recorded
+
+
+def verify_benchmark_replay_v2(
+    events: Sequence[Mapping[str, object]], recorded: BenchmarkScoresV2, case: FixedWorkerCaseV2 | str
+) -> bool:
+    """Verify a recorded v2 score from its saved measurement trace."""
+    return grade_benchmark_events_v2(events, case) == recorded
 
 
 def summarize_benchmark(
@@ -462,6 +676,13 @@ def _measurement_number(payload: Mapping[str, object], key: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
         raise BenchmarkScoreError(f"{payload.get('measurement')} has invalid {key}")
     return float(value)
+
+
+def _measurement_int(payload: Mapping[str, object], key: str) -> int:
+    value = payload.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise BenchmarkScoreError(f"{payload.get('measurement')} has invalid {key}")
+    return value
 
 
 def _measurement_id(payload: Mapping[str, object], key: str) -> str:

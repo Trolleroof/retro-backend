@@ -1,0 +1,26 @@
+{
+  "caseVersion": "restaurant-fixed-workers-case/v2",
+  "caseId": "saturday-night-v2-dev-2",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "graderVersion": "restaurant-fixed-workers-grader/v2",
+  "split": "development",
+  "level": "saturday-night-v2",
+  "seed": 2,
+  "durationTicks": 120,
+  "arrivalTicks": [2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57, 62, 67, 72, 77, 82, 87, 92, 97, 102, 107],
+  "cashTarget": 260,
+  "eventSchedule": [
+    {"tick": 6, "kind": "oven_failure", "targetId": "oven-1"},
+    {"tick": 70, "kind": "warming_shelf_overheat", "targetId": "warming-shelf-1"}
+  ],
+  "thresholds": {
+    "resourceFloor": 0,
+    "resourceCeiling": 260,
+    "recoveryTarget": 4,
+    "recoveryHardDeadline": 8,
+    "service": 80,
+    "resources": 80,
+    "recovery": 80,
+    "safety": 100
+  }
+}

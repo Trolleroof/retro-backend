@@ -1,0 +1,697 @@
+{
+  "source": "tui-gamepigeon scoreBenchmarkEvents",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "caseId": "quiet-tuesday-v2-dev-1",
+  "events": [
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "benchmark_config",
+        "resourceFloor": 0,
+        "resourceCeiling": 140,
+        "recoveryTarget": 4,
+        "recoveryHardDeadline": 8,
+        "recoveryApplicable": false,
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "durationTicks": 120,
+        "cashTarget": 140
+      }
+    },
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-1",
+        "createdAtTick": 0,
+        "deadlineTick": 10,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 0,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-2",
+        "createdAtTick": 0,
+        "deadlineTick": 10,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-1",
+        "size": 3,
+        "scheduledTick": 4
+      }
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x1",
+        "createdAtTick": 4,
+        "deadlineTick": 14,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-1",
+        "cashEarned": 14
+      }
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-1"
+      }
+    },
+    {
+      "tick": 4,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-1",
+        "cashEarned": 16
+      }
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-2",
+        "cashEarned": 38
+      }
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-2"
+      }
+    },
+    {
+      "tick": 5,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-2",
+        "cashEarned": 41
+      }
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x1",
+        "cashEarned": 55
+      }
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x1"
+      }
+    },
+    {
+      "tick": 6,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x1",
+        "cashEarned": 57
+      }
+    },
+    {
+      "tick": 14,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-2",
+        "size": 4,
+        "scheduledTick": 14
+      }
+    },
+    {
+      "tick": 14,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x2",
+        "createdAtTick": 14,
+        "deadlineTick": 24,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 16,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-x2",
+        "cashEarned": 79
+      }
+    },
+    {
+      "tick": 16,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x2"
+      }
+    },
+    {
+      "tick": 16,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x2",
+        "cashEarned": 82
+      }
+    },
+    {
+      "tick": 24,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-3",
+        "size": 3,
+        "scheduledTick": 24
+      }
+    },
+    {
+      "tick": 24,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x3",
+        "createdAtTick": 24,
+        "deadlineTick": 34,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 26,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x3",
+        "cashEarned": 96
+      }
+    },
+    {
+      "tick": 26,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x3"
+      }
+    },
+    {
+      "tick": 26,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x3",
+        "cashEarned": 98
+      }
+    },
+    {
+      "tick": 34,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-4",
+        "size": 4,
+        "scheduledTick": 34
+      }
+    },
+    {
+      "tick": 34,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x4",
+        "createdAtTick": 34,
+        "deadlineTick": 44,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 36,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 18,
+        "orderId": "order-x4",
+        "cashEarned": 116
+      }
+    },
+    {
+      "tick": 36,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x4"
+      }
+    },
+    {
+      "tick": 36,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x4",
+        "cashEarned": 119
+      }
+    },
+    {
+      "tick": 44,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-5",
+        "size": 2,
+        "scheduledTick": 44
+      }
+    },
+    {
+      "tick": 44,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x5",
+        "createdAtTick": 44,
+        "deadlineTick": 54,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 46,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 18,
+        "orderId": "order-x5",
+        "cashEarned": 137
+      }
+    },
+    {
+      "tick": 46,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x5"
+      }
+    },
+    {
+      "tick": 46,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x5",
+        "cashEarned": 140
+      }
+    },
+    {
+      "tick": 54,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-6",
+        "size": 2,
+        "scheduledTick": 54
+      }
+    },
+    {
+      "tick": 54,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x6",
+        "createdAtTick": 54,
+        "deadlineTick": 64,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 57,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 18,
+        "orderId": "order-x6",
+        "cashEarned": 158
+      }
+    },
+    {
+      "tick": 57,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x6"
+      }
+    },
+    {
+      "tick": 57,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x6",
+        "cashEarned": 161
+      }
+    },
+    {
+      "tick": 64,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-7",
+        "size": 3,
+        "scheduledTick": 64
+      }
+    },
+    {
+      "tick": 64,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x7",
+        "createdAtTick": 64,
+        "deadlineTick": 74,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 66,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x7",
+        "cashEarned": 175
+      }
+    },
+    {
+      "tick": 66,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x7"
+      }
+    },
+    {
+      "tick": 66,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x7",
+        "cashEarned": 177
+      }
+    },
+    {
+      "tick": 74,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-8",
+        "size": 2,
+        "scheduledTick": 74
+      }
+    },
+    {
+      "tick": 74,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x8",
+        "createdAtTick": 74,
+        "deadlineTick": 84,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 76,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x8",
+        "cashEarned": 191
+      }
+    },
+    {
+      "tick": 76,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x8"
+      }
+    },
+    {
+      "tick": 76,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x8",
+        "cashEarned": 193
+      }
+    },
+    {
+      "tick": 84,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-9",
+        "size": 3,
+        "scheduledTick": 84
+      }
+    },
+    {
+      "tick": 84,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x9",
+        "createdAtTick": 84,
+        "deadlineTick": 94,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 86,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 14,
+        "orderId": "order-x9",
+        "cashEarned": 207
+      }
+    },
+    {
+      "tick": 86,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x9"
+      }
+    },
+    {
+      "tick": 86,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x9",
+        "cashEarned": 209
+      }
+    },
+    {
+      "tick": 94,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-10",
+        "size": 2,
+        "scheduledTick": 94
+      }
+    },
+    {
+      "tick": 94,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x10",
+        "createdAtTick": 94,
+        "deadlineTick": 104,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 96,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 22,
+        "orderId": "order-x10",
+        "cashEarned": 231
+      }
+    },
+    {
+      "tick": 96,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x10"
+      }
+    },
+    {
+      "tick": 96,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 3,
+        "orderId": "order-x10",
+        "cashEarned": 234
+      }
+    },
+    {
+      "tick": 104,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "guest_arrived",
+        "partyId": "party-11",
+        "size": 4,
+        "scheduledTick": 104
+      }
+    },
+    {
+      "tick": 104,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_created",
+        "orderId": "order-x11",
+        "createdAtTick": 104,
+        "deadlineTick": 114,
+        "eligible": true
+      }
+    },
+    {
+      "tick": 106,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "revenue",
+        "amount": 11,
+        "orderId": "order-x11",
+        "cashEarned": 245
+      }
+    },
+    {
+      "tick": 106,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "order_served",
+        "orderId": "order-x11"
+      }
+    },
+    {
+      "tick": 106,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "ledger_entry",
+        "category": "tip",
+        "amount": 2,
+        "orderId": "order-x11",
+        "cashEarned": 247
+      }
+    },
+    {
+      "tick": 120,
+      "kind": "measurement",
+      "payload": {
+        "measurement": "episode_terminal",
+        "benchmarkVersion": "restaurant-fixed-workers/v2",
+        "durationTicks": 120,
+        "cashEarned": 247,
+        "cashTarget": 140,
+        "targetReached": true
+      }
+    }
+  ],
+  "tsScore": {
+    "benchmarkVersion": "restaurant-fixed-workers/v2",
+    "service": 100,
+    "resources": 100,
+    "recovery": null,
+    "safety": 100,
+    "composite": 100,
+    "durationTicks": 120,
+    "cashEarned": 247,
+    "cashTarget": 140,
+    "targetReached": true,
+    "validTerminalState": true,
+    "raw": {
+      "eligibleOrders": 13,
+      "onTimeOrders": 13,
+      "netOperatingReturn": 247,
+      "recoveryTime": null,
+      "safetyViolations": 0
+    }
+  }
+}
