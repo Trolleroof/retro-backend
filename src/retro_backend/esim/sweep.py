@@ -9,8 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from retro_backend.esim.case import CaseError, load_case
+from retro_backend.esim.case import (
+    FIXED_WORKER_BENCHMARK_VERSION_V2,
+    CaseError,
+    load_case,
+    load_fixed_worker_case_v2,
+)
 from retro_backend.esim.cli import _run_once  # pyright: ignore[reportPrivateUsage]
+from retro_backend.esim.fixed_workers_v2_runner import FixedWorkersV2Config, run_fixed_workers_v2
 from retro_backend.esim.runner import RunnerConfig
 
 REQUIRED_ARTIFACTS = (
@@ -35,6 +41,10 @@ class SweepConfig:
     max_turns: int | None = None
     rerun_provider_invalid: bool = False
     dry_run: bool = False
+    engine_repo: Path | None = None
+    nim_api_keys_file: Path | None = None
+    models: tuple[str, ...] = ()
+    case_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.benchmark_version.strip():
@@ -45,6 +55,15 @@ class SweepConfig:
             raise ValueError("request_timeout must be positive")
         if self.max_turns is not None and self.max_turns < 1:
             raise ValueError("max_turns must be positive when set")
+        if (
+            self.benchmark_version == FIXED_WORKER_BENCHMARK_VERSION_V2
+            and not self.dry_run
+            and (
+                self.engine_repo is None
+                or not (self.engine_repo / "src/games/restaurant-arena/restaurant-game.ts").is_file()
+            )
+        ):
+            raise ValueError("v2 requires --engine-repo pointing to a merged Restaurant Arena checkout")
 
 
 EpisodeRunner = Callable[[str, str, Path, int, SweepConfig], Awaitable[None]]
@@ -75,12 +94,24 @@ def _model_roster(path: Path) -> tuple[str, ...]:
 
 def _case_registry(path: Path, benchmark_version: str, *, dry_run: bool) -> tuple[str, ...]:
     payload = _read_json(path)
-    if not isinstance(payload, dict) or not isinstance(payload.get("cases"), list):
-        raise ValueError("case registry must be an object with a cases array")
+    if not isinstance(payload, dict):
+        raise ValueError("case registry must be an object")
+    case_values = payload.get("heldOutCases") if benchmark_version == FIXED_WORKER_BENCHMARK_VERSION_V2 else payload.get("cases")
+    if not isinstance(case_values, list):
+        raise ValueError("case registry does not contain the expected cases")
     if not dry_run and payload.get("status") != "frozen":
         raise ValueError("case registry is not frozen; pass --dry-run until Step 3 and Step 4 pass")
     case_ids: list[str] = []
-    for case in payload["cases"]:
+    for case in case_values:
+        if benchmark_version == FIXED_WORKER_BENCHMARK_VERSION_V2:
+            if not isinstance(case, str):
+                raise ValueError("every v2 registry case must be a caseId string")
+            case_ids.append(case)
+            if not dry_run:
+                loaded = load_fixed_worker_case_v2(case)
+                if loaded.benchmark_version != benchmark_version:
+                    raise ValueError(f"case {case!r} does not match benchmark version {benchmark_version!r}")
+            continue
         if not isinstance(case, dict) or not isinstance(case.get("caseId"), str):
             raise ValueError("every registry case needs a caseId")
         case_id = case["caseId"]
@@ -100,9 +131,19 @@ def _case_registry(path: Path, benchmark_version: str, *, dry_run: bool) -> tupl
 
 
 def validate_sweep_inputs(config: SweepConfig) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    return _model_roster(config.roster_path), _case_registry(
-        config.registry_path, config.benchmark_version, dry_run=config.dry_run
-    )
+    models = _model_roster(config.roster_path)
+    cases = _case_registry(config.registry_path, config.benchmark_version, dry_run=config.dry_run)
+    if config.models:
+        unknown = set(config.models) - set(models)
+        if unknown:
+            raise ValueError(f"requested models are not in roster: {', '.join(sorted(unknown))}")
+        models = config.models
+    if config.case_ids:
+        unknown = set(config.case_ids) - set(cases)
+        if unknown:
+            raise ValueError(f"requested cases are not in registry: {', '.join(sorted(unknown))}")
+        cases = config.case_ids
+    return models, cases
 
 
 def _component(value: str) -> str:
@@ -164,6 +205,23 @@ def _next_attempt(case_dir: Path) -> tuple[int, Path]:
 async def _run_episode(
     model: str, case_id: str, out_dir: Path, attempt_number: int, config: SweepConfig
 ) -> None:
+    if config.benchmark_version == FIXED_WORKER_BENCHMARK_VERSION_V2:
+        assert config.engine_repo is not None
+        await run_fixed_workers_v2(
+            FixedWorkersV2Config(
+                case_id=case_id,
+                model=model,
+                engine_repo=config.engine_repo,
+                max_attempts=config.retry_budget + 1,
+                max_output_tokens=config.max_output_tokens,
+                request_timeout=config.request_timeout,
+                nim_api_keys_file=config.nim_api_keys_file,
+            ),
+            out_dir,
+            episode_id=f"{config.benchmark_version}/{model}/{case_id}/{attempt_number}",
+            attempt_number=attempt_number,
+        )
+        return
     runner_config = RunnerConfig(
         case_id=case_id,
         model=model,
@@ -187,7 +245,7 @@ async def _run_episode(
 
 def _metric(grade: Mapping[str, Any], name: str) -> float | None:
     aliases = {name, name.lower(), name[0].lower() + name[1:]}
-    for block_name in ("benchmarkMetrics", "metrics"):
+    for block_name in ("scores", "benchmarkMetrics", "metrics"):
         block = grade.get(block_name)
         if isinstance(block, Mapping):
             for alias in aliases:
@@ -304,6 +362,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-turns", type=int, default=None)
     parser.add_argument("--rerun-provider-invalid", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--engine-repo", type=Path)
+    parser.add_argument("--nim-api-keys-file", type=Path)
+    parser.add_argument("--models", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
+    parser.add_argument("--case-ids", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     return parser
 
 

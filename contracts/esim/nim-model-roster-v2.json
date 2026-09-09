@@ -1,0 +1,13 @@
+{
+  "status": "candidate",
+  "models": [
+    "nim:moonshotai/kimi-k3",
+    "nim:deepseek-ai/deepseek-v4-pro-0813",
+    "nim:deepseek-ai/deepseek-v4-flash-0731",
+    "nim:nvidia/nemotron-3.5-lightning-30b-a3b",
+    "nim:nvidia/nemotron-3-ultra-550b-a55b",
+    "nim:google/diffusiongemma-26b-a4b-it",
+    "nim:nvidia/nemotron-3-super-120b-a12b",
+    "nim:google/gemma-4-31b-it"
+  ]
+}
