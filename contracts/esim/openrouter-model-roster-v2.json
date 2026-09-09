@@ -8,7 +8,7 @@
     "openrouter:deepseek/deepseek-v4-flash-0731",
     "openrouter:nvidia/nemotron-3.5-lightning",
     "openrouter:nvidia/nemotron-3-ultra-550b-a55b",
-    "openrouter:nvidia/nemotron-3-super-120b-a12b",
+    "openrouter:google/gemma-4-26b-a4b-it",
     "openrouter:google/gemma-4-31b-it"
   ],
   "excluded": [
