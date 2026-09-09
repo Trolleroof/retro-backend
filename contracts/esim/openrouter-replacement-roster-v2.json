@@ -1,0 +1,11 @@
+{
+  "status": "candidate",
+  "provider": "openrouter",
+  "routePolicy": "default-openrouter-route with request fallbacks disabled",
+  "purpose": "Replacement lane for OpenRouter models that remain provider-invalid after the longer-timeout retry.",
+  "models": [
+    "openrouter:google/gemini-3.7-flash",
+    "openrouter:z-ai/glm-5.3",
+    "openrouter:x-ai/grok-4.6"
+  ]
+}
