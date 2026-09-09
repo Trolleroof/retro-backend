@@ -84,7 +84,7 @@ def test_calibration_ran_all_policies_on_every_development_case() -> None:
 def test_typescript_fixture_regrades_to_the_same_v2_score_and_schedule() -> None:
     fixture = _json(PARITY)
     case = load_fixed_worker_case_v2(fixture["caseId"])
-    actual = grade_benchmark_events_v2(fixture["events"])
+    actual = grade_benchmark_events_v2(fixture["events"], case)
     expected = fixture["tsScore"]
     raw = expected["raw"]
 
@@ -106,7 +106,7 @@ def test_typescript_fixture_regrades_to_the_same_v2_score_and_schedule() -> None
         for event in fixture["events"]
         if event["payload"]["measurement"] == "guest_arrived"
     ] == list(case.arrival_ticks)
-    assert verify_benchmark_replay_v2(fixture["events"], actual) is True
+    assert verify_benchmark_replay_v2(fixture["events"], actual, case) is True
     Draft202012Validator(_json(SCORE_SCHEMA)).validate(actual.model_dump(by_alias=True))
 
 
@@ -119,7 +119,7 @@ def test_v2_fails_closed_on_terminal_cash_timer_and_deadline_mismatches() -> Non
         if event["payload"]["measurement"] != "episode_terminal"
     ]
     with pytest.raises(BenchmarkScoreError, match="episode_terminal"):
-        grade_benchmark_events_v2(missing_terminal)
+        grade_benchmark_events_v2(missing_terminal, load_fixed_worker_case_v2(fixture["caseId"]))
 
     wrong_deadline = json.loads(json.dumps(fixture["events"]))
     created = next(
@@ -127,7 +127,7 @@ def test_v2_fails_closed_on_terminal_cash_timer_and_deadline_mismatches() -> Non
     )
     created["payload"]["deadlineTick"] = created["tick"]
     with pytest.raises(BenchmarkScoreError, match="deadline"):
-        grade_benchmark_events_v2(wrong_deadline)
+        grade_benchmark_events_v2(wrong_deadline, load_fixed_worker_case_v2(fixture["caseId"]))
 
     wrong_cash = json.loads(json.dumps(fixture["events"]))
     terminal = next(
@@ -135,12 +135,30 @@ def test_v2_fails_closed_on_terminal_cash_timer_and_deadline_mismatches() -> Non
     )
     terminal["payload"]["cashEarned"] += 1
     with pytest.raises(BenchmarkScoreError, match="cashEarned"):
-        grade_benchmark_events_v2(wrong_cash)
+        grade_benchmark_events_v2(wrong_cash, load_fixed_worker_case_v2(fixture["caseId"]))
+
+    lowered_target = json.loads(json.dumps(fixture["events"]))
+    for event in lowered_target:
+        if event["payload"]["measurement"] in {"benchmark_config", "episode_terminal"}:
+            event["payload"]["cashTarget"] = 1
+    with pytest.raises(BenchmarkScoreError, match="cashTarget"):
+        grade_benchmark_events_v2(lowered_target, load_fixed_worker_case_v2(fixture["caseId"]))
+
+    thinned = [
+        event for event in fixture["events"]
+        if event["payload"]["measurement"] != "guest_arrived" or event["payload"]["scheduledTick"] != 14
+    ]
+    with pytest.raises(BenchmarkScoreError, match="schedule"):
+        grade_benchmark_events_v2(thinned, load_fixed_worker_case_v2(fixture["caseId"]))
+
+    mismatched_case = load_fixed_worker_case_v2("dinner-rush-v2-dev-2")
+    with pytest.raises(BenchmarkScoreError, match="cashTarget"):
+        grade_benchmark_events_v2(fixture["events"], mismatched_case)
 
 
 def test_all_requirements_add_terminal_target_and_handover_gates() -> None:
     fixture = _json(PARITY)
-    score = grade_benchmark_events_v2(fixture["events"])
+    score = grade_benchmark_events_v2(fixture["events"], load_fixed_worker_case_v2(fixture["caseId"]))
 
     passing = BenchmarkEpisodeV2(
         case_id=fixture["caseId"],

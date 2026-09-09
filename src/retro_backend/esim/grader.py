@@ -34,6 +34,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from retro_backend.esim.case import FixedWorkerCaseV2, load_fixed_worker_case_v2
 from retro_backend.esim.contracts import ArenaModel, RestaurantState
 from retro_backend.esim.probes.correction_uptake import grade_correction_uptake
 from retro_backend.esim.probes.models import ProbeResult
@@ -474,8 +475,10 @@ def grade_benchmark_events(events: Sequence[Mapping[str, object]]) -> BenchmarkS
 
 def grade_benchmark_events_v2(
     events: Sequence[Mapping[str, object]],
+    case: FixedWorkerCaseV2 | str,
 ) -> BenchmarkScoresV2:
-    """Score ``restaurant-fixed-workers/v2`` and fail closed on its timer contract."""
+    """Score v2 only when the trace is bound to its frozen case."""
+    frozen = load_fixed_worker_case_v2(case) if isinstance(case, str) else case
     rows = _benchmark_rows(events, _BENCHMARK_MEASUREMENTS_V2)
     configs = [payload for _, payload in rows if payload["measurement"] == "benchmark_config"]
     if len(configs) != 1:
@@ -485,14 +488,21 @@ def grade_benchmark_events_v2(
     config = configs[0]
     if config.get("benchmarkVersion") != BENCHMARK_VERSION_V2:
         raise BenchmarkScoreError("benchmark_config has invalid benchmarkVersion")
+    if config.get("caseId") not in (None, frozen.case_id):
+        raise BenchmarkScoreError("benchmark_config caseId does not match frozen case")
     duration = _measurement_int(config, "durationTicks")
     if duration != 120:
         raise BenchmarkScoreError("benchmark_config durationTicks must be 120")
     cash_target = _measurement_number(config, "cashTarget")
-    if cash_target <= 0:
-        raise BenchmarkScoreError("benchmark_config cashTarget must be positive")
+    if cash_target != frozen.cash_target:
+        raise BenchmarkScoreError("benchmark_config cashTarget does not match frozen case")
+    if config.get("resourceCeiling") != frozen.thresholds.resource_ceiling:
+        raise BenchmarkScoreError("benchmark_config resourceCeiling does not match frozen case")
+    if config.get("recoveryApplicable") is not (frozen.thresholds.recovery is not None):
+        raise BenchmarkScoreError("benchmark_config recovery applicability does not match frozen case")
 
     arrivals: set[str] = set()
+    arrival_ticks: list[int] = []
     running_cash = 0.0
     for tick, payload in rows:
         if payload["measurement"] == "guest_arrived":
@@ -500,6 +510,7 @@ def grade_benchmark_events_v2(
             if party_id in arrivals:
                 raise BenchmarkScoreError(f"duplicate guest_arrived for {party_id}")
             arrivals.add(party_id)
+            arrival_ticks.append(tick)
             scheduled_tick = _measurement_int(payload, "scheduledTick")
             size = _measurement_int(payload, "size")
             if tick != scheduled_tick or tick >= duration or size < 1:
@@ -518,6 +529,13 @@ def grade_benchmark_events_v2(
                 _measurement_number(payload, "cashEarned"), running_cash, abs_tol=1e-9
             ):
                 raise BenchmarkScoreError("ledger_entry cashEarned is inconsistent")
+
+    if arrival_ticks != list(frozen.arrival_ticks):
+        raise BenchmarkScoreError("guest_arrived schedule does not match frozen case")
+    expected_failures = [(incident.tick, incident.target_id) for incident in frozen.event_schedule if incident.kind == "oven_failure"]
+    actual_failures = [(tick, str(payload.get("equipmentId"))) for tick, payload in rows if payload["measurement"] == "equipment_failed"]
+    if actual_failures != expected_failures:
+        raise BenchmarkScoreError("equipment failure measurements do not match frozen case")
 
     terminals = [
         (tick, payload) for tick, payload in rows if payload["measurement"] == "episode_terminal"
@@ -597,10 +615,10 @@ def verify_benchmark_replay(
 
 
 def verify_benchmark_replay_v2(
-    events: Sequence[Mapping[str, object]], recorded: BenchmarkScoresV2
+    events: Sequence[Mapping[str, object]], recorded: BenchmarkScoresV2, case: FixedWorkerCaseV2 | str
 ) -> bool:
     """Verify a recorded v2 score from its saved measurement trace."""
-    return grade_benchmark_events_v2(events) == recorded
+    return grade_benchmark_events_v2(events, case) == recorded
 
 
 def summarize_benchmark(
