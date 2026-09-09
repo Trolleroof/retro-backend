@@ -1,6 +1,6 @@
 # Defensible fixed-worker restaurant benchmark plan
 
-Status: proposed for review. This document does not authorize implementation.
+Status: v1 frozen; v2 environment, cases, calibration, and cross-engine parity merged. Live v2 model runs have not started.
 
 Branch: `codex/restaurant-fixed-workers-benchmark`
 
@@ -30,6 +30,19 @@ Keep the product simulator and the frozen evaluation harness separate.
 | Case registry and reports | `retro-backend` | Benchmark version, nine held-out configurations, scripted-policy calibration artifacts, per-model results, and provider audit artifacts |
 
 The `retro-backend` runner must pin the `tui-gamepigeon` engine commit or an exported versioned environment contract. Do not duplicate restaurant rules in the backend. If a semantic environment change is needed, update `tui-gamepigeon`, version the contract, and then update the corresponding backend case registry and grader.
+
+## Current execution status
+
+`restaurant-fixed-workers/v1` remains frozen. `restaurant-fixed-workers/v2` now has 120-tick timed levels, deterministic arrivals, shared human/model observations, trace scoring, 9 development cases, 9 held-out cases, calibration evidence, and TypeScript/Python parity.
+
+| Next task | Repository | Suggested model | Gate |
+| --- | --- | --- | --- |
+| Provider preflight and one-case v2 smoke run | `retro-backend` | `gpt-5.6-luna` | One served model completes, artifacts and score write, no provider-invalid result |
+| Three-model v2 representative run | `retro-backend` | `gpt-5.6-sol` | 3 models × 9 cases, at least 8 valid cases per model, no score saturation |
+| Audit representative artifacts | `retro-backend` | `gpt-6-astra` | Recompute scores from traces; verify model IDs, version, and valid denominators |
+| Review benchmark display PR #309 | `tui-gamepigeon` | `gpt-5.6-luna` | UI reports backend facts only and has correct empty/error states |
+
+Do not start a v2 30-model sweep until the representative-run audit passes. PPO workers remain a separate experiment.
 
 ## Suggested model assignments
 
