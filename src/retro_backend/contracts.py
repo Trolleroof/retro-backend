@@ -26,6 +26,7 @@ GameType = Literal[
     "connect4",
     "lightsout",
     "sudoku",
+    "restaurant-arena",
 ]
 
 ID_SUFFIX_MAX_LENGTH = 120

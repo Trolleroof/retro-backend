@@ -32,6 +32,7 @@ def test_game_type_contract_lists_supported_games() -> None:
         "connect4",
         "lightsout",
         "sudoku",
+        "restaurant-arena",
     )
 
 
