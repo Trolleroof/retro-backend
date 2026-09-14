@@ -102,14 +102,18 @@ use. Note that `cloudflare/r2-lifecycle.json` has **no** expiry rule for `episod
   "parquet_bytes": 2048,
   "parquet_sha256": "…64 hex…",
   "source_chunk_ids": ["chk_…", "chk_…", "chk_…"],
+  "missing_chunk_ids": [],
   "written_at_ms": 1784289600123
 }
 ```
 
 `chunk_count`, `first_event_sequence` and `last_event_sequence` come from the `episode.ready`
 message and describe the episode as assembled. `source_chunk_ids` lists only the chunks whose
-validated artifact was actually readable, so `len(source_chunk_ids) < chunk_count` is the signal
-that rows are missing.
+validated artifact was actually readable and `missing_chunk_ids` names the rest, so a non-empty
+`missing_chunk_ids` is the signal that rows are missing, and
+`len(source_chunk_ids) + len(missing_chunk_ids) == chunk_count`. An `incomplete` or `abandoned`
+episode is expected to have gaps; a `complete` one with a non-empty `missing_chunk_ids` means a
+validated artifact expired before the writer reached it.
 
 `episode_id` is `sha256(f"{user_id}:{game_id}")` hex — the same value the EpisodeAssembler Durable
 Object uses as its object name.

@@ -109,12 +109,23 @@ npx wrangler queues create retro-episode-events-dlq
    goes missing. Regenerate the deploy config with `make prepare-deployment-config` so
    `wrangler.production.toml` picks them up.
 
-3. Optionally override the defaults under `[vars]`:
+3. Both bounds are pinned under `[vars]` in `wrangler.toml` (and so in the rendered
+   `wrangler.production.toml`) rather than left to the code defaults, so they are tunable
+   without a code deploy:
 
-| Var | Default | Meaning |
+| Var | Value | Meaning |
 | --- | --- | --- |
 | `EPISODE_IDLE_TTL_MS` | `21600000` (6h) | Idle time after the last chunk before an episode is flushed. |
 | `EPISODE_MAX_CHUNKS` | `512` | Hard cap on chunks per episode. |
+
+   `EPISODE_MAX_CHUNKS` is also the ceiling on one `EpisodeConsumer` invocation, which is
+   the binding constraint: that consumer reads every validated chunk of the episode into
+   memory, runs the BC join, and builds an uncompressed PLAIN Parquet, all inside a single
+   Python Worker. The client caps a chunk at 120 KiB, so `512` is 61 MiB of JSON before any
+   parsing overhead — a worst-case episode at that ceiling will not fit in a Worker. It has
+   not bitten yet because real chunks cut at 50 events long before the byte cap, but if
+   episode messages start failing on memory or CPU, this is the lever, and the failures now
+   surface through `QUEUE_CHECKS` rather than accumulating unseen.
 
 4. Deploy per [production-setup.md](production-setup.md). The `retro-episode-events` consumer landed with
    [#30](https://github.com/adavyas/retro-backend/issues/30) and is declared in `wrangler.toml`; it binds on the next

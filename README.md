@@ -345,6 +345,8 @@ Non-secret Worker variables live in `wrangler.toml`:
 - `MAX_RESULT_BYTES=16384`
 - `CHUNK_DEDUP_TTL_MS=172800000`
 - `CHUNK_PUBLISHING_LEASE_MS=30000`
+- `EPISODE_MAX_CHUNKS=512`
+- `EPISODE_IDLE_TTL_MS=21600000`
 - `ENVIRONMENT=production`
 - `PUBLIC_GAME_URL=https://gamepigeon.example`
 - `ALLOWED_GAME_ORIGINS=https://gamepigeon.example`

@@ -10,8 +10,10 @@ all three option combinations the port exposes, so regenerating the fixture is
 the only way to change an expectation.
 """
 
+import copy
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -56,6 +58,67 @@ def test_ignores_non_human_actors_by_default() -> None:
     assert any(
         sample["actor"] == "environment" for sample in case["output_actors_human_environment"]
     )
+
+
+def _join_case_input() -> list[dict[str, Any]]:
+    """A mutable copy of the canonical one-sample join case."""
+    return copy.deepcopy(CASES["join_across_chunks"]["input"])
+
+
+def _event(chunks: list[dict[str, Any]], event_type: str, **match: object) -> dict[str, Any]:
+    return next(
+        event
+        for chunk in chunks
+        for event in chunk["events"]
+        if event["event_type"] == event_type
+        and all(event["payload"].get(key) == value for key, value in match.items())
+    )
+
+
+def test_absent_ruleset_id_reads_as_null_rather_than_discarding_the_episode() -> None:
+    """Regression: nothing requires ``ruleset_id``, so it must not be fatal.
+
+    The v2 event contract and the published JSON Schema constrain ``payload`` to
+    an object and no further, and the Parquet column is OPTIONAL. Subscripting
+    it raised ``KeyError``, which ``build_rows`` converts into an
+    ``EpisodeConversionError`` that drops every sample in the episode.
+    """
+    chunks = _join_case_input()
+    del _event(chunks, "episode_started")["payload"]["ruleset_id"]
+
+    samples = extract_behavior_cloning_samples(chunks)
+    assert len(samples) == len(CASES["join_across_chunks"]["output_default"])
+    assert [sample["ruleset_id"] for sample in samples] == [None]
+
+
+def test_observation_without_an_id_is_skipped_rather_than_fatal() -> None:
+    chunks = _join_case_input()
+    del _event(chunks, "observation", observation_id="obs_1")["payload"]["observation_id"]
+
+    # obs_2 still resolves, so the one human control still joins.
+    assert len(extract_behavior_cloning_samples(chunks)) == 1
+
+
+def test_outcome_without_a_caused_by_id_is_skipped_rather_than_fatal() -> None:
+    chunks = _join_case_input()
+    del _event(chunks, "outcome_changed")["payload"]["caused_by_event_id"]
+
+    samples = extract_behavior_cloning_samples(chunks)
+    assert len(samples) == 1
+    assert samples[0]["reward"] is None
+    assert samples[0]["moved"] is None
+
+
+def test_control_without_a_string_action_is_dropped_alone() -> None:
+    """The one deliberate divergence: a sample no Parquet row can hold is skipped.
+
+    bc-export.ts would emit it with ``action: undefined``; ``sample_to_row``
+    rejects that, which would cost the whole episode instead of one control.
+    """
+    chunks = _join_case_input()
+    del _event(chunks, "control_changed", actor="human")["payload"]["action"]
+
+    assert extract_behavior_cloning_samples(chunks) == []
 
 
 def test_game_id_ordering_follows_icu_collation_not_code_points() -> None:

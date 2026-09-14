@@ -99,22 +99,50 @@ def extract_behavior_cloning_samples(
 
     Mirrors ``extractBehaviorCloningSamples`` in bc-export.ts, including its
     cross-chunk dedup-by-event_id and its ``moved is False`` no-op filter.
+
+    Absent payload fields read as ``None`` rather than raising, matching how the
+    TypeScript reads a missing property; the sole divergence is that a control
+    whose ``action`` is not a string is skipped instead of emitting a sample no
+    Parquet row can hold. Neither changes the output for a conformant trace.
     """
     actor_set = set(actors) if actors is not None else set(DEFAULT_ACTORS)
     events = _ordered_unique_events(chunks)
     observations: dict[str, dict[str, Any]] = {}
     outcomes: dict[str, dict[str, Any]] = {}
-    rulesets: dict[str, str] = {}
+    rulesets: dict[str, str | None] = {}
     chunks_by_game = {chunk["game_id"]: chunk for chunk in chunks}
 
+    # Every payload field below is read with ``.get``. The v2 event contract
+    # guarantees ``payload`` is an object but says nothing about what is inside
+    # it, so a contract-valid trace may omit any of these. In TypeScript that
+    # reads as ``undefined`` and flows through; subscripting here would raise
+    # ``KeyError``, which ``build_rows`` turns into an ``EpisodeConversionError``
+    # that discards the *whole episode* over one absent field. ``ruleset_id`` is
+    # the live case: nothing in the contract or the published JSON Schema
+    # requires it, and the Parquet column is already OPTIONAL.
     for event in events:
         event_type = event.get("event_type")
+        payload = event.get("payload")
+        if not isinstance(payload, Mapping):
+            continue
         if event_type == "observation":
-            observations[event["payload"]["observation_id"]] = event
+            # An id that is not a string can never be matched by a
+            # ``based_on_observation_id`` lookup below, which is guarded against
+            # falsy values, so declining to index it is what TypeScript does.
+            observation_id = payload.get("observation_id")
+            if isinstance(observation_id, str):
+                observations[observation_id] = event
         elif event_type == "outcome_changed":
-            outcomes[event["payload"]["caused_by_event_id"]] = event
+            caused_by_event_id = payload.get("caused_by_event_id")
+            if isinstance(caused_by_event_id, str):
+                outcomes[caused_by_event_id] = event
         elif event_type == "episode_started":
-            rulesets[event["game_id"]] = event["payload"]["ruleset_id"]
+            # Stored even when absent, so a later episode_started still wins the
+            # last-write-wins race the ordering above establishes.
+            ruleset_id = payload.get("ruleset_id")
+            rulesets[event["game_id"]] = (
+                ruleset_id if isinstance(ruleset_id, str) else None
+            )
 
     samples: list[dict[str, Any]] = []
     for event in events:
@@ -124,6 +152,14 @@ def extract_behavior_cloning_samples(
         actor = payload.get("actor")
         based_on_observation_id = payload.get("based_on_observation_id")
         if actor not in actor_set or not based_on_observation_id:
+            continue
+        # The one deliberate divergence from bc-export.ts: TypeScript emits a
+        # sample whose ``action`` is ``undefined``, which this pipeline cannot
+        # serialize -- ``sample_to_row`` rejects it and the episode is lost.
+        # Dropping the one malformed control is strictly better, and no
+        # contract-valid control is affected.
+        action = payload.get("action")
+        if not isinstance(action, str):
             continue
         observation = observations.get(based_on_observation_id)
         if observation is None or observation["game_id"] != event["game_id"]:
@@ -156,7 +192,7 @@ def extract_behavior_cloning_samples(
                 "control_event_id": event["event_id"],
                 "observation_id": observation["payload"]["observation_id"],
                 "observation": _policy_observation(observation["payload"]),
-                "action": payload["action"],
+                "action": action,
                 "actor": actor,
                 "reward": outcome_payload.get("engine_reward")
                 if outcome_payload is not None

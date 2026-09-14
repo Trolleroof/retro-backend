@@ -161,6 +161,11 @@ def build_manifest(
         "parquet_bytes": len(parquet_body),
         "parquet_sha256": hashlib.sha256(parquet_body).hexdigest(),
         "source_chunk_ids": list(rows.source_chunk_ids),
+        # Named explicitly rather than left to be inferred from the gap between
+        # chunk_count and source_chunk_ids: an incomplete or abandoned episode
+        # legitimately writes a Parquet short of rows, and a reader needs to
+        # tell "this episode had gaps" from "the join emitted nothing".
+        "missing_chunk_ids": list(rows.missing_chunk_ids),
         "written_at_ms": written_at_ms,
     }
 

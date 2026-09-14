@@ -7,10 +7,18 @@ from typing import cast
 
 from .bindings import QueueBinding, is_binding_null, value_field
 
+# ``terminal`` marks a queue nothing consumes: any backlog on one is stranded
+# data, so it fails on the first message rather than on an age threshold.
+# ``retro-episode-events`` and its dead-letter queue carry the second half of the
+# pipeline -- episode assembly, Parquet, and the D1 index -- and went unwatched,
+# so a wedged Parquet writer accumulated silently in a queue with no consumer
+# and no archival path.
 QUEUE_CHECKS = (
     ("GAMEPLAY_QUEUE", "retro-gameplay-events", False),
     ("GAMEPLAY_DLQ", "retro-gameplay-events-dlq", False),
     ("GAMEPLAY_ARCHIVE_DLQ", "retro-gameplay-events-archive-dlq", True),
+    ("EPISODE_QUEUE", "retro-episode-events", False),
+    ("EPISODE_DLQ", "retro-episode-events-dlq", True),
 )
 MAX_AGE_MS = 10 * 60 * 1000
 

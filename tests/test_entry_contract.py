@@ -1441,6 +1441,8 @@ def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
         "MAX_RESULT_BYTES": 16_384,
         "CHUNK_DEDUP_TTL_MS": 172_800_000,
         "CHUNK_PUBLISHING_LEASE_MS": 30_000,
+        "EPISODE_MAX_CHUNKS": 512,
+        "EPISODE_IDLE_TTL_MS": 21_600_000,
         "ENVIRONMENT": "production",
         "PUBLIC_GAME_URL": "https://gamepigeon.example",
         "ALLOWED_GAME_ORIGINS": "https://gamepigeon.example",
@@ -1449,6 +1451,10 @@ def test_wrangler_contains_only_approved_nonsecret_vars() -> None:
     assert "`AUTH_CACHE_TTL_SECONDS=60`" in readme
     assert "`AUTH_SESSION_URL=https://auth.runretroarcade.com/api/auth/get-session`" in readme
     assert "`MAX_RESULT_BYTES=16384`" in readme
+    # Pinned rather than left to the code defaults so the episode-assembly and
+    # Parquet-writer bounds are tunable without a code deploy.
+    assert "`EPISODE_MAX_CHUNKS=512`" in readme
+    assert "`EPISODE_IDLE_TTL_MS=21600000`" in readme
     assert "`ENVIRONMENT=production`" in readme
     assert "`PUBLIC_GAME_URL=https://gamepigeon.example`" in readme
     assert "`ALLOWED_GAME_ORIGINS=https://gamepigeon.example`" in readme

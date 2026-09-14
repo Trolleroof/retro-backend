@@ -20,6 +20,17 @@ MAX_CHUNK_BYTES = 262144
 MAX_RESULT_BYTES = 16384
 CHUNK_DEDUP_TTL_MS = 172800000
 CHUNK_PUBLISHING_LEASE_MS = 30000
+# Episode assembly bounds, pinned here rather than left to the code defaults in
+# episode_assembler.py so they are visible and tunable without a code deploy.
+# EPISODE_MAX_CHUNKS is the ceiling on one EpisodeConsumer invocation: it reads
+# every validated chunk of an episode into memory, runs the BC join, and builds
+# an uncompressed PLAIN Parquet, all inside one Python Worker. The client caps a
+# chunk at 120 KiB (overlay/recording.ts), so 512 is 61 MiB of JSON before
+# parsing overhead -- comfortably past the Worker memory limit for a worst-case
+# episode. Lower it if episode messages start failing; see the note in
+# docs/episode-assembly.md.
+EPISODE_MAX_CHUNKS = 512
+EPISODE_IDLE_TTL_MS = 21600000
 ENVIRONMENT = "production"
 PUBLIC_GAME_URL = "https://gamepigeon.example"
 ALLOWED_GAME_ORIGINS = "https://gamepigeon.example"

@@ -114,6 +114,7 @@ async def test_happy_path_writes_parquet_then_manifest_then_the_d1_row(
         "parquet_bytes": len(parquet_body),
         "parquet_sha256": hashlib.sha256(parquet_body).hexdigest(),
         "source_chunk_ids": [envelope["chunk_id"] for envelope in envelopes],
+        "missing_chunk_ids": [],
         "written_at_ms": WRITTEN_AT_MS,
     }
 
@@ -157,6 +158,26 @@ async def test_every_terminal_status_produces_a_readable_file(
     manifest = json.loads(_put(fake_env, MANIFEST_KEY).body)
     assert manifest["status"] == status
     assert manifest["row_count"] == 5
+
+
+async def test_manifest_names_the_chunks_the_join_could_not_read(
+    fake_env: Any,
+) -> None:
+    """A gap must be stated, not left to be inferred from a short row count.
+
+    ``validated/`` expires at seven days, so an episode replayed late legitimately
+    loses chunks. Without this the Parquet is simply short and nothing says why.
+    """
+    envelopes, message = three_chunk_episode()
+    seed_chunks(fake_env.RAW_BUCKET, [envelopes[0], envelopes[2]])
+
+    result = await _consumer(fake_env).process(message)
+
+    assert result.status == "written"
+    manifest = json.loads(_put(fake_env, MANIFEST_KEY).body)
+    assert manifest["source_chunk_ids"] == [envelopes[0]["chunk_id"], envelopes[2]["chunk_id"]]
+    assert manifest["missing_chunk_ids"] == [envelopes[1]["chunk_id"]]
+    assert manifest["chunk_count"] == 3
 
 
 async def test_written_parquet_is_readable_and_matches_the_bc_join(

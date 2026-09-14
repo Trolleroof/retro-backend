@@ -155,13 +155,16 @@ nothing in this repo can parse Parquet at runtime.
   "parquet_bytes": 20481,
   "parquet_sha256": "…64 hex…",
   "source_chunk_ids": ["chk_…", "chk_…"],
+  "missing_chunk_ids": [],
   "written_at_ms": 1760000000123
 }
 ```
 
 The fields are the same values the D1 row carries, plus `source_chunk_ids` — the
 chunks the episode was built from, which is what lets you walk back to the
-`validated/` or `raw/` objects behind a suspect episode.
+`validated/` or `raw/` objects behind a suspect episode — and `missing_chunk_ids`,
+the chunks the episode named that the join could not read (expired from
+`validated/`, or never written). The two together account for `chunk_count`.
 
 `parquet_sha256` is the integrity anchor. It is written in three places that must
 agree: the manifest, the D1 row, and the R2 object's own `payload_sha256` custom
@@ -384,9 +387,10 @@ stopping at the first thing that is not true:
    That is the current state of production, not a fault.
 2. **Does a consumer exist?** Until [#30](https://github.com/adavyas/retro-backend/issues/30)
    is deployed, the queue accumulates without a reader. `queues info` shows the
-   consumer list. Backlog with no consumer is expected, not stuck — and because
-   neither episode queue is in `QUEUE_CHECKS`, you will only ever learn about that
-   backlog by looking.
+   consumer list. Backlog with no consumer is expected, not stuck. Both episode
+   queues are in `QUEUE_CHECKS`, so a backlog that outlives the age threshold — or a
+   single message on `retro-episode-events-dlq`, which nothing consumes — fails the
+   five-minute cron rather than waiting to be noticed.
 3. **Is the episode terminal at all?** An episode only emits when it completes or its
    idle TTL expires — `EPISODE_IDLE_TTL_MS` defaults to six hours. An episode whose
    last chunk arrived an hour ago is not stuck, it is waiting.
@@ -453,9 +457,18 @@ safe:
 
 - **Deterministic keys.** The same episode always derives the same Parquet and
   manifest keys, so a retry targets the same object rather than creating a second one.
-- **Conditional writes.** `put_derived` heads the key first and compares
-  `payload_sha256`; identical bytes are a no-op, different bytes raise
+- **Converging writes.** The Parquet and manifest pair goes through `put_object`,
+  which overwrites unconditionally. That is deliberate: a republished episode carries
+  a fresh `written_at_ms` and may see a chunk artifact that has since expired, so its
+  bytes legitimately differ from the first write and a conditional put would wedge the
+  message in a permanent conflict loop. The `validated/` and `rejected/` artifacts are
+  the ones written conditionally, through `put_derived`, which heads the key first and
+  compares `payload_sha256`: identical bytes are a no-op, different bytes raise
   `DerivedObjectConflict` instead of overwriting.
+
+  The cost of that choice is that nothing at the R2 layer stops two *different* episodes
+  from claiming one key. The key carries no `user=` segment, so it holds only as long as
+  `game_id` is unique across users — see the caveat below.
 - **Upsert on `episode_id`.** `ON CONFLICT(episode_id) DO UPDATE` makes the D1 write
   converge rather than error on a replay.
 
@@ -464,6 +477,19 @@ So what you should never see is two objects for one episode, or two rows for one
 violation shows up on `episodes_game_id_idx`, that is not a retry artifact: it means
 two different `episode_id` values (so two different `user_id`s) claimed the same
 `game_id`, and the client is reusing game ids across users.
+
+**Known gap.** That case is detected, not defended against, and it is detected too
+late. `game_id` is client-supplied and only pattern-checked; nothing binds it to the
+authenticated user. Because the Parquet key is
+`episodes/parquet/v1/{game_type}/{YYYY}/{MM}/{DD}/{game_id}.parquet` with no `user=`
+segment, and because R2 is written before D1, the second user's Parquet and manifest
+have already overwritten the first user's by the time the unique index fires — leaving
+the first user's D1 row pointing at an object whose `parquet_sha256` no longer matches,
+and dead-lettering the second user's episode. Every other prefix (`raw/`, `validated/`,
+`rejected/`) is partitioned by `user=` and is unaffected. UUIDv4 game ids make an
+accidental collision negligible, but a malicious or buggy client can reach it. Fixing
+it means re-keying the Parquet dataset, so it is tracked separately from the
+no-migration hardening in this pass.
 
 What you *may* legitimately see is a Parquet object whose `written_at_ms` is well
 after `completed_at_ms`. That is retry lag, and it is fine.
