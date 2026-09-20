@@ -16,7 +16,7 @@ async def test_openrouter_adapter_uses_openrouter_endpoint_and_key() -> None:
         seen["url"] = str(request.url)
         seen["auth"] = request.headers["authorization"]
         seen["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"model": "moonshotai/kimi-k3", "choices": [{"message": {"content": "{\"action\":\"wait\"}", "reasoning": "checked the available action"}}], "usage": {"prompt_tokens": 2, "completion_tokens": 3, "completion_tokens_details": {"reasoning_tokens": 2}}})
+        return httpx.Response(200, json={"model": "moonshotai/kimi-k3", "choices": [{"message": {"content": "{\"action\":\"wait\"}", "reasoning_details": [{"type": "text", "text": "checked "}, {"type": "text", "text": "the available action"}]}}], "usage": {"prompt_tokens": 2, "completion_tokens": 3, "completion_tokens_details": {"reasoning_tokens": 2}}})
 
     adapter = OpenRouterAdapter(
         "moonshotai/kimi-k3",

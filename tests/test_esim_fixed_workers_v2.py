@@ -199,6 +199,6 @@ async def test_fixed_worker_attempt_log_keeps_reasoning() -> None:
     assert action == "wait"
     assert error is None
     record = json.loads(attempts.getvalue())
-    assert config.openrouter_reasoning_effort == "medium"
+    assert config.openrouter_reasoning_effort is None
     assert record["reasoning"] == "waiting preserves the current plan"
     assert record["reasoningTokens"] == 4

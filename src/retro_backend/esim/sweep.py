@@ -46,7 +46,7 @@ class SweepConfig:
     openrouter_api_key_file: Path | None = None
     provider_failure_limit: int = 2
     openrouter_provider_order: tuple[str, ...] = ()
-    openrouter_reasoning_effort: str = "medium"
+    openrouter_reasoning_effort: str | None = None
     models: tuple[str, ...] = ()
     case_ids: tuple[str, ...] = ()
 
@@ -451,7 +451,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--openrouter-api-key-file", type=Path)
     parser.add_argument("--provider-failure-limit", type=int, default=2)
     parser.add_argument("--openrouter-provider", dest="openrouter_provider_order", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
-    parser.add_argument("--openrouter-reasoning-effort", default="medium")
+    parser.add_argument("--openrouter-reasoning-effort")
     parser.add_argument("--models", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     parser.add_argument("--case-ids", type=lambda value: tuple(part.strip() for part in value.split(",") if part.strip()), default=())
     return parser

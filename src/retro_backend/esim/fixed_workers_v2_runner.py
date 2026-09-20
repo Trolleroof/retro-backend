@@ -36,7 +36,7 @@ class FixedWorkersV2Config:
     nim_api_keys_file: Path | None = None
     openrouter_api_key_file: Path | None = None
     openrouter_provider_order: tuple[str, ...] = ()
-    openrouter_reasoning_effort: str = "medium"
+    openrouter_reasoning_effort: str | None = None
 
 
 class _RotatingAdapter:

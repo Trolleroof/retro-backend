@@ -303,14 +303,22 @@ class NimAdapter(ModelAdapter):
             first_choice = choices[0]
             message = first_choice.get("message") if isinstance(first_choice, dict) else None
             content = message.get("content") if isinstance(message, dict) else None
-            raw_reasoning = (
-                message.get("reasoning_content")
-                or message.get("reasoning")
-                or message.get("reasoning_details")
-                if isinstance(message, dict)
-                else None
-            )
-            reasoning = raw_reasoning if isinstance(raw_reasoning, str) else None
+            reasoning = None
+            if isinstance(message, dict):
+                raw_reasoning = message.get("reasoning_content") or message.get("reasoning")
+                if isinstance(raw_reasoning, str):
+                    reasoning = raw_reasoning
+                else:
+                    details = message.get("reasoning_details")
+                    if isinstance(details, list):
+                        parts = [
+                            item["text"]
+                            for item in details
+                            if isinstance(item, dict) and isinstance(item.get("text"), str)
+                        ]
+                        reasoning = "".join(parts) or None
+                    elif isinstance(details, str):
+                        reasoning = details
             finish = first_choice.get("finish_reason") if isinstance(first_choice, dict) else None
 
             # Truncation is decided by finish_reason, not by what content looks
@@ -321,9 +329,7 @@ class NimAdapter(ModelAdapter):
             # model that cannot follow the format and, being retryable, spends
             # two more calls truncating identically. Both are one cause.
             if finish == "length":
-                reasoned = isinstance(message, dict) and bool(
-                    message.get("reasoning_content") or message.get("reasoning")
-                )
+                reasoned = bool(reasoning)
                 where = "before any answer was written" if not content else "mid-answer"
                 detail = f"output token budget exhausted {where}" + (
                     " (spent on reasoning tokens)" if reasoned else ""
