@@ -291,12 +291,26 @@ class NimAdapter(ModelAdapter):
             usage = data.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens") or 0)
             output_tokens = int(usage.get("completion_tokens") or 0)
+            completion_details = usage.get("completion_tokens_details") or {}
+            reasoning_tokens = int(
+                (completion_details.get("reasoning_tokens") if isinstance(completion_details, dict) else 0)
+                or usage.get("reasoning_tokens")
+                or 0
+            )
             raw_served = data.get("model")
             served = raw_served if isinstance(raw_served, str) else None
 
             first_choice = choices[0]
             message = first_choice.get("message") if isinstance(first_choice, dict) else None
             content = message.get("content") if isinstance(message, dict) else None
+            raw_reasoning = (
+                message.get("reasoning_content")
+                or message.get("reasoning")
+                or message.get("reasoning_details")
+                if isinstance(message, dict)
+                else None
+            )
+            reasoning = raw_reasoning if isinstance(raw_reasoning, str) else None
             finish = first_choice.get("finish_reason") if isinstance(first_choice, dict) else None
 
             # Truncation is decided by finish_reason, not by what content looks
@@ -321,6 +335,8 @@ class NimAdapter(ModelAdapter):
                     latency_ms=latency_ms,
                     error=f"{ERR_TRUNCATED}: {detail}",
                     served_model=served,
+                    reasoning=reasoning,
+                    reasoning_tokens=reasoning_tokens,
                 )
 
             if content is None or not isinstance(content, str):
@@ -331,6 +347,8 @@ class NimAdapter(ModelAdapter):
                     latency_ms=latency_ms,
                     error=f"{ERR_PROVIDER_MALFORMED}: missing or non-string 'content' in first choice message",
                     served_model=served,
+                    reasoning=reasoning,
+                    reasoning_tokens=reasoning_tokens,
                 )
 
             return ModelReply(
@@ -340,6 +358,8 @@ class NimAdapter(ModelAdapter):
                 latency_ms=latency_ms,
                 error=None,
                 served_model=served,
+                reasoning=reasoning,
+                reasoning_tokens=reasoning_tokens,
             )
 
         except httpx.TimeoutException as exc:

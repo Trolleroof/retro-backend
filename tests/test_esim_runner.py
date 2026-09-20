@@ -44,13 +44,13 @@ class Replies:
         await self.close()
 
 
-def _reply(text: str | None, error: str | None = None) -> ModelReply:
-    return ModelReply(text=text, input_tokens=3, output_tokens=2, latency_ms=4.0, error=error)
+def _reply(text: str | None, error: str | None = None, reasoning: str | None = None) -> ModelReply:
+    return ModelReply(text=text, input_tokens=3, output_tokens=2, latency_ms=4.0, error=error, reasoning=reasoning, reasoning_tokens=5 if reasoning else 0)
 
 
 @pytest.mark.asyncio
 async def test_runner_keeps_malformed_json_as_model_behavior() -> None:
-    adapter = Replies([_reply("not json")])
+    adapter = Replies([_reply("not json", reasoning="tried strict JSON")])
     output = io.StringIO()
 
     result = await run_case(
@@ -64,6 +64,8 @@ async def test_runner_keeps_malformed_json_as_model_behavior() -> None:
     records = [json.loads(line) for line in output.getvalue().splitlines()]
     assert records[0]["error"].startswith("invalid_json")
     assert records[0].get("providerError") is None
+    assert records[0]["reasoning"] == "tried strict JSON"
+    assert records[0]["reasoningTokens"] == 5
 
 
 @pytest.mark.asyncio

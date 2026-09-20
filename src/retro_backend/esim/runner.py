@@ -307,6 +307,8 @@ async def run_case(
                     "queueDelayMs": reply.queue_delay_ms,
                     "inputTokens": reply.input_tokens,
                     "outputTokens": reply.output_tokens,
+                    "reasoning": reply.reasoning,
+                    "reasoningTokens": reply.reasoning_tokens,
                 }
                 if not reply.ok:
                     error = reply.error or "unknown_model_error"

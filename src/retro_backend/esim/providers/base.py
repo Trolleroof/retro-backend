@@ -75,6 +75,8 @@ class ModelReply:
         text: The generated completion text, or None if the request failed.
         input_tokens: Number of prompt/input tokens consumed.
         output_tokens: Number of generated completion tokens consumed.
+        reasoning: Provider-returned reasoning text, when available.
+        reasoning_tokens: Number of completion tokens spent on reasoning.
         latency_ms: Roundtrip wall-clock latency in milliseconds.
         error: Typed error description if call failed, None otherwise.
         queue_delay_ms: Wall-clock milliseconds this call spent waiting for the
@@ -99,6 +101,8 @@ class ModelReply:
     served_model: str | None = None
     retry_after_seconds: float | None = None
     queue_delay_ms: float = 0.0
+    reasoning: str | None = None
+    reasoning_tokens: int = 0
 
     @property
     def ok(self) -> bool:

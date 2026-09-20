@@ -1,3 +1,4 @@
+import io
 import json
 from collections import Counter
 from pathlib import Path
@@ -7,12 +8,14 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from retro_backend.esim.case import load_fixed_worker_case_v2
+from retro_backend.esim.fixed_workers_v2_runner import FixedWorkersV2Config, _generate
 from retro_backend.esim.grader import (
     BenchmarkEpisodeV2,
     BenchmarkScoreError,
     grade_benchmark_events_v2,
     verify_benchmark_replay_v2,
 )
+from retro_backend.esim.providers.base import ModelReply
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "contracts/esim/fixed-workers-v2-case-registry.json"
@@ -175,3 +178,27 @@ def test_all_requirements_add_terminal_target_and_handover_gates() -> None:
     assert passing.model_copy(
         update={"scores": score.model_copy(update={"valid_terminal_state": False})}
     ).all_requirements_met is False
+
+
+@pytest.mark.asyncio
+async def test_fixed_worker_attempt_log_keeps_reasoning() -> None:
+    class Reply:
+        async def generate(self, *_: object, **__: object) -> ModelReply:
+            return ModelReply(
+                text='{"action":"wait"}', input_tokens=3, output_tokens=7, latency_ms=1,
+                reasoning="waiting preserves the current plan", reasoning_tokens=4,
+            )
+
+    attempts = io.StringIO()
+    config = FixedWorkersV2Config("quiet-tuesday-v2-dev-1", "openrouter:model", ROOT)
+    action, error = await _generate(
+        Reply(), config, {"observation": {"tick": 3}, "availableActions": ["wait"], "kind": "decision"},
+        attempts, Counter(), set(),
+    )
+
+    assert action == "wait"
+    assert error is None
+    record = json.loads(attempts.getvalue())
+    assert config.openrouter_reasoning_effort == "medium"
+    assert record["reasoning"] == "waiting preserves the current plan"
+    assert record["reasoningTokens"] == 4

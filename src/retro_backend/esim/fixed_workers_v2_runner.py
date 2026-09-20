@@ -36,7 +36,7 @@ class FixedWorkersV2Config:
     nim_api_keys_file: Path | None = None
     openrouter_api_key_file: Path | None = None
     openrouter_provider_order: tuple[str, ...] = ()
-    openrouter_reasoning_effort: str | None = None
+    openrouter_reasoning_effort: str = "medium"
 
 
 class _RotatingAdapter:
@@ -64,20 +64,29 @@ class _RotatingAdapter:
 
 
 def _adapter(config: FixedWorkersV2Config) -> ModelAdapter:
-    if config.nim_api_keys_file is None and config.openrouter_api_key_file is None:
-        return get_adapter(config.model)
     provider, model = parse_model_spec(config.model)
-    if config.openrouter_api_key_file is not None:
-        if config.nim_api_keys_file is not None or provider != "openrouter":
+    if provider == "openrouter":
+        if config.openrouter_api_key_file is None:
+            return OpenRouterAdapter(
+                model,
+                timeout=config.request_timeout,
+                provider_order=config.openrouter_provider_order,
+                reasoning_effort=config.openrouter_reasoning_effort,
+            )
+        if config.nim_api_keys_file is not None:
             raise ValueError("--openrouter-api-key-file may only be used with openrouter: models")
         key_path = config.openrouter_api_key_file
         keys = [line.strip() for line in key_path.read_text().splitlines() if line.strip()]
         if len(keys) != 1:
             raise ValueError("OpenRouter key file must contain exactly one nonblank key")
         return OpenRouterAdapter(model, api_key=keys[0], timeout=config.request_timeout, provider_order=config.openrouter_provider_order, reasoning_effort=config.openrouter_reasoning_effort)
+    if config.nim_api_keys_file is None:
+        return get_adapter(config.model)
+    if config.openrouter_api_key_file is not None:
+        raise ValueError("--openrouter-api-key-file may only be used with openrouter: models")
     if provider != "nim":
         raise ValueError("--nim-api-keys-file may only be used with nim: models")
-    nim_key_path = cast(Path, config.nim_api_keys_file)
+    nim_key_path = config.nim_api_keys_file
     keys = [line.strip() for line in nim_key_path.read_text().splitlines() if line.strip()]
     if not keys or len(keys) != len(set(keys)):
         raise ValueError("NIM key file must contain unique, nonblank keys")
@@ -143,6 +152,7 @@ async def _generate(
             "kind": turn.get("kind"), "attempt": attempt, "servedModel": reply.served_model,
             "latencyMs": reply.latency_ms, "queueDelayMs": reply.queue_delay_ms,
             "inputTokens": reply.input_tokens, "outputTokens": reply.output_tokens,
+            "reasoning": reply.reasoning, "reasoningTokens": reply.reasoning_tokens,
         }
         if not reply.ok:
             error = reply.error or "unknown_model_error"
@@ -195,6 +205,7 @@ async def _handover(
             "event": "handover_attempt", "attempt": attempt, "servedModel": reply.served_model,
             "latencyMs": reply.latency_ms, "queueDelayMs": reply.queue_delay_ms,
             "inputTokens": reply.input_tokens, "outputTokens": reply.output_tokens,
+            "reasoning": reply.reasoning, "reasoningTokens": reply.reasoning_tokens,
         }
         if not reply.ok:
             error = reply.error or "unknown_model_error"

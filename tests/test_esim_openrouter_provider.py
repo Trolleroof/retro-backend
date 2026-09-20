@@ -16,13 +16,14 @@ async def test_openrouter_adapter_uses_openrouter_endpoint_and_key() -> None:
         seen["url"] = str(request.url)
         seen["auth"] = request.headers["authorization"]
         seen["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"model": "moonshotai/kimi-k3", "choices": [{"message": {"content": "{\"action\":\"wait\"}"}}], "usage": {"prompt_tokens": 2, "completion_tokens": 3}})
+        return httpx.Response(200, json={"model": "moonshotai/kimi-k3", "choices": [{"message": {"content": "{\"action\":\"wait\"}", "reasoning": "checked the available action"}}], "usage": {"prompt_tokens": 2, "completion_tokens": 3, "completion_tokens_details": {"reasoning_tokens": 2}}})
 
     adapter = OpenRouterAdapter(
         "moonshotai/kimi-k3",
         api_key="test-key",
         transport=httpx.MockTransport(handler),
         budget=RollingWindowBudget(max_starts=1),
+        reasoning_effort="medium",
     )
     try:
         reply = await adapter.generate("hello")
@@ -35,10 +36,13 @@ async def test_openrouter_adapter_uses_openrouter_endpoint_and_key() -> None:
         "model": "moonshotai/kimi-k3",
         "messages": [{"role": "user", "content": "hello"}],
         "provider": {"allow_fallbacks": False},
+        "reasoning_effort": "medium",
         "temperature": 0.0,
     }
     assert reply.served_model == "moonshotai/kimi-k3"
     assert reply.text == '{"action":"wait"}'
+    assert reply.reasoning == "checked the available action"
+    assert reply.reasoning_tokens == 2
 
 
 def test_registry_resolves_openrouter(monkeypatch: pytest.MonkeyPatch) -> None:

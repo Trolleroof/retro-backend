@@ -359,6 +359,7 @@ async def test_nim_adapter_generate_success_messages() -> None:
                     "message": {
                         "role": "assistant",
                         "content": '{"action": "seat", "table_id": "table-1"}',
+                        "reasoning_content": "table-1 is open",
                     },
                     "finish_reason": "stop",
                 }
@@ -367,6 +368,7 @@ async def test_nim_adapter_generate_success_messages() -> None:
                 "prompt_tokens": 42,
                 "completion_tokens": 15,
                 "total_tokens": 57,
+                "completion_tokens_details": {"reasoning_tokens": 9},
             },
         }
         return httpx.Response(200, json=body)
@@ -391,6 +393,8 @@ async def test_nim_adapter_generate_success_messages() -> None:
     assert reply.text == '{"action": "seat", "table_id": "table-1"}'
     assert reply.input_tokens == 42
     assert reply.output_tokens == 15
+    assert reply.reasoning == "table-1 is open"
+    assert reply.reasoning_tokens == 9
     assert reply.latency_ms > 0.0
 
 
@@ -871,4 +875,3 @@ async def test_a_failed_attempt_still_reports_which_model_answered() -> None:
     assert reply.error is not None
     assert reply.error.startswith(ERR_TRUNCATED)
     assert reply.served_model == "vendor/substituted"
-
