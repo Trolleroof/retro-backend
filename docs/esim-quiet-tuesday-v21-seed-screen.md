@@ -138,3 +138,48 @@ every quiet-tuesday seed, and no choice of seed changes that, because seeds vary
 allergy tickets appear and never whether verifying is right. Earning that gate needs a
 decision whose correct answer depends on the situation, which is engine game logic rather
 than seed selection, and is recorded as the next benchmark version's work.
+
+---
+
+## Amendment 1 — S5's distinctness clause was inert by construction
+
+**Recorded 2026-09-20, after the first screen run over seeds 11–199 and before any
+seed accepted under the amended clause has been looked at.**
+
+The first run screened 189 seeds and accepted one. The breakdown: 113 rejected by S1,
+**73 by S5**, 2 by S4, 1 accepted. The full output is kept as
+`tests/fixtures/fixed-workers-v21/seed-screen-first-run.json`.
+
+S5 required an accepted seed's eligible-order arrival signature to differ from every
+already-accepted seed's. **All 189 seeds produce the identical signature** — 13 eligible
+orders at the same created/deadline pairs, every time. The clause can therefore accept
+only the first seed it sees and must reject every seed after it, whatever that seed
+contains.
+
+This is a specification error, not a result. The same document states two sections
+earlier that "arrivals, target and incidents are fixed per level"; S5 then tested for
+variation in exactly that fixed quantity. The clause was never capable of measuring
+variety.
+
+**The amendment.** S5's distinctness sub-clause is replaced by one that can vary:
+
+> **S5 — uncontaminated.** The set of order ids carrying an allergy ticket differs from
+> every already-accepted v2.1 seed's, and the seed does not appear anywhere in the v2
+> case set: `{1, 2, 5, 9, 17, 19, 23, 29, 31, 37, 43, 47, 53}`.
+
+Two seeds that flag the same orders pose the same judgment problem regardless of party
+sizes, which is the variety a held-out set actually needs. The exclusion of the v2 seed
+union is unchanged. S1 through S4 are unchanged.
+
+**Why this is not fitting the predicate to the outcome.** The replacement measures the
+same property S5 was written to measure — that accepted seeds are not repeats of each
+other — using a quantity that is capable of differing. It was chosen from the structure
+of the episode, and this amendment is committed before the amended screen is run, so the
+seeds it accepts were not known when it was written. The rejection counts above are
+reported for the original clause and are superseded, not deleted.
+
+**One measurement correction, no change of threshold.** The screen reports
+`eligibleOrders: 13`, not the 11 parties the arithmetic in this document assumed. The S1
+threshold is unaffected: pulling 2 of 13 tickets leaves Service at 84.6, which clears the
+80 threshold, and pulling 3 leaves 76.9, which does not. Three tickets remains the point
+at which over-caution becomes punishable.
