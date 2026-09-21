@@ -63,6 +63,14 @@ SANITIZED_FILES = (
     "grade.json",
     "summary.json",
     "directives.json",
+    # The per-turn model inputs travel. Unlike attempts.jsonl they contain no
+    # model output and no provider metadata -- only the observation the frozen
+    # engine emitted and the prompt template this repo already publishes in
+    # source -- so the reason the attempt log stays behind does not apply to
+    # them, and without them a reader of a shared row can see which action was
+    # taken but not what it was chosen from. Runs that predate the file simply
+    # do not have it; _copy_sanitized skips what is absent.
+    "turns.jsonl",
 )
 # Without these a row cannot be re-graded or configuration-checked, so their
 # absence makes the row incomplete rather than merely thinner.

@@ -105,6 +105,58 @@ def _messages(turn: Mapping[str, object]) -> list[dict[str, str]]:
     ]
 
 
+def _handover_messages(observation: Mapping[str, object]) -> list[dict[str, str]]:
+    """Render the terminal-report prompt.
+
+    Split out of :func:`_handover` so the messages that are sent and the
+    messages that are recorded are the same object rather than two copies of
+    one template that drift the first time somebody edits only the one they
+    were looking at. :func:`_messages` already had this shape; the handover
+    prompt was inline and is the reason its input went unrecorded.
+    """
+    return [
+        {"role": "system", "content": "Report the terminal result. Return only strict JSON: {\"cashEarned\":number,\"targetReached\":boolean}."},
+        {"role": "user", "content": json.dumps(observation, sort_keys=True, separators=(",", ":"))},
+    ]
+
+
+def _record_turn(
+    turns: TextIO, turn_index: int, kind: str, payload: Mapping[str, object], messages: Sequence[Mapping[str, str]]
+) -> None:
+    """Record what the model was asked, once per turn rather than per attempt.
+
+    The input lives in its own ``turns.jsonl`` instead of being folded into
+    each ``attempts.jsonl`` record because a turn is retried up to
+    ``max_attempts`` times against a byte-identical prompt: inlining it would
+    write the same full game observation two or three times over for every
+    turn that stumbles, and the observation is the largest thing in the
+    bundle. The cost of the split is that a consumer now has to join two
+    files; ``turnIndex`` is that join key, present on both sides and unique
+    within an episode. Tick alone would not do -- the bridge can raise more
+    than one decision on the same tick, and the handover has no tick at all.
+
+    Both the structured payload and the rendered messages are kept even though
+    the user message is a serialisation of the payload today. That redundancy
+    is the point of the finding: the payload is what you query and re-prompt
+    from, the messages are what actually went over the wire, and a later edit
+    to the prompt template must not silently rewrite the history of runs that
+    were made under the old one.
+    """
+    record_jsonl(
+        turns,
+        {
+            "event": "turn", "turnIndex": turn_index, "kind": kind,
+            "tick": payload.get("tick") if kind == "handover" else _turn_tick(payload),
+            "payload": payload, "messages": [dict(message) for message in messages],
+        },
+    )
+
+
+def _turn_tick(turn: Mapping[str, object]) -> object:
+    observation = turn.get("observation")
+    return observation.get("tick") if isinstance(observation, Mapping) else None
+
+
 def _retry_seconds(reply: ModelReply, attempt: int) -> float:
     if reply.retry_after_seconds is not None:
         return min(120.0, reply.retry_after_seconds)
@@ -127,15 +179,22 @@ async def _generate(
     adapter: ModelAdapter,
     config: FixedWorkersV2Config,
     turn: Mapping[str, object],
+    turn_index: int,
     attempts: TextIO,
+    turns: TextIO,
     totals: Counter[str],
     served: set[str],
 ) -> tuple[str | None, str | None]:
     available = turn.get("availableActions")
     assert isinstance(available, list) and all(isinstance(value, str) for value in available)
+    messages = _messages(turn)
+    # Written before the first request, not after the last: a run that dies
+    # mid-turn should still show the decision it died on, for the same reason
+    # record_jsonl flushes every attempt as it happens.
+    _record_turn(turns, turn_index, "model_turn", turn, messages)
     for attempt in range(1, config.max_attempts + 1):
         try:
-            reply = await adapter.generate(_messages(turn), max_tokens=config.max_output_tokens)
+            reply = await adapter.generate(messages, max_tokens=config.max_output_tokens)
         except TimeoutError:
             reply = ModelReply(None, 0, 0, config.request_timeout * 1000, f"{ERR_TIMEOUT}: request exceeded {config.request_timeout:g}s")
         totals["turns"] += 1
@@ -146,9 +205,8 @@ async def _generate(
         totals["queue_delay_ms"] += round(reply.queue_delay_ms)
         if reply.served_model:
             served.add(reply.served_model)
-        observation = turn.get("observation")
         record: dict[str, object] = {
-            "event": "model_attempt", "tick": observation.get("tick") if isinstance(observation, Mapping) else None,
+            "event": "model_attempt", "tick": _turn_tick(turn), "turnIndex": turn_index,
             "kind": turn.get("kind"), "attempt": attempt, "servedModel": reply.served_model,
             "latencyMs": reply.latency_ms, "queueDelayMs": reply.queue_delay_ms,
             "inputTokens": reply.input_tokens, "outputTokens": reply.output_tokens,
@@ -180,14 +238,18 @@ async def _handover(
     adapter: ModelAdapter,
     config: FixedWorkersV2Config,
     observation: Mapping[str, object],
+    turn_index: int,
     attempts: TextIO,
+    turns: TextIO,
     totals: Counter[str],
     served: set[str],
 ) -> tuple[bool, dict[str, object] | None, str | None]:
-    prompt = [
-        {"role": "system", "content": "Report the terminal result. Return only strict JSON: {\"cashEarned\":number,\"targetReached\":boolean}."},
-        {"role": "user", "content": json.dumps(observation, sort_keys=True, separators=(",", ":"))},
-    ]
+    prompt = _handover_messages(observation)
+    # The handover is a model call like any other and is logged like one: the
+    # terminal observation it is asked to summarise is the input, and without
+    # it a wrong cashEarned reading cannot be told apart from a state the
+    # model was never shown.
+    _record_turn(turns, turn_index, "handover", observation, prompt)
     for attempt in range(1, config.max_attempts + 1):
         try:
             reply = await adapter.generate(prompt, max_tokens=config.max_output_tokens)
@@ -202,7 +264,7 @@ async def _handover(
         if reply.served_model:
             served.add(reply.served_model)
         record: dict[str, object] = {
-            "event": "handover_attempt", "attempt": attempt, "servedModel": reply.served_model,
+            "event": "handover_attempt", "turnIndex": turn_index, "attempt": attempt, "servedModel": reply.served_model,
             "latencyMs": reply.latency_ms, "queueDelayMs": reply.queue_delay_ms,
             "inputTokens": reply.input_tokens, "outputTokens": reply.output_tokens,
             "reasoning": reply.reasoning, "reasoningTokens": reply.reasoning_tokens,
@@ -274,6 +336,14 @@ async def run_fixed_workers_v2(
     case = load_fixed_worker_case_v2(config.case_id)
     out_dir.mkdir(parents=True, exist_ok=False)
     attempts_path = out_dir / "attempts.jsonl"
+    # A sibling of the attempt log rather than a section of the bundle's JSON
+    # artifacts: like attempts.jsonl it is append-only and written as the
+    # episode happens, so a run killed halfway still leaves the turns it did
+    # reach. It is deliberately not in sweep's REQUIRED_ARTIFACTS -- that list
+    # gates both the v1 and v2 paths, and v1 does not write this file, so
+    # requiring it would mark every existing bundle incomplete and re-bill a
+    # matrix of runs to recover evidence they cannot retroactively hold.
+    turns_path = out_dir / "turns.jsonl"
     process = await asyncio.create_subprocess_exec(
         "npx", "--yes", "bun@1.3.11", str(Path(__file__).resolve().parents[3] / "scripts/fixed_workers_v2_bridge.ts"),
         str(config.engine_repo), case.level, str(case.seed),
@@ -288,21 +358,27 @@ async def run_fixed_workers_v2(
     completed: dict[str, Any] | None = None
     handover_accurate = False
     handover: dict[str, object] | None = None
-    with attempts_path.open("w") as attempts:
+    turn_index = 0
+    with attempts_path.open("w") as attempts, turns_path.open("w") as turns:
         while line := await process.stdout.readline():
             message = json.loads(line)
             if message.get("type") == "complete":
                 completed = message
                 break
+            # The counter advances even for turns skipped after a provider
+            # failure, so an index identifies the same bridge turn whether or
+            # not the model was asked about it.
+            turn_index += 1
             action, error = (None, None) if provider_error else await _generate(
-                model_adapter, config, message, attempts, totals, served
+                model_adapter, config, message, turn_index, attempts, turns, totals, served
             )
             provider_error = provider_error or error
             process.stdin.write((json.dumps({"action": action}) + "\n").encode())
             await process.stdin.drain()
         if completed is not None and provider_error is None:
+            turn_index += 1
             handover_accurate, handover, error = await _handover(
-                model_adapter, config, completed["terminalObservation"], attempts, totals, served
+                model_adapter, config, completed["terminalObservation"], turn_index, attempts, turns, totals, served
             )
             provider_error = provider_error or error
     process.stdin.close()
