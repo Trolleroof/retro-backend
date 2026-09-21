@@ -183,6 +183,59 @@ def test_v2_report_excludes_unverified_replays(tmp_path: Path) -> None:
     assert report["valid_episodes"] == 0
 
 
+def _v1_entry(summary_overrides: dict[str, object]) -> dict[str, object]:
+    return {
+        "summary": {
+            "runValidity": "valid",
+            "termination": "episode_complete",
+            "servedModels": ["model-a"],
+            "turns": 1,
+            **summary_overrides,
+        },
+        "grade": {
+            "metrics": {"Service": 80, "Resources": 70, "Recovery": 90, "Safety": 100, "Composite": 85},
+            "allRequirementsMet": True,
+        },
+    }
+
+
+def test_report_publishes_the_decode_settings_every_scored_episode_shared(tmp_path: Path) -> None:
+    """A leaderboard row has to say which effort the score was earned at."""
+    entries = [
+        _v1_entry({"reasoningEffort": "high", "maxOutputTokens": 8000, "requestedProviderRoute": ["together"]})
+        for _ in range(8)
+    ]
+    report = sweep_module._model_report(
+        "openrouter:model-a", entries, "bench/v1", artifact_root=tmp_path,
+        stopped_after_provider_failures=False, planned_episodes=8,
+    )
+
+    assert report["reasoning_effort"] == "high"
+    assert report["decode"] == {
+        "reasoning_effort": "high",
+        "max_output_tokens": 8000,
+        "requested_provider_route": ["together"],
+        "uniform_across_episodes": True,
+    }
+
+
+def test_report_refuses_to_name_one_effort_when_the_episodes_disagree(tmp_path: Path) -> None:
+    """Attributing the aggregate to the first episode's setting would invent a
+    setting the score was not earned under."""
+    entries = [
+        _v1_entry({"reasoningEffort": "high" if index else "low", "maxOutputTokens": 8000})
+        for index in range(8)
+    ]
+    report = sweep_module._model_report(
+        "openrouter:model-a", entries, "bench/v1", artifact_root=tmp_path,
+        stopped_after_provider_failures=False, planned_episodes=8,
+    )
+
+    assert report["reasoning_effort"] is None
+    assert report["decode"]["max_output_tokens"] == 8000
+    assert report["decode"]["uniform_across_episodes"] is False
+
+
 def test_v2_resume_does_not_reuse_pre_engine_replay_bundle(tmp_path: Path) -> None:
     out_dir = tmp_path / "attempt"
     _write_bundle(out_dir, model="openrouter:model-a", version="restaurant-fixed-workers/v2", valid=True, attempt=1)

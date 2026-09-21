@@ -16,7 +16,11 @@ from retro_backend.esim.case import (
     load_fixed_worker_case_v2,
 )
 from retro_backend.esim.cli import _run_once  # pyright: ignore[reportPrivateUsage]
-from retro_backend.esim.fixed_workers_v2_runner import BUNDLE_VERSION, FixedWorkersV2Config, run_fixed_workers_v2
+from retro_backend.esim.fixed_workers_v2_runner import (
+    BUNDLE_VERSION,
+    FixedWorkersV2Config,
+    run_fixed_workers_v2,
+)
 from retro_backend.esim.runner import RunnerConfig
 
 REQUIRED_ARTIFACTS = (
@@ -289,6 +293,39 @@ def _all_requirements(grade: Mapping[str, Any]) -> bool | None:
     return None
 
 
+def _decode_settings(valid: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """The request settings every scored episode ran under.
+
+    Each bundle already records these; until now the report dropped them, so
+    two models compared in one table could have been asked the question under
+    different reasoning efforts, different provider routes or different output
+    budgets with nothing saying so.
+
+    A setting is published only when every scored episode agrees on it. When
+    they disagree the value is ``None`` and ``uniform_across_episodes`` is
+    false, because there is no single setting to attribute the score to and
+    reporting the first one would invent one.
+    """
+    keys = (
+        ("reasoning_effort", "reasoningEffort"),
+        ("max_output_tokens", "maxOutputTokens"),
+        ("requested_provider_route", "requestedProviderRoute"),
+    )
+    settings: dict[str, Any] = {}
+    uniform = bool(valid)
+    for name, summary_key in keys:
+        observed = sorted(
+            {
+                json.dumps(entry.get("summary", {}).get(summary_key), sort_keys=True)
+                for entry in valid
+            }
+        )
+        settings[name] = json.loads(observed[0]) if len(observed) == 1 else None
+        uniform = uniform and len(observed) == 1
+    settings["uniform_across_episodes"] = uniform
+    return settings
+
+
 def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_version: str, *, artifact_root: Path, stopped_after_provider_failures: bool, planned_episodes: int) -> dict[str, Any]:
     def eligible(entry: Mapping[str, Any]) -> bool:
         summary = entry.get("summary")
@@ -343,6 +380,7 @@ def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_versi
         "provider_failure_episodes": provider_failures,
         "stopped_after_repeated_provider_failures": stopped_after_provider_failures,
     }
+    decode = _decode_settings(valid)
     trajectory = {
         "artifact_root": str(artifact_root),
         "valid_trajectory_episodes": len(valid),
@@ -350,6 +388,11 @@ def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_versi
     return {
         "model": model,
         "served_model_id": served[0] if len(served) == 1 else None,
+        # Promoted out of `decode` because it belongs on the leaderboard row
+        # itself: a model run at a higher reasoning effort is not comparable
+        # with one run lower, and a table that omits the setting invites
+        # exactly that comparison.
+        "reasoning_effort": decode["reasoning_effort"],
         "benchmark_version": benchmark_version,
         "planned_episodes": planned_episodes,
         "valid_episodes": len(valid),
@@ -362,6 +405,7 @@ def _model_report(model: str, entries: Sequence[dict[str, Any]], benchmark_versi
         "total_model_calls": calls,
         "task": task,
         "provider": provider,
+        "decode": decode,
         "trajectory": trajectory,
     }
 
