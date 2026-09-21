@@ -29,11 +29,13 @@ Three things are checked, deliberately kept apart:
 
 import json
 from copy import deepcopy
+from functools import cache
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from retro_backend.esim.case import FixedWorkerCaseV2, load_fixed_worker_case_v2
 from retro_backend.esim.grader import (
     BenchmarkEpisodeV2,
     BenchmarkScoreError,
@@ -43,6 +45,9 @@ from retro_backend.esim.grader import (
 )
 
 _FIXTURES_DIR = Path(__file__).parent / "fixtures/traces/benchmark-v2"
+_REGISTRY_PATH = (
+    Path(__file__).resolve().parents[1] / "contracts/esim/fixed-workers-v2-case-registry.json"
+)
 
 _BENCHMARK_VERSION = "restaurant-fixed-workers/v2"
 
@@ -104,8 +109,36 @@ def _load_fixture(case_id: str) -> dict[str, Any]:
     return json.loads((_FIXTURES_DIR / f"{case_id}.json").read_text())
 
 
+@cache
+def _case_for(case_id: str) -> FixedWorkerCaseV2:
+    """The frozen case these fixture events are graded against.
+
+    ``grade_benchmark_events_v2`` binds a trace to a case by the fields the
+    case freezes: the arrival schedule, the cash target, the resource ceiling
+    and the incident schedule. Every one of those is a property of the *level*
+    -- the six cases in a level differ only by ``caseId``, ``seed`` and
+    ``split`` -- so a fixture exported from a level binds equally to any case
+    of that level, and the development case is chosen here because it is the
+    one a reader of the registry may look at.
+
+    The exporter names these fixtures after the behaviour they demonstrate
+    (``dinner-rush-v2-timer-expiry``), not after a registry case, so the level
+    comes from the fixture's own ``variationId``. If the grader ever binds on
+    something seed-specific, this lookup is where it fails first.
+    """
+    level = _load_fixture(case_id)["variationId"]
+    registry = json.loads(_REGISTRY_PATH.read_text())
+    matches = [
+        case
+        for case in (load_fixed_worker_case_v2(name) for name in registry["developmentCases"])
+        if case.level == level
+    ]
+    assert matches, f"no frozen development case for level {level!r}"
+    return matches[0]
+
+
 def _score(case_id: str) -> BenchmarkScoresV2:
-    return grade_benchmark_events_v2(_load_fixture(case_id)["events"])
+    return grade_benchmark_events_v2(_load_fixture(case_id)["events"], _case_for(case_id))
 
 
 def _ts_score_in_backend_shape(ts_score: dict[str, Any]) -> dict[str, Any]:
@@ -164,7 +197,7 @@ def test_backend_grader_matches_the_typescript_engines_recorded_v2_score(case_id
     assert fixture["benchmarkVersion"] == _BENCHMARK_VERSION
 
     expected = _ts_score_in_backend_shape(fixture["tsScore"])
-    actual = grade_benchmark_events_v2(fixture["events"]).model_dump()
+    actual = grade_benchmark_events_v2(fixture["events"], _case_for(case_id)).model_dump()
 
     # Asserted here rather than through `expected`, which carries only what
     # the TypeScript fixture actually says. See `_GRADER_VERSION`.
@@ -197,7 +230,7 @@ def test_the_v2_timer_and_cash_target_agree_with_the_fixtures_own_metadata(case_
     events. Reading both back proves the trace is the run it claims to be, not
     just internally consistent."""
     fixture = _load_fixture(case_id)
-    scores = grade_benchmark_events_v2(fixture["events"])
+    scores = grade_benchmark_events_v2(fixture["events"], _case_for(case_id))
 
     assert scores.duration_ticks == fixture["durationTicks"] == _DURATION_TICKS
     assert scores.cash_target == fixture["cashTarget"]
@@ -253,7 +286,8 @@ def test_backend_scorer_confirms_the_v2_recovery_and_capacity_deltas() -> None:
 def test_a_trace_missing_the_v2_timer_field_is_rejected() -> None:
     with pytest.raises(BenchmarkScoreError, match="durationTicks"):
         grade_benchmark_events_v2(
-            _with_edited_terminal("quiet-tuesday-v2-target-reached", durationTicks=None)
+            _with_edited_terminal("quiet-tuesday-v2-target-reached", durationTicks=None),
+            _case_for("quiet-tuesday-v2-target-reached"),
         )
 
 
@@ -263,7 +297,8 @@ def test_a_trace_carrying_the_wrong_benchmark_version_is_rejected() -> None:
             _with_edited_terminal(
                 "quiet-tuesday-v2-target-reached",
                 benchmarkVersion="restaurant-fixed-workers/v1",
-            )
+            ),
+            _case_for("quiet-tuesday-v2-target-reached"),
         )
 
     events = deepcopy(_load_fixture("quiet-tuesday-v2-target-reached")["events"])
@@ -274,7 +309,7 @@ def test_a_trace_carrying_the_wrong_benchmark_version_is_rejected() -> None:
     )
     config["benchmarkVersion"] = "restaurant-fixed-workers/v1"
     with pytest.raises(BenchmarkScoreError, match="benchmarkVersion"):
-        grade_benchmark_events_v2(events)
+        grade_benchmark_events_v2(events, _case_for("quiet-tuesday-v2-target-reached"))
 
 
 def test_a_duplicated_event_is_rejected_rather_than_double_counted() -> None:
@@ -283,7 +318,7 @@ def test_a_duplicated_event_is_rejected_rather_than_double_counted() -> None:
     events = deepcopy(fixture["events"])
     terminal = deepcopy(events[_terminal_index(events)])
     with pytest.raises(BenchmarkScoreError, match="episode_terminal"):
-        grade_benchmark_events_v2([*events, terminal])
+        grade_benchmark_events_v2([*events, terminal], _case_for("quiet-tuesday-v2-target-reached"))
 
     events = deepcopy(fixture["events"])
     index = next(
@@ -293,7 +328,10 @@ def test_a_duplicated_event_is_rejected_rather_than_double_counted() -> None:
     )
     arrival = deepcopy(events[index])
     with pytest.raises(BenchmarkScoreError, match="duplicate guest_arrived"):
-        grade_benchmark_events_v2([*events[:index], arrival, *events[index:]])
+        grade_benchmark_events_v2(
+            [*events[:index], arrival, *events[index:]],
+            _case_for("quiet-tuesday-v2-target-reached"),
+        )
 
 
 def test_a_provider_invalid_attempt_is_excluded_from_the_score() -> None:
@@ -318,27 +356,28 @@ def test_a_provider_invalid_attempt_is_excluded_from_the_score() -> None:
 def test_a_model_summary_cannot_override_the_score_the_trace_supports() -> None:
     case_id = "quiet-tuesday-v2-target-missed"
     events = _load_fixture(case_id)["events"]
-    honest = grade_benchmark_events_v2(events)
+    honest = grade_benchmark_events_v2(events, _case_for(case_id))
     assert honest.target_reached is False
-    assert verify_benchmark_replay_v2(events, honest) is True
+    assert verify_benchmark_replay_v2(events, honest, _case_for(case_id)) is True
 
     # A recorded score claiming the target was hit does not survive replay...
     flattered = honest.model_copy(
         update={"target_reached": True, "composite": 100.0, "cash_earned": honest.cash_target}
     )
-    assert verify_benchmark_replay_v2(events, flattered) is False
+    assert verify_benchmark_replay_v2(events, flattered, _case_for(case_id)) is False
 
     # ...and neither does rewriting the terminal summary to say so, because
     # the ledger entries, not the summary, are what the cash is read from.
     with pytest.raises(BenchmarkScoreError, match="cashEarned|targetReached"):
         grade_benchmark_events_v2(
-            _with_edited_terminal(case_id, cashEarned=9_999.0, targetReached=True)
+            _with_edited_terminal(case_id, cashEarned=9_999.0, targetReached=True),
+            _case_for(case_id),
         )
     episode = BenchmarkEpisodeV2(
         case_id=case_id,
         run_validity="valid",
         scores=flattered,
-        replay_verified=verify_benchmark_replay_v2(events, flattered),
+        replay_verified=verify_benchmark_replay_v2(events, flattered, _case_for(case_id)),
         handover_accurate=True,
     )
     assert episode.exclusion_reason == "replay_mismatch"

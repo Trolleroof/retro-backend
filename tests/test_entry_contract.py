@@ -1499,8 +1499,22 @@ def test_deferred_analytics_and_billing_are_not_configured() -> None:
     assert "integrations/stripe.py" not in source_paths
 
 
+#: The one TypeScript file this Python backend is allowed to carry, and why.
+#:
+#: The fixed-workers v2 environment *is* the tui-gamepigeon TypeScript engine:
+#: a scored episode has to be driven by that engine, in-process, or it is not
+#: the same environment the score claims. This file is the stdin/stdout bridge
+#: that drives it and hands the measurement events back to the Python grader.
+#: It is a subprocess entry point executed by `bun`, never imported by the
+#: worker and never bundled into it, which is what the rest of this contract
+#: exists to prevent. Anything else with a `.ts` or `.js` suffix is still a
+#: contract violation.
+_TYPESCRIPT_EXEMPTIONS = {"scripts/fixed_workers_v2_bridge.ts"}
+
+
 def test_backend_has_no_typescript_or_javascript_source() -> None:
     excluded_directories = {
+        ".claude",
         ".git",
         ".venv",
         ".venv-workers",
@@ -1508,17 +1522,23 @@ def test_backend_has_no_typescript_or_javascript_source() -> None:
         ".pytest_cache",
         ".ruff_cache",
         "js-stubs",
+        "node_modules",
         "python_modules",
     }
     generated_source = [
-        path.relative_to(ROOT).as_posix()
+        relative
         for path in ROOT.rglob("*")
         if path.is_file()
         and path.suffix in {".js", ".ts"}
         and not any(part in excluded_directories for part in path.parts)
+        and (relative := path.relative_to(ROOT).as_posix()) not in _TYPESCRIPT_EXEMPTIONS
     ]
 
     assert generated_source == []
+    # An exemption that no longer names a real file is an exemption nobody is
+    # checking: it would silently widen the contract the next time that path
+    # is reused.
+    assert all((ROOT / exemption).is_file() for exemption in _TYPESCRIPT_EXEMPTIONS)
 
 
 def test_worker_lock_is_committed_while_generated_modules_are_ignored() -> None:
