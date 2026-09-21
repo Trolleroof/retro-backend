@@ -302,3 +302,94 @@ def test_the_registry_is_not_frozen_before_its_evidence_lands(status_field: str)
     pending = registry[status_field].get("status") == "pending"
     if pending:
         assert registry["status"] != "frozen"
+
+
+# -- held-out separation -----------------------------------------------------
+
+SEPARATION = ROOT / "tests/fixtures/fixed-workers-v21/separation.json"
+
+
+def _arm(report: dict[str, Any], name: str, block: str = "scriptedPolicies") -> dict[str, Any]:
+    return next(policy for policy in report[block] if policy["arm"] == name)
+
+
+def _met_count(policy: dict[str, Any]) -> int:
+    """Recounted from the per-case rows rather than read off the summary."""
+    return sum(_requirements_met(row) for row in policy["byCase"].values())
+
+
+def test_the_scripted_arms_separate_on_the_held_out_suite() -> None:
+    """The split models are actually scored on.
+
+    v2 ran its policies only on the development cases, so the nine cases that
+    decide a published number were frozen on evidence gathered somewhere else.
+    """
+    report = _json(SEPARATION)
+    assert report["heldOutCases"] == _json(REGISTRY)["heldOutCases"]
+
+    verify_all = _arm(report, "verify-all")
+    for weaker in ("careless", "over-cautious", "passive"):
+        assert verify_all["meanComposite"] - _arm(report, weaker)["meanComposite"] >= 10, weaker
+
+    # Carelessness must never clear a case. This is the claim quiet-tuesday was
+    # re-selected to support, checked on the held-out split rather than assumed
+    # from the development one.
+    assert _met_count(_arm(report, "careless")) == 0
+    assert _arm(report, "careless")["safetyFailures"] == len(report["heldOutCases"])
+
+    # And no arm may clear the whole suite: a benchmark nothing fails is a
+    # benchmark that measures nothing.
+    for policy in report["scriptedPolicies"]:
+        assert _met_count(policy) < len(report["heldOutCases"]), policy["arm"]
+        assert _met_count(policy) == policy["requirementsMetCases"], policy["arm"]
+
+
+def test_a_positionally_memorized_sequence_does_not_beat_the_reference() -> None:
+    """The half of the memorization question v2.1 does answer.
+
+    ``shuffledOptions`` reseeds option order per (episodeSeed, decisionId), so a
+    constant position is a different semantic choice on every case. These arms
+    are the regression witnesses: if one ever starts clearing cases, the shuffle
+    has stopped working and the registry may not call itself frozen.
+    """
+    report = _json(SEPARATION)
+    gate = report["positionalMemorizationGate"]
+    reference = _met_count(_arm(report, gate["reference"]))
+    best = max(_met_count(policy) for policy in report["memorizedSequences"])
+
+    assert gate["referenceRequirementsMetCases"] == reference
+    assert gate["bestMemorizedRequirementsMetCases"] == best
+    assert best < reference, "a positional constant matched the reference; the option shuffle is not working"
+    assert gate["passed"] is True
+    if not gate["passed"]:
+        assert _json(REGISTRY)["status"] != "frozen"
+
+
+def test_the_registry_records_both_halves_of_the_memorization_question() -> None:
+    """Semantic memorization is not defeated here, and the record says so.
+
+    "Always verify" clears every quiet-tuesday case, and no seed selection can
+    change that, because seeds vary how many allergy tickets appear rather than
+    whether verifying is right. Recording it as not-applicable with the reason
+    is the honest form; claiming the gate passed on the strength of the
+    positional arms alone would not be.
+    """
+    gate = _json(REGISTRY)["freezeGate"]
+    semantic = gate["step5MemorizationGate"]
+    assert semantic["status"] == "not_applicable"
+    assert "not defeated" in semantic["semanticMemorization"]
+    assert "defeated" in semantic["positionalMemorization"]
+    assert semantic["scheduledFix"]
+    assert gate["positionalMemorizationGate"]["passed"] is True
+
+
+def test_the_frozen_registry_carries_the_evidence_that_froze_it() -> None:
+    """Frozen is a consequence, not a declaration."""
+    registry = _json(REGISTRY)
+    assert registry["status"] == "frozen"
+    assert registry["calibration"]["status"] == "passed"
+    assert registry["heldOutSeparation"]["status"] == "passed"
+    for block in ("calibration", "heldOutSeparation"):
+        assert Path(ROOT / registry[block]["source"]).is_file()
+    assert registry["calibration"]["perCaseDiscrimination"]["negativeControl"]
+    assert _json(SEPARATION)["engine"]["game"] == registry["engine"]["game"]

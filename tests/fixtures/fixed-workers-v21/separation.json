@@ -1,0 +1,633 @@
+{
+  "generatedFrom": "scripts/run-fixed-workers-v21-separation.ts on the nine held-out cases; no model was called",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "registryVersion": "restaurant-fixed-workers-case-registry/v2.1",
+  "graderVersion": "restaurant-fixed-workers-grader/v2",
+  "engine": {
+    "game": "4dd91c0a7bbab4135ab16a4850afa060b6315fa0",
+    "head": "90b134107e6a68388e34d2658eafaa57f9c66273",
+    "worktree": "/Users/nikhi/tui-gamepigeon"
+  },
+  "heldOutCases": [
+    "quiet-tuesday-v21-held-out-25",
+    "quiet-tuesday-v21-held-out-26",
+    "quiet-tuesday-v21-held-out-34",
+    "dinner-rush-v2-held-out-19",
+    "dinner-rush-v2-held-out-31",
+    "dinner-rush-v2-held-out-47",
+    "saturday-night-v2-held-out-23",
+    "saturday-night-v2-held-out-37",
+    "saturday-night-v2-held-out-53"
+  ],
+  "scriptedPolicies": [
+    {
+      "arm": "verify-all",
+      "meanComposite": 85.49382716049382,
+      "meanService": 89.81481481481482,
+      "meanResources": 100,
+      "requirementsMetCases": 6,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-v21-held-out-25": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-v21-held-out-26": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "quiet-tuesday-v21-held-out-34": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "dinner-rush-v2-held-out-19": {
+          "service": 100,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 100,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "dinner-rush-v2-held-out-31": {
+          "service": 85,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 95,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "dinner-rush-v2-held-out-47": {
+          "service": 90,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 96.66666666666669,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "saturday-night-v2-held-out-23": {
+          "service": 83.33333333333333,
+          "resources": 100,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 61.11111111111111,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-37": {
+          "service": 87.5,
+          "resources": 100,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 62.5,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-53": {
+          "service": 62.5,
+          "resources": 100,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 54.16666666666666,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        }
+      }
+    },
+    {
+      "arm": "careless",
+      "meanComposite": 0,
+      "meanService": 89.81481481481482,
+      "meanResources": 100,
+      "requirementsMetCases": 0,
+      "safetyFailures": 9,
+      "byCase": {
+        "quiet-tuesday-v21-held-out-25": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-26": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-34": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-19": {
+          "service": 100,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-31": {
+          "service": 85,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-47": {
+          "service": 90,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-23": {
+          "service": 83.33333333333333,
+          "resources": 100,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-37": {
+          "service": 87.5,
+          "resources": 100,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-53": {
+          "service": 62.5,
+          "resources": 100,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        }
+      }
+    },
+    {
+      "arm": "over-cautious",
+      "meanComposite": 63.055073581389365,
+      "meanService": 68.95299145299145,
+      "meanResources": 63.573035151982516,
+      "requirementsMetCases": 2,
+      "safetyFailures": 0,
+      "byCase": {
+        "quiet-tuesday-v21-held-out-25": {
+          "service": 76.92307692307692,
+          "resources": 61.42857142857143,
+          "recovery": null,
+          "safety": 100,
+          "composite": 69.17582417582418,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-26": {
+          "service": 76.92307692307692,
+          "resources": 79.28571428571428,
+          "recovery": null,
+          "safety": 100,
+          "composite": 78.10439560439559,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-34": {
+          "service": 69.23076923076923,
+          "resources": 55.714285714285715,
+          "recovery": null,
+          "safety": 100,
+          "composite": 62.472527472527474,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-19": {
+          "service": 80,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 93.33333333333331,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "dinner-rush-v2-held-out-31": {
+          "service": 80,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 93.33333333333331,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "dinner-rush-v2-held-out-47": {
+          "service": 75,
+          "resources": 98.42105263157895,
+          "recovery": 100,
+          "safety": 100,
+          "composite": 91.14035087719297,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-23": {
+          "service": 50,
+          "resources": 12.307692307692308,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 20.76923076923077,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-37": {
+          "service": 62.5,
+          "resources": 34.23076923076923,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 32.243589743589745,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-53": {
+          "service": 50,
+          "resources": 30.76923076923077,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 26.923076923076923,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        }
+      }
+    },
+    {
+      "arm": "passive",
+      "meanComposite": 0,
+      "meanService": 68.33333333333333,
+      "meanResources": 89.16329284750337,
+      "requirementsMetCases": 0,
+      "safetyFailures": 9,
+      "byCase": {
+        "quiet-tuesday-v21-held-out-25": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-26": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-34": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-19": {
+          "service": 55,
+          "resources": 89.47368421052632,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-31": {
+          "service": 50,
+          "resources": 87.36842105263159,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-47": {
+          "service": 60,
+          "resources": 99.47368421052632,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-23": {
+          "service": 58.333333333333336,
+          "resources": 83.84615384615385,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-37": {
+          "service": 54.166666666666664,
+          "resources": 83.46153846153847,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-53": {
+          "service": 37.5,
+          "resources": 58.84615384615385,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        }
+      }
+    }
+  ],
+  "memorizedSequences": [
+    {
+      "arm": "always-first-option",
+      "meanComposite": 20.402609086819613,
+      "meanService": 69.91452991452992,
+      "meanResources": 61.824111560953675,
+      "requirementsMetCases": 1,
+      "safetyFailures": 6,
+      "byCase": {
+        "quiet-tuesday-v21-held-out-25": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-26": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-34": {
+          "service": 84.61538461538461,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 92.3076923076923,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": true
+        },
+        "dinner-rush-v2-held-out-19": {
+          "service": 45,
+          "resources": 36.31578947368421,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-31": {
+          "service": 55,
+          "resources": 71.05263157894737,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 42.01754385964912,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-47": {
+          "service": 60,
+          "resources": 87.89473684210526,
+          "recovery": 0,
+          "safety": 100,
+          "composite": 49.29824561403509,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-23": {
+          "service": 100,
+          "resources": 21.923076923076923,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-37": {
+          "service": 66.66666666666667,
+          "resources": 1.153846153846154,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-53": {
+          "service": 33.333333333333336,
+          "resources": 38.07692307692307,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        }
+      }
+    },
+    {
+      "arm": "always-last-option",
+      "meanComposite": 10.137362637362637,
+      "meanService": 77.8988603988604,
+      "meanResources": 94.50774371827002,
+      "requirementsMetCases": 0,
+      "safetyFailures": 8,
+      "byCase": {
+        "quiet-tuesday-v21-held-out-25": {
+          "service": 84.61538461538461,
+          "resources": 97.85714285714285,
+          "recovery": null,
+          "safety": 100,
+          "composite": 91.23626373626374,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-26": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "quiet-tuesday-v21-held-out-34": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-19": {
+          "service": 85,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-31": {
+          "service": 50,
+          "resources": 75.78947368421053,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "dinner-rush-v2-held-out-47": {
+          "service": 85,
+          "resources": 100,
+          "recovery": 100,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": true,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-23": {
+          "service": 70.83333333333333,
+          "resources": 90,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-37": {
+          "service": 75,
+          "resources": 98.46153846153847,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        },
+        "saturday-night-v2-held-out-53": {
+          "service": 58.333333333333336,
+          "resources": 88.46153846153845,
+          "recovery": 0,
+          "safety": 0,
+          "composite": 0,
+          "validTerminalState": true,
+          "targetReached": false,
+          "requirementsMet": false
+        }
+      }
+    }
+  ],
+  "positionalMemorizationGate": {
+    "reference": "verify-all",
+    "referenceRequirementsMetCases": 6,
+    "bestMemorizedSequence": "always-first-option",
+    "bestMemorizedRequirementsMetCases": 1,
+    "passed": true
+  }
+}

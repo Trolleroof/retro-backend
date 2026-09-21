@@ -2,7 +2,7 @@
   "registryVersion": "restaurant-fixed-workers-case-registry/v2.1",
   "benchmarkVersion": "restaurant-fixed-workers/v2",
   "graderVersion": "restaurant-fixed-workers-grader/v2",
-  "status": "draft",
+  "status": "frozen",
   "supersedes": "restaurant-fixed-workers-case-registry/v2",
   "changeScope": "quiet-tuesday-v2 case selection only; environment, presets, grader and score contract unchanged",
   "engine": {
@@ -172,11 +172,45 @@
   },
   "calibration": {
     "source": "tests/fixtures/fixed-workers-v21/calibration.json",
-    "status": "pending"
+    "status": "passed",
+    "accepted": true,
+    "rejectionGates": {
+      "passivePassesEveryCase": false,
+      "allPoliciesTie": false,
+      "oneActionSequenceDominates": false,
+      "carelessEverPasses": false,
+      "verifyAllFailsOnQuietTuesday": false
+    },
+    "perCaseDiscrimination": {
+      "status": "passed",
+      "rule": "every level must show at least two distinct composites, a spread of at least 20, a split on All-Requirements-Met, and more than one action sequence",
+      "enforcedBy": "tests/test_esim_fixed_workers_v21_registry.py::test_every_level_separates_its_arms",
+      "negativeControl": "the same gate applied to the v2 calibration fails on quiet-tuesday (composite spread 3.8, All-Requirements-Met 9/9)"
+    }
   },
   "heldOutSeparation": {
     "source": "tests/fixtures/fixed-workers-v21/separation.json",
-    "status": "pending"
+    "status": "passed",
+    "generatedFrom": "scripts/run-fixed-workers-v21-separation.ts on the nine held-out cases; no model was called",
+    "note": "v2 ran its scripted policies only on the development cases, so the split models are scored on was frozen on the evidence of a different split",
+    "summary": {
+      "verify-all": {
+        "meanComposite": 85.5,
+        "requirementsMetCases": 6
+      },
+      "careless": {
+        "meanComposite": 0,
+        "requirementsMetCases": 0
+      },
+      "over-cautious": {
+        "meanComposite": 63.1,
+        "requirementsMetCases": 2
+      },
+      "passive": {
+        "meanComposite": 0,
+        "requirementsMetCases": 0
+      }
+    }
   },
   "freezeGate": {
     "step5MemorizationGate": {
@@ -185,6 +219,13 @@
       "semanticMemorization": "not defeated: the constant policy 'answer every allergy ticket with verify' clears every quiet-tuesday seed. Seeds vary how many allergy tickets appear, never whether verifying is correct, so no seed selection can defeat it.",
       "consequence": "quiet-tuesday v2.1 claims to separate careless, over-cautious and correct play. It does not claim to defeat a semantic constant.",
       "scheduledFix": "a decision whose correct answer depends on the situation, which is engine game logic rather than seed selection, and is the next benchmark version's work"
+    },
+    "positionalMemorizationGate": {
+      "reference": "verify-all",
+      "referenceRequirementsMetCases": 6,
+      "bestMemorizedSequence": "always-first-option",
+      "bestMemorizedRequirementsMetCases": 1,
+      "passed": true
     }
   },
   "heldOutSelection": {
