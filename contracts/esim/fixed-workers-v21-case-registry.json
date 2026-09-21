@@ -1,0 +1,200 @@
+{
+  "registryVersion": "restaurant-fixed-workers-case-registry/v2.1",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "graderVersion": "restaurant-fixed-workers-grader/v2",
+  "status": "draft",
+  "supersedes": "restaurant-fixed-workers-case-registry/v2",
+  "changeScope": "quiet-tuesday-v2 case selection only; environment, presets, grader and score contract unchanged",
+  "engine": {
+    "game": "4dd91c0a7bbab4135ab16a4850afa060b6315fa0",
+    "head": "c676c2ac1e4b58c360ec1a3fda9c7d7fb11b6be7",
+    "worktree": "/Users/nikhi/tui-gamepigeon"
+  },
+  "developmentCases": [
+    "quiet-tuesday-v21-dev-13",
+    "quiet-tuesday-v21-dev-15",
+    "quiet-tuesday-v21-dev-16",
+    "dinner-rush-v2-dev-2",
+    "dinner-rush-v2-dev-5",
+    "dinner-rush-v2-dev-9",
+    "saturday-night-v2-dev-1",
+    "saturday-night-v2-dev-2",
+    "saturday-night-v2-dev-9"
+  ],
+  "heldOutCases": [
+    "quiet-tuesday-v21-held-out-25",
+    "quiet-tuesday-v21-held-out-26",
+    "quiet-tuesday-v21-held-out-34",
+    "dinner-rush-v2-held-out-19",
+    "dinner-rush-v2-held-out-31",
+    "dinner-rush-v2-held-out-47",
+    "saturday-night-v2-held-out-23",
+    "saturday-night-v2-held-out-37",
+    "saturday-night-v2-held-out-53"
+  ],
+  "seedSelection": {
+    "level": "quiet-tuesday-v2",
+    "preRegistration": "docs/esim-quiet-tuesday-v21-seed-screen.md",
+    "candidates": "seeds 11 through 74 ascending, pre-registered before any arm was run",
+    "scannedRange": {
+      "from": 11,
+      "to": 74
+    },
+    "arms": [
+      "verify-all",
+      "careless",
+      "over-cautious",
+      "passive"
+    ],
+    "screen": [
+      "S1 judgment present: the seed must raise at least three distinct allergy_ticket:<orderId> decisions",
+      "S2 carelessness punished: the careless arm (every allergy ticket answered `substitute`) must record safety 0 and composite 0",
+      "S3 over-caution punished: the over-cautious arm (every allergy ticket answered `pull`) must fail All-Requirements-Met on Service while keeping safety 100",
+      "S4 correct answer rewarded: the verify-all arm must reach the target, keep safety 100 and score composite at least 80",
+      "S5 uncontaminated: the set of orders carrying an allergy ticket must differ from every already-accepted v2.1 seed's, and the seed may not appear anywhere in the v2 case set"
+    ],
+    "amendments": [
+      {
+        "id": 1,
+        "recorded": "2026-09-20",
+        "clause": "S5",
+        "reason": "S5 originally required a distinct eligible-order arrival signature. All 189 seeds screened in the first run produce the identical signature, because the arrival schedule is a property of the level preset rather than of the seed, so the clause could only ever accept the first seed it saw. It was replaced by the set of orders carrying an allergy ticket, which does vary and measures the property S5 was written for.",
+        "committedBeforeRerun": true,
+        "firstRunEvidence": "tests/fixtures/fixed-workers-v21/seed-screen-first-run.json"
+      }
+    ],
+    "replacementRule": "an ascending scan; the first three accepted seeds are development, the next three are held out; a seed that fails any screen is skipped and the scan continues. No seed was kept, dropped or replaced on the basis of any score a model produced.",
+    "accepted": {
+      "development": [
+        13,
+        15,
+        16
+      ],
+      "heldOut": [
+        25,
+        26,
+        34
+      ]
+    },
+    "rejected": [
+      {
+        "seed": 11,
+        "screen": "S1",
+        "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 12,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 14,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 17,
+        "screen": "S1",
+        "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 18,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 19,
+        "screen": "S1",
+        "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 20,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 21,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 22,
+        "screen": "S1",
+        "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 23,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 24,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 27,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 28,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 29,
+        "screen": "S5",
+        "detail": "seed already appears in the frozen v2 case set"
+      },
+      {
+        "seed": 30,
+        "screen": "S1",
+        "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 31,
+        "screen": "S1",
+        "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 32,
+        "screen": "S1",
+        "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      },
+      {
+        "seed": 33,
+        "screen": "S1",
+        "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+      }
+    ],
+    "evidence": "tests/fixtures/fixed-workers-v21/seed-screen.json"
+  },
+  "calibration": {
+    "source": "tests/fixtures/fixed-workers-v21/calibration.json",
+    "status": "pending"
+  },
+  "heldOutSeparation": {
+    "source": "tests/fixtures/fixed-workers-v21/separation.json",
+    "status": "pending"
+  },
+  "freezeGate": {
+    "step5MemorizationGate": {
+      "status": "not_applicable",
+      "positionalMemorization": "defeated: shuffledOptions reseeds option order per (episodeSeed, decisionId), so a constant such as 'always take the first option' does not transfer between cases",
+      "semanticMemorization": "not defeated: the constant policy 'answer every allergy ticket with verify' clears every quiet-tuesday seed. Seeds vary how many allergy tickets appear, never whether verifying is correct, so no seed selection can defeat it.",
+      "consequence": "quiet-tuesday v2.1 claims to separate careless, over-cautious and correct play. It does not claim to defeat a semantic constant.",
+      "scheduledFix": "a decision whose correct answer depends on the situation, which is engine game logic rather than seed selection, and is the next benchmark version's work"
+    }
+  },
+  "heldOutSelection": {
+    "rule": "quiet-tuesday seeds come from the pre-registered ascending screen above; dinner-rush and saturday-night keep their frozen v2 held-out seeds unchanged",
+    "outcomesInspected": false
+  },
+  "backendParity": {
+    "fixture": "tests/fixtures/fixed-workers-v2/quiet-tuesday-v2-dev-1.json",
+    "scorer": "retro_backend.esim.grader.grade_benchmark_events_v2",
+    "status": "validated",
+    "note": "the v2 parity fixture binds by level, and quiet-tuesday-v2's preset is unchanged, so it grades the v2.1 cases identically"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "caseVersion": "restaurant-fixed-workers-case/v2",
+  "caseId": "quiet-tuesday-v21-dev-16",
+  "benchmarkVersion": "restaurant-fixed-workers/v2",
+  "graderVersion": "restaurant-fixed-workers-grader/v2",
+  "split": "development",
+  "level": "quiet-tuesday-v2",
+  "seed": 16,
+  "durationTicks": 120,
+  "arrivalTicks": [
+    4,
+    14,
+    24,
+    34,
+    44,
+    54,
+    64,
+    74,
+    84,
+    94,
+    104
+  ],
+  "cashTarget": 140,
+  "eventSchedule": [
+    {
+      "tick": 75,
+      "kind": "warming_shelf_overheat",
+      "targetId": "warming-shelf-1"
+    }
+  ],
+  "thresholds": {
+    "resourceFloor": 0,
+    "resourceCeiling": 140,
+    "recoveryTarget": null,
+    "recoveryHardDeadline": null,
+    "service": 80,
+    "resources": 80,
+    "recovery": null,
+    "safety": 100
+  }
+}

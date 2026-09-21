@@ -1,0 +1,1869 @@
+{
+  "preRegistration": "retro-backend/docs/esim-quiet-tuesday-v21-seed-screen.md",
+  "level": "quiet-tuesday-v2",
+  "engine": {
+    "game": "4dd91c0a7bbab4135ab16a4850afa060b6315fa0",
+    "head": "c676c2ac1e4b58c360ec1a3fda9c7d7fb11b6be7",
+    "worktree": "/Users/nikhi/tui-gamepigeon"
+  },
+  "scannedRange": {
+    "from": 11,
+    "to": 74
+  },
+  "minAllergyTickets": 3,
+  "excludedSeeds": [
+    1,
+    2,
+    5,
+    9,
+    17,
+    19,
+    23,
+    29,
+    31,
+    37,
+    43,
+    47,
+    53
+  ],
+  "arms": [
+    "verify-all",
+    "careless",
+    "over-cautious",
+    "passive"
+  ],
+  "accepted": {
+    "development": [
+      13,
+      15,
+      16
+    ],
+    "heldOut": [
+      25,
+      26,
+      34
+    ]
+  },
+  "rejected": [
+    {
+      "seed": 11,
+      "screen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 12,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 14,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 17,
+      "screen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 18,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 19,
+      "screen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 20,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 21,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 22,
+      "screen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 23,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 24,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 27,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 28,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 29,
+      "screen": "S5",
+      "detail": "seed already appears in the frozen v2 case set"
+    },
+    {
+      "seed": 30,
+      "screen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 31,
+      "screen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 32,
+      "screen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 33,
+      "screen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    }
+  ],
+  "seeds": [
+    {
+      "seed": 11,
+      "allergyTickets": 1,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 96.15384615384615,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 12,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x2",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 99.28571428571429,
+          "recovery": null,
+          "safety": 100,
+          "composite": 91.95054945054946,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 13,
+      "allergyTickets": 6,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x1,allergy_ticket:order-x10,allergy_ticket:order-x2,allergy_ticket:order-x8,allergy_ticket:order-x9",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x1_verify",
+            "decide_allergy_ticket:order-x2_verify",
+            "decide_allergy_ticket:order-x8_verify",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x9_verify",
+            "decide_allergy_ticket:order-x10_verify"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x1_substitute",
+            "decide_allergy_ticket:order-x2_substitute",
+            "decide_allergy_ticket:order-x8_substitute",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x9_substitute",
+            "decide_allergy_ticket:order-x10_substitute"
+          ]
+        },
+        "over-cautious": {
+          "service": 53.84615384615385,
+          "resources": 3.571428571428571,
+          "recovery": null,
+          "safety": 100,
+          "composite": 28.708791208791208,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x1_pull",
+            "decide_allergy_ticket:order-x2_pull",
+            "decide_allergy_ticket:order-x8_pull",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x9_pull",
+            "decide_allergy_ticket:order-x10_pull"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": true,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": true,
+      "failedScreen": null,
+      "detail": null
+    },
+    {
+      "seed": 14,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x4",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x4_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x4_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 92.3076923076923,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x4_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 15,
+      "allergyTickets": 4,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x11,allergy_ticket:order-x3,allergy_ticket:order-x8",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x3_verify",
+            "decide_allergy_ticket:order-x8_verify",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x11_verify"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x3_substitute",
+            "decide_allergy_ticket:order-x8_substitute",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x11_substitute"
+          ]
+        },
+        "over-cautious": {
+          "service": 69.23076923076923,
+          "resources": 46.42857142857143,
+          "recovery": null,
+          "safety": 100,
+          "composite": 57.82967032967033,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x3_pull",
+            "decide_allergy_ticket:order-x8_pull",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x11_pull"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": true,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": true,
+      "failedScreen": null,
+      "detail": null
+    },
+    {
+      "seed": 16,
+      "allergyTickets": 4,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x10,allergy_ticket:order-x2,allergy_ticket:order-x4",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x2_verify",
+            "decide_allergy_ticket:order-x4_verify",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x10_verify"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x2_substitute",
+            "decide_allergy_ticket:order-x4_substitute",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x10_substitute"
+          ]
+        },
+        "over-cautious": {
+          "service": 69.23076923076923,
+          "resources": 55.00000000000001,
+          "recovery": null,
+          "safety": 100,
+          "composite": 62.11538461538461,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x2_pull",
+            "decide_allergy_ticket:order-x4_pull",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x10_pull"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": true,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": true,
+      "failedScreen": null,
+      "detail": null
+    },
+    {
+      "seed": 17,
+      "allergyTickets": 1,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 96.15384615384615,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": false
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 18,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x7",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x7_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x7_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 92.3076923076923,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x7_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 19,
+      "allergyTickets": 1,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 96.15384615384615,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": false
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 20,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x7",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x7_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x7_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 92.3076923076923,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x7_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 21,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x5",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x5_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x5_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 92.3076923076923,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x5_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 22,
+      "allergyTickets": 1,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 96.15384615384615,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 23,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x6",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x6_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x6_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 92.3076923076923,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x6_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": false
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 24,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x2",
+      "arms": {
+        "verify-all": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 96.15384615384615,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 76.92307692307692,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 88.46153846153845,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 25,
+      "allergyTickets": 3,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x2,allergy_ticket:order-x4",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x2_verify",
+            "decide_allergy_ticket:order-x4_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x2_substitute",
+            "decide_allergy_ticket:order-x4_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 76.92307692307692,
+          "resources": 61.42857142857143,
+          "recovery": null,
+          "safety": 100,
+          "composite": 69.17582417582418,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x2_pull",
+            "decide_allergy_ticket:order-x4_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": true,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": true,
+      "failedScreen": null,
+      "detail": null
+    },
+    {
+      "seed": 26,
+      "allergyTickets": 3,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x11,allergy_ticket:order-x4",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x4_verify",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x11_verify"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x4_substitute",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x11_substitute"
+          ]
+        },
+        "over-cautious": {
+          "service": 76.92307692307692,
+          "resources": 79.28571428571428,
+          "recovery": null,
+          "safety": 100,
+          "composite": 78.10439560439559,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x4_pull",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x11_pull"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": true,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": true,
+      "failedScreen": null,
+      "detail": null
+    },
+    {
+      "seed": 27,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x1",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x1_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x1_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 92.3076923076923,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x1_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 28,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x6",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x6_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x6_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 92.85714285714286,
+          "recovery": null,
+          "safety": 100,
+          "composite": 88.73626373626374,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x6_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 29,
+      "allergyTickets": 5,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x4,allergy_ticket:order-x6,allergy_ticket:order-x8,allergy_ticket:order-x9",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x4_verify",
+            "decide_allergy_ticket:order-x6_verify",
+            "decide_allergy_ticket:order-x8_verify",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x9_verify"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x4_substitute",
+            "decide_allergy_ticket:order-x6_substitute",
+            "decide_allergy_ticket:order-x8_substitute",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x9_substitute"
+          ]
+        },
+        "over-cautious": {
+          "service": 61.53846153846154,
+          "resources": 5,
+          "recovery": null,
+          "safety": 100,
+          "composite": 33.269230769230774,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x4_pull",
+            "decide_allergy_ticket:order-x6_pull",
+            "decide_allergy_ticket:order-x8_pull",
+            "decide_shelf_hot_dump",
+            "decide_allergy_ticket:order-x9_pull"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": true,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": false
+      },
+      "accepted": false,
+      "failedScreen": "S5",
+      "detail": "seed already appears in the frozen v2 case set"
+    },
+    {
+      "seed": 30,
+      "allergyTickets": 1,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 96.15384615384615,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 31,
+      "allergyTickets": 1,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 96.15384615384615,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": false
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 32,
+      "allergyTickets": 2,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x4",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x4_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x4_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 84.61538461538461,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 92.3076923076923,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x4_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 2 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 33,
+      "allergyTickets": 1,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 92.3076923076923,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 96.15384615384615,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": false,
+        "S2": true,
+        "S3": false,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": false,
+      "failedScreen": "S1",
+      "detail": "raises 1 allergy ticket(s); fewer than 3 means pulling every ticket still clears the Service threshold, so over-caution goes unpunished"
+    },
+    {
+      "seed": 34,
+      "allergyTickets": 4,
+      "eligibleOrders": 13,
+      "arrivalSignature": "0:10,0:10,4:14,14:24,24:34,34:44,44:54,54:64,64:74,74:84,84:94,94:104,104:114",
+      "allergySignature": "allergy_ticket:order-2,allergy_ticket:order-x1,allergy_ticket:order-x5,allergy_ticket:order-x8",
+      "arms": {
+        "verify-all": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 100,
+          "composite": 100,
+          "targetReached": true,
+          "requirementsMet": true,
+          "actions": [
+            "decide_allergy_ticket:order-2_verify",
+            "decide_allergy_ticket:order-x1_verify",
+            "decide_allergy_ticket:order-x5_verify",
+            "decide_allergy_ticket:order-x8_verify",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "careless": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_substitute",
+            "decide_allergy_ticket:order-x1_substitute",
+            "decide_allergy_ticket:order-x5_substitute",
+            "decide_allergy_ticket:order-x8_substitute",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "over-cautious": {
+          "service": 69.23076923076923,
+          "resources": 55.714285714285715,
+          "recovery": null,
+          "safety": 100,
+          "composite": 62.472527472527474,
+          "targetReached": false,
+          "requirementsMet": false,
+          "actions": [
+            "decide_allergy_ticket:order-2_pull",
+            "decide_allergy_ticket:order-x1_pull",
+            "decide_allergy_ticket:order-x5_pull",
+            "decide_allergy_ticket:order-x8_pull",
+            "decide_shelf_hot_dump"
+          ]
+        },
+        "passive": {
+          "service": 100,
+          "resources": 100,
+          "recovery": null,
+          "safety": 0,
+          "composite": 0,
+          "targetReached": true,
+          "requirementsMet": false,
+          "actions": []
+        }
+      },
+      "screens": {
+        "S1": true,
+        "S2": true,
+        "S3": true,
+        "S4": true,
+        "S5": true
+      },
+      "accepted": true,
+      "failedScreen": null,
+      "detail": null
+    }
+  ]
+}
